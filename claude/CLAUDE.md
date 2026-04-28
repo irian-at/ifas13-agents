@@ -8,7 +8,7 @@ IFAS13 (Investment Fund Administration System) is a Spring Boot-based enterprise
 
 ## Technology Stack
 
-- Java 21 (LTS), Spring Boot 3.5.6, Spring Data JPA
+- Java 21 (LTS), Spring Boot 3.5.8, Spring Data JPA
 - Maven multi-module project
 - MapStruct 1.6.3 for object mapping
 - Apache POI 5.4.1 for Excel processing, Apache Commons CSV 1.12.0
@@ -39,28 +39,29 @@ Database tests use TestContainers. Setup scripts: `ifas-database/ifas-database-f
 
 Multiple entry points depending on database backend. **Never run `IfasMainApplication` directly** - it throws an exception by design.
 
-| Main class | Database | Prerequisites |
-|------------|----------|---------------|
-| `SpringBootH2IfasMainApplication` | H2 in-memory | None |
-| `SpringBootPostgresContainerIfasMainApplication` | Postgres (auto-container) | Docker/Podman |
-| `SpringBootPostgresLocalIfasMainApplication` | Postgres on port 7432 | Running Postgres |
-| `SpringBootSybaseLocalIfasMainApplication` | Sybase | Running Sybase |
-| `SpringBootMultiDbIfasMainApplication` | Multi-database | Depends on config |
+**Production**: `SpringBootIfasApplication` — activates all database profiles; configured via environment for deployment.
+
+**Local development** (test launchers in `src/test/java`, run from IDE):
+
+| Test launcher | Databases |
+|---------------|-----------|
+| `LocalH2OnlyIfasApplication` | H2 only |
+| `LocalH2WithMailhogIfasApplication` | H2 + Mailhog |
+| `LocalPostgresOnlyIfasApplication` | PostgreSQL only |
+| `LocalPostgresAndH2IfasApplication` | PostgreSQL + H2 |
+| `LocalPostgresAndSybaseIfasApplication` | PostgreSQL + Sybase |
+| `LocalSybaseGastAndH2IfasApplication` | Sybase GAST + H2 |
+| `LocalSybaseGastAndPostgresIfasApplication` | Sybase GAST + PostgreSQL |
 
 Application URL: http://localhost:8080/ifas-uat
-
-```bash
-# Command line example (from ifas-applications/ifas-main-application)
-mvn spring-boot:run -Dspring-boot.run.mainClass=at.oekb.ifas.app.SpringBootH2IfasMainApplication
-```
 
 ## Docker Development Environment
 
 ```bash
-cd container/local-dev-support
-docker-compose up                                    # Sybase + Java app
-docker-compose --profile donotstart up postgres      # PostgreSQL (port 7432)
-docker-compose --profile donotstart up minio         # MinIO for file storage
+# From ifas-applications/ifas-main-application
+docker-compose up postgres      # PostgreSQL (port 7432)
+docker-compose up sybase16      # Sybase (port 5001)
+docker-compose up mailhog       # Mailhog (web: 8025, SMTP: 10025)
 ```
 
 ## Development Tools
@@ -84,35 +85,39 @@ mvn exec:java -Dexec.mainClass="at.oekb.ifas.devtools.DatabaseSchemaTool"
 - `xls-support` - Excel file processing utilities
 - `dsl-support` - Domain-specific language support
 - `log-support` - Logging utilities
+- `mail-support` - Email sending utilities
+- `multidbctx-support` - Multi-database context routing framework
+- `netapp-archive-support` - NetApp archive integration
 - `core-test-support` - Test utilities
 - `sybase-testcontainer` - Sybase Testcontainer implementation
+- `sybase-drivers` - Sybase JDBC drivers
 - `oekb-libs/` - Third-party OEKB libraries
 - `oekb-master-pom-dummy/` - Parent POM definition
 
 **`ifas-database/`** - Data persistence layer
+- `ifas-database-config` - Database configuration classes and Spring profiles
 - `ifas-database-flyway` - Database migration scripts (Flyway)
 - `ifas-persistence-core` - Core persistence entities and repositories
 - `ifas-persistence-stamm` - Master data persistence
 - `ifas-persistence-stm` - Tax report ("Steuermeldung") persistence
 - `ifas-persistence-inv` - Investment data persistence
 - `ifas-persistence-wkn` - Security identifier persistence
+- `ifas-persistence-infra` - Infrastructure persistence (work queue, jobs, filestore)
 - `ifas-data-import-export` - Database import/export functionality
 
 **`ifas-domain/`** - Business domain logic (DDD approach)
-- `ifas-domain-stamm` - Master data domain (funds, companies, etc.)
-- `ifas-domain-fonds` - Fund management domain
+- `ifas-domain-core` - Shared domain model and utilities
 - `ifas-domain-stm` - Tax reporting domain (core business logic)
     - Processing of "SteuerMeldung" (tax reports)
     - Validation against "Ermittlungsvorgabe" (calculation rules)
     - Business calculations and transformations
-- `ifas-domain-wkn` - Security identifier domain
+- `ifas-domain-recalc` - Excel recalculation domain logic
 
 **`ifas-services/`** - Application services
 - `ifas-main-service` - Core business services (orchestration layer)
     - `DataImportService` - CSV import processing
     - `DataExportService` - Report generation
     - `UserAcceptanceTestService` - UAT execution
-- `ifas-mft-watchdog` - Managed file transfer monitoring
 
 **`ifas-applications/`** - Deployable applications
 - `ifas-main-application` - Spring Boot application (JAR deployment)
@@ -120,13 +125,14 @@ mvn exec:java -Dexec.mainClass="at.oekb.ifas.devtools.DatabaseSchemaTool"
 
 **`ifas-web/`** - Web layer
 - `ifas-web-restapi` - REST API for user acceptance tests
-- `ifas-web-app` - Web UI components
+- `ifas-web-ui` - Web UI components
 
 **`ifas-testing/`** - Test infrastructure
-- `ifas-test-support` - Test data and utilities
+- `ifas-test-data` - Test data and utilities
 - `ifas-integration-tests` - Integration test suites
 - `ifas-libreoffice-recalc-server-container` - LibreOffice calculation service (for Excel recalc)
-- `ifas-libreoffice-recalc-client` - Client for LibreOffice service
+- `ifas-libreoffice-recalc-client` - Client for LibreOffice recalc service
+- `ifas-msexcel-recalc-client` - Client for MS Excel recalc service
 
 **`ifas-dev-tools/`** - Developer utilities
 
@@ -178,14 +184,23 @@ Web controllers should be organized in sub-packages reflecting the UI navigation
 
 ### Database Profiles
 
-Multiple database configurations via Spring profiles:
-- `h2` - In-memory H2 (fastest for development)
-- `postgres-container` - Testcontainers-managed PostgreSQL
-- `postgres-local` - Local PostgreSQL on port 7432
-- `sybase-local` - Local Sybase instance
-- `multidb` - Multiple datasources
+Database configuration classes in `ifas-database/ifas-database-config/` define Spring profiles:
 
-Use the profile-specific main application classes rather than configuring profiles manually.
+**H2** (in-memory, PostgreSQL compatibility mode):
+- `h2-db1`, `h2-db2`, `h2-db3` — application databases
+- `h2-infra-db` — infrastructure (work queue, jobs, filestore)
+
+**PostgreSQL 15**:
+- `postgres-localhost-7432` — local development (port 7432)
+- `postgres-server` — server deployment (environment-configured)
+- `postgres-testcontainer` — TestContainers-managed (integration tests only)
+
+**Sybase 16**:
+- `sybase-localhost-5001` — local development
+- `sybase-gast` — staging environment
+- `sybase-ifasneu` — alternative instance
+
+Database routing uses `database-context.*-db-key` properties to map service contexts to database profiles. The test launchers activate the appropriate combination of profiles.
 
 ## Code Quality
 
@@ -224,8 +239,8 @@ mvn test -Pskip-postgres15-tests -Pskip-sybase16-tests
 
 ### Application Won't Start
 
-Don't run `IfasMainApplication` directly - use one of the profile-specific main classes listed above.
+Don't run `IfasMainApplication` directly — use `SpringBootIfasApplication` or one of the test launchers listed above.
 
 ### Port Conflicts
 
-Default ports: 8080 (Spring Boot), 7432 (PostgreSQL), 7433 (Sybase docker-compose), 5000 (Sybase internal).
+Default ports: 8080 (Spring Boot), 7432 (PostgreSQL), 5001 (Sybase docker-compose), 5000 (Sybase internal).
