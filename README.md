@@ -38,7 +38,7 @@ cd ifas13
 ln -s ../ifas13-agents/CLAUDE.md ./CLAUDE.md
 ln -s ../ifas13-agents/.claude ./.claude
 ln -s ../ifas13-agents/<USER>/CLAUDE.local.md ./CLAUDE.local.md
-ln -s ../ifas13-agents/<USER>/settings.local.json ./.claude/settings.local.json
+ln -s ../<USER>/claude-settings.local.json ./.claude/settings.local.json
 ```
 
 
