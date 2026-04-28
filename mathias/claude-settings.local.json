@@ -12,26 +12,12 @@
       "mcp__idea__*",
       "mcp__ide__*",
       "mcp__context7__*",
-      "Read(//tmp/**)",
-      "Read(//home/sma/.m2/**)",
-      "Read(//home/sma/.local/**)",
-      "Read(//home/sma/dev/projects/**)",
-      "Read(//run/podman/**)",
-      "Read(//nix/store/**)",
-      "Read(//home/sma/.claude/**)",
-      "Read(//etc/**)",
-      "Read(//etc/NetworkManager/system-connections/**)",
-      "Read(//etc/wireguard/**)",
       "Bash(nmcli connection:*)",
       "Bash(systemctl list-units:*)",
       "Bash(git config:*)",
-      "Bash(grep -c '\\\\^M\\\\$$')",
-      "Bash(unzip -l \"OeKB-Request TEST.zip\")",
-      "Bash(/home/sma/dev/projects/oekb/ifas13/ifas-dev-tools/scripts/extract-isins-from-isin-list.sh \"/home/sma/dev/projects/oekb/ifas13/ifas-testing/ifas-integration-tests/src/test/resources/at/oekb/ifas/domain/stm/estbreport/OeKB-Request TEST.zip\" /dev/stdout)",
-      "Bash(/home/sma/dev/projects/oekb/ifas13/ifas-dev-tools/scripts/extract-isins-from-isin-list.sh:*)",
-      "Bash(google-chrome-stable --remote-debugging-port=9222 --no-first-run --no-default-browser-check \"http://localhost:8080/ifas-uat/\")",
-      "Bash(npx chrome-devtools-mcp@latest --help)",
-      "Bash(find /home/sma/dev/projects/oekb/ifas13 -name \"*.log\" -type f -exec grep -l \"Mapped port\\\\|Container startup failed\\\\|sybase\" {} \\\\;)"
+      "Bash(unzip -l *)",
+      "Bash(ifas-dev-tools/scripts/*)",
+      "Bash(google-chrome-stable --remote-debugging-port=9222 *)"
     ],
     "deny": [
       "Bash(sudo *)",
@@ -65,7 +51,7 @@
     "Stop": []
   },
   "enabledPlugins": {
-    "frontend-design@claude-plugins-official": true
+    "frontend-design@claude-plugins-official": false
   },
   "outputStyle": "default",
   "plansDirectory": "~/dev/projects/ifas13-agents/mathias/plans"
