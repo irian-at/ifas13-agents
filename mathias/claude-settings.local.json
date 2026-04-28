@@ -1,0 +1,72 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Task",
+      "WebSearch",
+      "WebFetch",
+      "Skill",
+      "mcp__jetbrains__*",
+      "mcp__idea__*",
+      "mcp__ide__*",
+      "mcp__context7__*",
+      "Read(//tmp/**)",
+      "Read(//home/sma/.m2/**)",
+      "Read(//home/sma/.local/**)",
+      "Read(//home/sma/dev/projects/**)",
+      "Read(//run/podman/**)",
+      "Read(//nix/store/**)",
+      "Read(//home/sma/.claude/**)",
+      "Read(//etc/**)",
+      "Read(//etc/NetworkManager/system-connections/**)",
+      "Read(//etc/wireguard/**)",
+      "Bash(nmcli connection:*)",
+      "Bash(systemctl list-units:*)",
+      "Bash(git config:*)",
+      "Bash(grep -c '\\\\^M\\\\$$')",
+      "Bash(unzip -l \"OeKB-Request TEST.zip\")",
+      "Bash(/home/sma/dev/projects/oekb/ifas13/ifas-dev-tools/scripts/extract-isins-from-isin-list.sh \"/home/sma/dev/projects/oekb/ifas13/ifas-testing/ifas-integration-tests/src/test/resources/at/oekb/ifas/domain/stm/estbreport/OeKB-Request TEST.zip\" /dev/stdout)",
+      "Bash(/home/sma/dev/projects/oekb/ifas13/ifas-dev-tools/scripts/extract-isins-from-isin-list.sh:*)",
+      "Bash(google-chrome-stable --remote-debugging-port=9222 --no-first-run --no-default-browser-check \"http://localhost:8080/ifas-uat/\")",
+      "Bash(npx chrome-devtools-mcp@latest --help)",
+      "Bash(find /home/sma/dev/projects/oekb/ifas13 -name \"*.log\" -type f -exec grep -l \"Mapped port\\\\|Container startup failed\\\\|sybase\" {} \\\\;)"
+    ],
+    "deny": [
+      "Bash(sudo *)",
+      "Bash(rm -rf *)",
+      "Bash(rm -r *)",
+      "Bash(rmdir *)",
+      "Bash(dd *)",
+      "Bash(mkfs *)",
+      "Bash(kill -9 *)",
+      "Bash(pkill *)",
+      "Bash(killall *)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(git push --force-with-lease *)",
+      "Bash(git reset --hard *)",
+      "Bash(git clean *)",
+      "Bash(git branch -D *)",
+      "Bash(git checkout -- *)",
+      "Bash(git restore *)",
+      "Bash(git rebase *)",
+      "Bash(git stash drop *)",
+      "Bash(chmod 777 *)",
+      "Bash(> *)"
+    ],
+    "ask": []
+  },
+  "hooks": {
+    "PreToolUse": [],
+    "PermissionRequest": [],
+    "UserPromptSubmit": [],
+    "Stop": []
+  },
+  "enabledPlugins": {
+    "frontend-design@claude-plugins-official": true
+  },
+  "outputStyle": "default",
+  "plansDirectory": "~/dev/projects/ifas13-agents/mathias/plans"
+}
