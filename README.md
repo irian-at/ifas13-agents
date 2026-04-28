@@ -12,9 +12,8 @@ projects/
 │   ├── thomas/       
 │   │   └── plans/
 │   ├── CLAUDE.md    # shared instruction for claude code
-│   ├── AGENTs.md    # shared instruction for codex
+│   ├── AGENTS.md    # shared instruction for codex
 │   ├── .claude/
-│   │   ├── CLAUDE.md
 │   │   ├── (settings.local.json)   # .gitignore
 │   │   ├── settings.json
 │   │   ├── skills/
@@ -26,9 +25,9 @@ projects/
 │       └── ...
 └── ifas13/
     ├── (CLAUDE.local.md)   # .gitignore
-    ├── AGENTs.md           # symbolic link
+    ├── CLAUDE.md           # symbolic link
+    ├── AGENTS.md           # symbolic link
     ├── .claude/            # symbolic link
-    │   └── CLAUDE.md
     └── .codex/             # symbolic link
 ```
 
@@ -36,6 +35,7 @@ projects/
 
 ```
 cd projects
+ln -s ifas13-agents/CLAUDE.md ifas13/CLAUDE.md
 ln -s ifas13-agents/.claude ifas13/.claude
 ```
 
