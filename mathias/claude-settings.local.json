@@ -1,5 +1,6 @@
 {
   "permissions": {
+    "defaultMode":"plan",
     "allow": [
       "Read",
       "Grep",
@@ -54,5 +55,8 @@
     "frontend-design@claude-plugins-official": false
   },
   "outputStyle": "default",
-  "plansDirectory": "~/dev/projects/ifas13-agents/mathias/plans"
+  "plansDirectory": "~/dev/projects/ifas13-agents/mathias/plans",
+  "autoMemoryEnabled": true,
+  "autoMemoryDirectory": "~/dev/projects/ifas13-agents/mathias/automemory",
+  "effortLevel": "xhigh"
 }

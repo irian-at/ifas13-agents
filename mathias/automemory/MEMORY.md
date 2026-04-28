@@ -1,0 +1,1 @@
+- [Communication style](user_style.md) — prefers direct, raw, unfiltered communication
