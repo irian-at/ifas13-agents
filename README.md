@@ -34,9 +34,9 @@ projects/
 ## Symbolic links setup
 
 ```
-cd projects
-ln -s ifas13-agents/CLAUDE.md ifas13/CLAUDE.md
-ln -s ifas13-agents/.claude ifas13/.claude
+cd ifas13
+ln -s ../ifas13-agents/CLAUDE.md .
+ln -s ../ifas13-agents/.claude .
 ```
 
 
