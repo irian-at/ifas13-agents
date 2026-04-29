@@ -1,25 +1,22 @@
 # CLAUDE.local.md
 
-## Communication Style
-
-- **Be concise**: Keep responses brief and to the point
-- **Detailed explanations**: Only provide extensive explanations when explicitly requested
-- **Examples**: Avoid multiple examples unless asked
-- **Assume competence**: User understands concepts unless they ask for clarification
+## Application 
+ 
+- The new IFAS13 application is based on a legacy CPP application. The sources for this legacy application are
+  located at ~/dev/projects/oekb/ifas
 
 ## Platform
-
-- NixOS/Linux, fish shell
+ 
+- NixOS/Linux, AMD64, fish shell
+- nixos config is located at ~/nixos-config
 - IntelliJ IDEA with JetBrains MCP plugin
 
-## Writer Pattern
+## Required Maven Profiles
 
-Use dedicated writer classes for text output. For complete guidance, invoke the `generating-writers` skill.
+Always activate `-Pno-proxy` (no proxy needed on this network):
 
-## Testing
+```bash
+mvn clean install -Pno-proxy
+```
 
-For test generation, the `java-unit-test` and `assertj-assertions` skills provide complete guidance.
-
-## Workflow Preferences
-
-- I'll run the tests myself and copy the log if needed
+Note: `-Pplatform-amd64` is active by default in the project POMs, so it does not need to be specified explicitly (Manfred uses `-Pplatform-arm64` because his Apple Silicon platform requires overriding the default).
