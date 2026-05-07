@@ -1,24 +1,49 @@
+## todo - discuss with manfred - why did he change jeAnteil logic to use fieldCategory instead of fieldName??
+
+
+
+## todo - Wunsch der FAchabteilung
+# Tagesprotokoll auswertung - alle Fehler zusammen (ohne positive Rückmeldungen - zB keine Differenzen..)
+# Alle Meldungen zu einem Tag 
+# Wenn 2800 STM eintreffen ist das zuviel..
+
+Klasse für von-bis rekalkulationen lesen - anzahl fehler u warnings - 
+create service in service layer - read recalc jobs from bis (created_at) timestamp
+extractProtocolFromBundleResult - fetch protocol from bundle result
+
+
+
+# grossfile test:
+# 1) alstsystem grossfile 1 test mit -T parameter (so wird nichts persistiert)
+# 2) neusystem grossfile 1 einspielen und mit ergebnissen aus 1 vergleichen
+# 3) altsystem grossfile 1 ohne -T parameter
+# 4) neusystem grossfile 2 einspielen
+
+
+
+
+
+# Schreiben wir in Ifas neu schon geschäftsjahre in die tabelle? - wenn ja in welche? sollte in postgres sein..
+# wir brauchen eine rest schnittstelle für die berechnung von geschaeftsjahren.. (1 oder mehrere, oder alle) 
+
+# FA ändert manuell geschäftsjahre in der tabelle - ludwig lest von der tabelle für fristenprüfung mit skripts
+# deshalb brauchen wir die Schnittstelle - aber wenn die fristenprüfung sowieso eine neuberechnung der geschäftsjahre
+# und fristen triggert, können wir und die schnittstelle evtl sparen. (bin nicht sicher)
+
+# brauchen wir überhaupt eine eigene Event-Log Tabelle - oder weiß der Job (zB estb-report 1,2,3) wann der letzte 
+# erfolgreiche Job gestartet wurde?
+
+# Parallelbetrieb ab Ende Mai? - was brauchen wir noch unbedingt? 
 
 
 
 
 ## todo - rest interface für ESTB report - NUr POST für isin-list
-## todo - grossfile test fixen mit zips only
-
-
 ## todo Manfred - DbErmittlungsvorgabe
-## todo Manfred - ausschuettung_e - letzte spalte fehlt je anteil
 
-START;AT0000A090J4;InvF;V;EUR;2025.01.01;2025.12.31;JA;;;10000;;AT;NEIN;JA;JA;;NEIN;JA;10000;
-vs
-START;AT0000A090J4;InvF;V;EUR;2025.01.01;2025.12.31;JA;;;10000.0;;AT;;JA;JA;;NEIN;JA;10000.0;
 
-- colIdx: 10
-  fieldName: Anteile_Tranche_Anzahl_e
-  desc: Anz. Anteile
-  valueType: AMOUNT
-  required: true
-
+## done - grossfile test fixen mit zips only
+# done Manfred - ausschuettung_e - letzte spalte fehlt je anteil
 # done - allow No ermittlungsvorgabe found for version 3 - add setting to UI -
 # done - isin ISIN , detail layout same as recalcs - UI
 # done - datumsformat - YYYY.MM.DD beim rausschreiben  create jira!

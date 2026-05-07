@@ -60,3 +60,16 @@ try {
 - **Test data creators**: `{Entity}Testdata` (e.g., `WaehrungTestdata`)
 - **Custom assertions**: `{Entity}Assertions` (e.g., `SteuerMeldungEntityAssertions`)
 - **Web controllers**: `{Name}PageController` suffix
+
+## Javadoc & Inline Comments
+
+Skip Javadoc for self-explanatory methods, fields, and classes — well-named identifiers document themselves.
+
+Add Javadoc when:
+- Public API behavior is non-obvious from the signature
+- Pre-/post-conditions, invariants, or thrown exceptions need stating
+- Domain context (German term, business rule, legal reference) needs explaining
+
+For complex inline logic that requires a second read to follow, add a short comment explaining *why*, not *what*. Typical cases: non-obvious algorithms, workarounds for upstream bugs, intentional ordering, performance trade-offs.
+
+Avoid restating what the code already says, documenting trivial getters/setters, or adding empty `@param`/`@return` tags.
