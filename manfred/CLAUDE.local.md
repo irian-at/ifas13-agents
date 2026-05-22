@@ -23,27 +23,28 @@ IFAS13 (Investment Fund Administration System) is a Spring Boot-based enterprise
 
 ### Required Maven Profiles
 
-**IMPORTANT:** Always activate these Maven profiles when running `mvn` commands:
+**IMPORTANT:** Always activate these Maven profiles when running `mvn` commands locally:
 - `no-proxy` - Disables proxy settings
 - `platform-arm64` - Required for ARM64/Apple Silicon
+- `dev-build` - Required for local development builds
 
 ```bash
 # Example: Always include these profiles
-mvn clean install -Pno-proxy -Pplatform-arm64
+mvn clean install -Pno-proxy -Pplatform-arm64 -Pdev-build
 ```
 
 ### Building the Project
 
 ```bash
 # Clean build from root
-mvn clean install -Pno-proxy -Pplatform-arm64
+mvn clean install -Pno-proxy -Pplatform-arm64 -Pdev-build
 
 # Build without tests
-mvn clean install -DskipTests -Pno-proxy -Pplatform-arm64
+mvn clean install -DskipTests -Pno-proxy -Pplatform-arm64 -Pdev-build
 
 # Build specific module
 cd <module-directory>
-mvn clean install -Pno-proxy -Pplatform-arm64
+mvn clean install -Pno-proxy -Pplatform-arm64 -Pdev-build
 ```
 
 ### Running Tests
