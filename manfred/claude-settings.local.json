@@ -69,7 +69,10 @@
       "mcp__ide__getDiagnostics",
       "Bash(/opt/homebrew/bin/git add:*)",
       "mcp__chrome-devtools__evaluate_script",
-      "Bash(docs/Rekalkulation/generate-pdf.sh:*)"
+      "Bash(docs/Rekalkulation/generate-pdf.sh:*)",
+      "Read(//Users/manolito/IdeaProjects/oekb/ifas13/**)",
+      "Grep",
+      "Glob"
     ],
     "deny": [],
     "ask": []
