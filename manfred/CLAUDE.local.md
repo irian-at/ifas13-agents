@@ -55,26 +55,53 @@ See `.claude/rules/run-tests.md` for full test conventions (AssertJ, naming, com
 
 The application has multiple entry points depending on the database backend. **Never run `IfasMainApplication` directly** - it will throw an exception by design.
 
+The runnable launcher classes live in **test sources** of `ifas-main-application`
+(`ifas-applications/ifas-main-application/src/test/java/at/oekb/ifas/app/`). Each one
+sets the appropriate Spring profiles and delegates to `IfasMainApplication`.
+
 #### Using IDE Run Configurations (preferred):
 
-- `SpringBootH2IfasMainApplication` - H2 in-memory database (no prerequisites)
-- `SpringBootPostgresContainerIfasMainApplication` - Auto-started Postgres container (requires Docker/Podman)
-- `SpringBootPostgresLocalIfasMainApplication` - Existing Postgres on port 7432
-- `SpringBootSybaseLocalIfasMainApplication` - Existing Sybase instance
-- `SpringBootMultiDbIfasMainApplication` - Multi-database support
+IntelliJ run configurations (in `.run/`) point at the launcher classes above:
+
+- `LocalH2OnlyIfasApplication` - H2 in-memory database (no prerequisites, simplest)
+- `LocalPostgres7432OnlyIfasApplication` - Existing Postgres on port 7432
+- `LocalPostgres7432AndH2IfasApplication` - Postgres (7432) + H2 multi-db
+- `LocalPostgres7432AndSybase5001IfasApplication` - Postgres (7432) + Sybase (5001) multi-db
+
+Additional launcher classes (no committed run config, run via the IDE gutter or CLI):
+
+- `LocalH2WithMailhogIfasApplication` - H2 + local Mailhog for mail testing
+- `LocalSybaseGastAndH2IfasApplication` - OeKB developer VM only; connects to the server's SybaseGast test DB
+- `LocalSybaseGastAndPostgresServerIfasApplication` - OeKB developer VM only; SybaseGast + PostgresServer test DBs
 
 #### Using Command Line:
 
+The launchers are test-source classes, so they must run on the **test classpath**.
+The reliable invocation is `exec:java` with `classpathScope=test`, run from the repo
+root so the required Maven profiles activate:
+
 ```bash
-# From ifas-applications/ifas-main-application directory
-cd ifas-applications/ifas-main-application
+# From the repository root (so -Pno-proxy/-Pplatform-arm64/-Pdev-build resolve)
 
 # Run with H2 (simplest, no dependencies)
-mvn spring-boot:run -Dspring-boot.run.mainClass=at.oekb.ifas.app.SpringBootH2IfasMainApplication
+mvn -pl ifas-applications/ifas-main-application test-compile \
+  org.codehaus.mojo:exec-maven-plugin:3.5.1:java \
+  -Dexec.mainClass=at.oekb.ifas.app.LocalH2OnlyIfasApplication \
+  -Dexec.classpathScope=test \
+  -Pno-proxy -Pplatform-arm64 -Pdev-build
 
-# Run with Postgres container
-mvn spring-boot:run -Dspring-boot.run.mainClass=at.oekb.ifas.app.SpringBootPostgresContainerIfasMainApplication
+# Run with local Postgres on 7432 (swap the mainClass)
+mvn -pl ifas-applications/ifas-main-application test-compile \
+  org.codehaus.mojo:exec-maven-plugin:3.5.1:java \
+  -Dexec.mainClass=at.oekb.ifas.app.LocalPostgres7432OnlyIfasApplication \
+  -Dexec.classpathScope=test \
+  -Pno-proxy -Pplatform-arm64 -Pdev-build
 ```
+
+Note: `spring-boot:run` from the module directory does **not** work for these launchers -
+the `<mainClass>` configured in the module pom (`LocalH2OnlyIfasApplication`) is a test
+class that is not on the default (main) run classpath, so it fails with
+`ClassNotFoundException`. Use the `exec:java` form above (or the IDE run configurations).
 
 Application URL: http://localhost:8080/ifas-uat
 
@@ -430,7 +457,7 @@ mvn test -Pskip-postgres15-tests -Pskip-sybase16-tests
 
 ### Application Won't Start
 
-Don't run `IfasMainApplication` directly - it throws `IllegalStateException` by design. Use one of the profile-specific main classes.
+Don't run `IfasMainApplication` directly - it throws `IllegalStateException` by design. Use one of the `Local*IfasApplication` launcher classes (in `ifas-main-application` test sources) - see "Running the Application" above.
 
 ### Port Conflicts
 
