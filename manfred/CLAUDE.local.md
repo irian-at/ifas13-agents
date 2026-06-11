@@ -103,6 +103,10 @@ class that is not on the default (main) run classpath, so it fails with
 
 Application URL: http://localhost:8080/ifas-uat
 
+### Container Runtime (Podman, NOT Docker Desktop)
+
+**HARD RULE: Never start Docker Desktop yourself.** This machine uses **Podman Desktop**, which should already be running. If a `docker` command fails (e.g. `docker info` errors, Testcontainers can't reach a container runtime), **do not attempt to launch any container runtime** — instead, ask the user to start Podman Desktop and wait.
+
 ### Docker Development Environment
 
 ```bash
