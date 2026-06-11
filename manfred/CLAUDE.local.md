@@ -244,6 +244,8 @@ The project follows a layered architecture organized into Maven modules:
 
 See `.claude/rules/git-commits.md` for git commit and documentation rules.
 
+**HARD RULE: NEVER add a "Co-Authored-By" line (or any co-author/attribution hint) to commit messages.**
+
 ### Time and Date Handling
 
 See `.claude/rules/time-date-handling.md` for time/date handling rules.
