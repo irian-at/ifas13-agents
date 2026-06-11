@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-<!-- IMPORTANT: Never commit this file to git -->
-
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
