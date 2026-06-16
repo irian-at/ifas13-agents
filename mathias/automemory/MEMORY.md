@@ -6,3 +6,7 @@
 
 ## Feedback
 - [Only change what was asked](feedback_only-change-what-was-asked.md) — Don't silently rewrite unrelated content; properties files in this repo are ISO-8859-1 and Edit/Write will re-save them as UTF-8.
+- [Plan file naming](feedback_plan-file-naming.md) — Rename the plan file from the random session slug to a descriptive kebab-case name before exiting plan mode.
+
+## Project
+- [Recalc historical fidelity](project_recalc-historical-fidelity.md) — Recalc of old SteuerMeldung versions must match legacy's behavior at that time, not current legacy; don't "clean up" version gates that mirror dated OeKBSD changes.

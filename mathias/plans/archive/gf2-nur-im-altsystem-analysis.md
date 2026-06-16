@@ -100,41 +100,59 @@ Legacy compared the CSV LEI `U090UTR2IZOR4U9CSZ50` to the original DB row's empt
 - Code `ERR_UNGL_VORH` — template at `c_stm_logger.cpp:102–103`.
 - Raised at `c_st_meldung.cpp:8307` inside `CheckVorhandeneMeldung()`.
 - Status gating: UPDATE + CONFIRMED + DELETE (UPDATE downgrades to INFO at line 8308).
+- Lookup of the existing meldung is keyed by **`stm_id` alone** at
+  `c_st_meldung.cpp:7676` (`where stm_id = %d`), with `LEI = isnull(m.LEI, '-')` projected at
+  `c_st_meldung.cpp:7671-7673` (version 4+ only).
 
 **IFAS13 counterpart**
 
 - Same code `ERR_UNGL_VORH`.
-- LEI is registered in `UNGL_VORH_FIELD_CHECKS` at
-  `validation/status/SteuerMeldungStatusValidators.java:409`.
-- Compared in `checkFieldUnchanged` at `SteuerMeldungStatusValidators.java:427`. Condition:
-  `currentValue != null && !valuesEqual(currentValue, previousValue)`. With current = `"U090UTR2IZOR4U9CSZ50"` and
-  previous = `null`/`""`, the check **should** fire.
-- Severity: ERROR (because status is CONFIRMED, not UPDATE — see line 440).
+- LEI is registered in `UNGL_VORH_FIELD_CHECKS` at `SteuerMeldungStatusValidators.java:461`.
+- Compared in `checkFieldUnchanged` at `SteuerMeldungStatusValidators.java:488`.
+- Severity: ERROR (because status is CONFIRMED, not UPDATE — see line 492).
 
-**Why it doesn't fire — best hypothesis**
+**Schema gap — fixed**
 
-The whole `errUnglVorh` block is guarded by `if (previousSteuerMeldung != null)` at
-`SteuerMeldungStatusValidationService.java:137`. `previousSteuerMeldung` is looked up at line 80 from a
-**same-ISIN-filtered** map (line 76 — `getExistingMeldungenByIsin`). If the original meldung `649538` was filed under
-a different ISIN, or was deleted, or the test database is missing the row, the lookup returns null and `errUnglVorh`
-is skipped silently.
+IFAS13's `steuer_meldung` table previously had no `lei` column; both `EagerDbSteuerMeldung` and
+`LazyDbSteuerMeldung` resolved `getLei()` through `InvRepository` → `WknDesc.lei` (master data). For
+any meldung loaded from the DB, `getLei()` therefore reflected current master data, not the
+snapshot legacy stored on the STM row at creation time.
 
-This is **pattern 4 from the validation-discrepancy skill** — *Lookup pre-filtered by ISIN (cross-ISIN blind spot)*.
-A partial mitigation already exists (`previousIsinAnyMatch` for `ERR_ISIN_MID` / `ERR_MELDID_FEHLT` at line 89) but
-does **not** feed the `errUnglVorh` call path.
+Closed by the schema migration `V036__steuer_meldung_lei.sql` (postgres15 + sybase16) plus the
+entity field `SteuerMeldungEntity.lei` and rewires of `Eager/LazyDbSteuerMeldung.getLei()` to read
+from the entity (see plan `lei-from-steuer-meldung-instead-of-wkndesc.md`). MapStruct auto-maps
+`SteuerMeldungDto.lei` ↔ entity; no separate production write path exists (legacy CPP still owns
+STM DB writes).
 
-**Pattern**: pattern 4 (cross-ISIN blind spot) — `errUnglVorh` not yet wired through the hybrid lookup.
+**Why Z122 still doesn't fire — confirmed cause**
+
+With the schema fix in place, the only remaining gate is the `if (previousSteuerMeldung != null)`
+guard at `SteuerMeldungStatusValidationService.java:137`. `previousSteuerMeldung` is looked up at
+line 80 from a **same-ISIN-filtered** map (line 76 — `getExistingMeldungenByIsin`). Legacy's
+lookup is stm_id-only, so legacy finds the row for `649538` regardless of which ISIN it was filed
+under; IFAS13 needs the lookup to match the CSV's ISIN `LU0136043550`. If the original meldung
+`649538` was filed under a different ISIN, or the test DB is missing the row, the lookup returns
+null and `errUnglVorh` is skipped silently.
+
+This is **pattern 4 from the validation-discrepancy skill** — *Lookup pre-filtered by ISIN
+(cross-ISIN blind spot)*. The partial mitigation `previousIsinAnyMatch` at line 89 already covers
+`ERR_ISIN_MID` / `ERR_MELDID_FEHLT` but does **not** feed `errUnglVorh`.
+
+**Pattern**: pattern 4 (cross-ISIN blind spot) — `errUnglVorh` not yet wired through the hybrid
+lookup.
 
 **Fix shape**
 
 Confirm at runtime by adding a temporary log in the validator, then either:
 
-- Extend the hybrid lookup so `previousSteuerMeldungAnyIsin` feeds `errUnglVorh` when same-ISIN lookup is null
-  (caveat: this may surface other UNGL_VORH fields that don't match either — review scope before applying), OR
-- If the root cause is test-data drift (the DB row for `649538` simply isn't loaded), fix the test data and confirm
-  no code change is needed.
+- Extend the hybrid lookup so `previousSteuerMeldungAnyIsin` feeds `errUnglVorh` when same-ISIN
+  lookup is null (caveat: this may surface other UNGL_VORH fields that don't match either —
+  review scope before applying), OR
+- If the root cause is test-data drift (the DB row for `649538` simply isn't loaded), fix the
+  test data and confirm no code change is needed.
 
-Cite legacy reference: `c_st_meldung.cpp:8307` in `CheckVorhandeneMeldung()`.
+Cite legacy reference: `c_st_meldung.cpp:7676` (stm_id-only lookup) and `c_st_meldung.cpp:8307`
+(LEI comparison) inside `CheckVorhandeneMeldung()`.
 
 ---
 
