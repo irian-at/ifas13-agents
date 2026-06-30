@@ -1,3 +1,6 @@
+
+## todo - revisit
+
 # Refactor: validation msgs grouped by scope at the CSV→domain boundary
 
 ## Context
