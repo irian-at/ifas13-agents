@@ -11,7 +11,5 @@
 
 ## Project
 - [Recalc historical fidelity](project_recalc-historical-fidelity.md) — Recalc of old SteuerMeldung versions must match legacy's behavior at that time, not current legacy; don't "clean up" version gates that mirror dated OeKBSD changes.
-- [gf3 missing stmIds recovered from gf4](project_gf3-missing-stmids-recovered-from-gf4.md) — 649492/649539/649548/649550 gone from sybase-gast but recoverable from gf4-d20260807 fixture via `merge_yaml.py --extract`.
-- [gf6 UPDATE on ended meldung / guelt_bis](project_gf6-update-on-ended-meldung-guelt-bis.md) — an Altsystem "Melde-ID nicht vorhanden" deviation can be a code bug, not missing data: legacy keys "active" off `guelt_bis is null`; check gueltBis before reaching for recover/prune.
-- [gf7 missing data recovered from gf8](project_gf7-missing-data-recovered-from-gf8.md) — gf7 fixture missing all 20 ISINs + 11 predecessors; recovered from gf8 snapshot, but OPE predecessors gf7 mutated (gueltBis set / confirmed) must be re-sourced pre-T from gf1-export-AFTER.
-- [gf8 recovery + SN-Frist gap](project_gf8-recovery-and-sn-frist-gap.md) — gf8's 4 error deviations: 2 missing-data (LU0145634076/LU0125743475 recovered from gf2/gf5 fixtures, no time-filter needed), 2 are a real SN-during-Frist code gap (Selbstnachweis JA vs NEIN), not data; baseline → (5,0,0,2,0,0).
+- [Recalc fixture data recovery](project_recalc-fixture-data-recovery.md) — Missing meldung/ISIN in a grossfile fixture? Recover from a LATER grossfile's export-AFTER snapshot, undoing that grossfile's mutations (exclude what it created; re-source pre-T any OPE predecessor it ended — FIN ones stay null).
+- [gueltBis = active-meldung discriminator](project_gueltbis-active-meldung-discriminator.md) — Legacy keys "active" off `guelt_bis is null`, not status; check gueltBis before treating an ERR_MELDID_FEHLT deviation as missing data — present-but-ended = validation bug, not a data problem.
