@@ -247,7 +247,7 @@ not require it.
 - **New**: `ifas-domain-stm/.../validation/ValidationMsgStore.java`.
 - **Change**: `SteuerMeldungLieferung.java` — `validationMsgs()` returns
   `ValidationMsgStore`. Default severity helpers
-  (`errorValidationMsgs() / infoValidationMsgs() / oekbInfoValidationMsgs()`)
+  (`errorValidationMsgs() / infoValidationMsgs()`)
   keep their signatures temporarily via
   `validationMsgs().filterBySeverity(...).all()` (removed in a follow-up).
 - **Change**: `DefaultSteuerMeldungLieferung.java` — record component +

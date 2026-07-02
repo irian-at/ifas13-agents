@@ -163,4 +163,4 @@ Archive the superseded patch plan: move `plans/fix-acceptance-check-and-preserve
 - Removing `_LIEFERUNG` codes from `MSG_CODES_ALWAYS_SHOWN_AS_WARNINGS_IF_ONLY_IN_NEW` — these stay for covered-by-pairing reasons; only the rationale comment changes.
 - Whether `LieferungStmKey` should include `stmId`/`status` for status-update meldungen — sidestepped by preserving the ordered list.
 - Persisting `ValidationMsg`s to DB — `SteuerMeldungPersistenceService` is stubbed; persistence model is a separate piece of work.
-- Aligning `CsvValidationMsg.Severity{INFO,WARN,ERROR}` with `ValidationMsg.Severity{ERROR,INFO,OEKBINFO}` — `ValidationMsgMapper` already handles this asymmetrically; no change.
+- Aligning `CsvValidationMsg.Severity{INFO,WARN,ERROR}` with `ValidationMsg.Severity{ERROR,INFO}` — `ValidationMsgMapper` already handles this asymmetrically; no change.
