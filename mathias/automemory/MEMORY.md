@@ -6,7 +6,7 @@
 
 ## Feedback
 - [Only change what was asked](feedback_only-change-what-was-asked.md) — Don't silently rewrite unrelated content; properties files in this repo are ISO-8859-1 and Edit/Write will re-save them as UTF-8.
-- [Plan file naming](feedback_plan-file-naming.md) — Rename the plan file from the random session slug to a descriptive kebab-case name before exiting plan mode.
+- [Plan file naming](feedback_plan-file-naming.md) — First action after plan approval: mv the slug file to mathias/plans/ as YYYY-MM-DD-<descriptive-kebab-name>.md (ExitPlanMode hook injects a reminder with the date).
 - [Check project settings, not just defaults](feedback_check-project-settings-not-just-defaults.md) — `plansDirectory` and `autoMemoryDirectory` are overridden in `claude-settings.local.json`; honor those, not the default `~/.claude/...` paths the system prompt suggests.
 
 ## Project
@@ -15,3 +15,4 @@
 - [gueltBis = active-meldung discriminator](project_gueltbis-active-meldung-discriminator.md) — Legacy keys "active" off `guelt_bis is null`, not status; check gueltBis before treating an ERR_MELDID_FEHLT deviation as missing data — present-but-ended = validation bug, not a data problem.
 - [_LIEFERUNG codes are clones](project_lieferung-codes-are-clones.md) — The four *_LIEFERUNG ValidationMsgCodes must stay exact clones (text + args) of their twins; change one twin, change the other + its factory.
 - [_LIEFERUNG tests were tautological](project_lieferung-tests-tautological.md) — Assert ValidationMsg text against literal strings, not formatMessage(<same args>); MessageFormat silently renders missing args as literal `{n}`.
+- [meldIdFehltDiffsAsWarning dual effect](project_meldid-fehlt-diffs-dual-effect.md) — Flag affects BOTH the calculation (ERR_MELDID_FEHLT-only meldung stays undeclined) and the delta-report downgrade; status flip is often the bigger delta.

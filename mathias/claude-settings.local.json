@@ -18,7 +18,8 @@
       "Bash(git config:*)",
       "Bash(unzip -l *)",
       "Bash(ifas-dev-tools/scripts/*)",
-      "Bash(google-chrome-stable --remote-debugging-port=9222 *)"
+      "Bash(google-chrome-stable --remote-debugging-port=9222 *)",
+      "Bash(mv /home/sma/.claude/plans/* /home/sma/dev/projects/ifas13-agents/mathias/plans/*)"
     ],
     "deny": [
       "Bash(sudo *)",
