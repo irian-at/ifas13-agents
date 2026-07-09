@@ -15,4 +15,3 @@
 - [gueltBis = active-meldung discriminator](project_gueltbis-active-meldung-discriminator.md) — Legacy keys "active" off `guelt_bis is null`, not status; check gueltBis before treating an ERR_MELDID_FEHLT deviation as missing data — present-but-ended = validation bug, not a data problem.
 - [_LIEFERUNG codes are clones](project_lieferung-codes-are-clones.md) — The four *_LIEFERUNG ValidationMsgCodes must stay exact clones (text + args) of their twins; change one twin, change the other + its factory.
 - [_LIEFERUNG tests were tautological](project_lieferung-tests-tautological.md) — Assert ValidationMsg text against literal strings, not formatMessage(<same args>); MessageFormat silently renders missing args as literal `{n}`.
-- [meldIdFehltDiffsAsWarning dual effect](project_meldid-fehlt-diffs-dual-effect.md) — Flag affects BOTH the calculation (ERR_MELDID_FEHLT-only meldung stays undeclined) and the delta-report downgrade; status flip is often the bigger delta.
