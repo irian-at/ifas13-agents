@@ -106,3 +106,12 @@ Add Javadoc when:
 For complex inline logic that requires a second read to follow, add a short comment explaining *why*, not *what*. Typical cases: non-obvious algorithms, workarounds for upstream bugs, intentional ordering, performance trade-offs.
 
 Avoid restating what the code already says, documenting trivial getters/setters, or adding empty `@param`/`@return` tags.
+
+## Comment Brevity
+
+Keep every comment as short and precise as possible — the fewest words that carry the *why*. A comment must earn its lines; when in doubt, cut.
+
+- One fact per comment. State it once, do not restate it in a longer form on the next line.
+- Prefer a single line. Only span multiple lines when each line adds a distinct fact (e.g. cause, decision, source/commit).
+- Drop narration, hedging, and background the reader can get from the code, git history, or a linked reference. Cite the reference (ticket, commit, `file:line`, legal §) instead of paraphrasing it.
+- Name the concrete anchor (method, code, commit hash, date) over prose describing it.
