@@ -17,6 +17,33 @@ var list = new ArrayList<String>();
 ArrayList<String> list = new ArrayList<>();
 ```
 
+## Formatting
+
+When a call's arguments are chopped down — the first argument starts on a new line after the
+opening `(` — the closing `)` must start on its own line as well:
+
+```java
+// wrong
+return collectInIsolatedTransaction(
+        () -> _getDtosForIsin(isin, exportedWfsWkn, stichtag, minStmVersion, excludeBaseData));
+
+// correct
+return collectInIsolatedTransaction(
+        () -> _getDtosForIsin(isin, exportedWfsWkn, stichtag, minStmVersion, excludeBaseData)
+);
+```
+
+This also holds for a nested call whose own arguments are chopped down:
+
+```java
+// correct
+.flatMap(isin -> getDtosForIsin(
+        isin, exportedWfsWkn, stichtag, minStmVersion, excludeBaseData, transactional
+).stream())
+```
+
+Arguments that still fit on the line with the opening `(` keep the closing `)` on that same line.
+
 ## Logging
 
 Use Lombok's `@Slf4j` annotation. Do NOT declare loggers manually:
