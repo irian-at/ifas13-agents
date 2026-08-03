@@ -44,6 +44,41 @@ This also holds for a nested call whose own arguments are chopped down:
 
 Arguments that still fit on the line with the opening `(` keep the closing `)` on that same line.
 
+
+## Declared Types in Signatures
+
+Method return types, parameters, and fields declare a type callers depend on. Two rules,
+in order of strength:
+
+1. **Never expose a concrete implementation.** `ArrayList`, `LinkedHashMap`, `HashSet`,
+   `TreeMap`, etc. must not appear in a signature — only the interface they implement
+   (`List`, `Map`, `Set`, ...). The concrete class belongs to the `new ...` and its local
+   variable, nowhere else.
+2. **Among interfaces, declare the most general one that satisfies callers.** `SequencedMap`
+   is an interface, not a concrete type — but it is a *stronger* contract than `Map`. Only
+   widen the declared interface (`Map` over `SequencedMap`, `Collection` over `List`) when
+   nothing forces the stronger one. If a caller genuinely needs the extra contract (e.g.
+   `SequencedMap.reversed()`, `List.get(int)`), declaring it is correct — the need must be
+   real, not incidental.
+
+```java
+// wrong — concrete implementation in the signature (rule 1)
+public LinkedHashMap<K, V> byPosition() { ... }
+public ArrayList<String> names() { ... }
+
+// correct — signature is an interface, implementation stays concrete
+public Map<K, V> byPosition() {
+    Map<K, V> map = new LinkedHashMap<>();   // LinkedHashMap: iteration order preserved
+    ...
+    return map;
+}
+public List<String> names() { ... }
+```
+
+Note: this concerns API surface. Local variables still use explicit concrete types
+per **Type Declarations** above (`var` is forbidden).
+
+
 ## Logging
 
 Use Lombok's `@Slf4j` annotation. Do NOT declare loggers manually:
@@ -100,3 +135,12 @@ Add Javadoc when:
 For complex inline logic that requires a second read to follow, add a short comment explaining *why*, not *what*. Typical cases: non-obvious algorithms, workarounds for upstream bugs, intentional ordering, performance trade-offs.
 
 Avoid restating what the code already says, documenting trivial getters/setters, or adding empty `@param`/`@return` tags.
+
+## Comment Brevity
+
+Keep every comment as short and precise as possible — the fewest words that carry the *why*. A comment must earn its lines; when in doubt, cut.
+
+- One fact per comment. State it once, do not restate it in a longer form on the next line.
+- Prefer a single line. Only span multiple lines when each line adds a distinct fact (e.g. cause, decision, source/commit).
+- Drop narration, hedging, and background the reader can get from the code, git history, or a linked reference. Cite the reference (ticket, commit, `file:line`, legal §) instead of paraphrasing it.
+- Name the concrete anchor (method, code, commit hash, date) over prose describing it.
