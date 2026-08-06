@@ -18,5 +18,6 @@
 - [KONTROLL tolerance (legacy)](project_kontroll-tolerance-legacy.md) — INFO_KONTROLL_1 & Kontrollsummen use absolute dToleranz=10.0 (Stichtag≥2017-02-01, else 0.9), 10-NK operands, in c_st_meldung.cpp CheckKontrollsummen(); new system's infoKontroll1 doesn't apply it yet. Legacy .cpp is ISO-8859-1 → use grep -a.
 - [gf1 field-diff null-vs-zero](project_gf1-fielddiff-null-vs-zero.md) — gf1's ~11151 GrossfileRecalc error field diffs are benign: new system omits zero country-vector entries (filterZeroValuesForCountries) that legacy wrote as explicit 0.0000, and the newReturnVsOldReturn config is strict about it. No calc bug, no data loss.
 - [STM guelt_ab unique-key test flake](project_stm-gueltab-unique-key-test-flake.md) — Multi-row SteuerMeldung test seeding with a shared now() for guelt_ab collides on AK_STUER_BEH_ALT_KEY_STEUER_M on coarse clocks; use a deterministic per-row timestamp.
+- [ValidationSetting flags have two effects](project_validationsetting-flags-have-two-effects.md) — Each recalc-artifact flag drives both the delta-report severity AND (via SteuerlicheErmittlungRecalcOptions.ignore*Errors) the meldung's result status; wiring only the report half leaves the STATUS_* return-file diffs in place.
 
 
