@@ -112,7 +112,7 @@ if (cSt_Meldung::strSelbstnachweis == "NEIN") {
 
 Pattern: IFAS13 reads a precomputed deadline column on the matched GJ row (which is null-by-design for B) where legacy derives it on the fly from the meldung's own `gjEnde`. Follow legacy verbatim: for ERR_FRIST_NOSN specifically, derive `lastChance = meldung.gjEnde + 7M` at the call site, independent of any GJ row. Legacy doesn't no-op when no GJ matches either — it fires both `ERR_FRIST_NOSN` and `ERR_GJE_UNGLEICH_O` when the meldung's `gjEnde` is both late-by-its-own-claim and unrecognised; both are true and both should be emitted.
 
-Note this is divergent from how IFAS13 derives the GJ-entity's `lastChance` (which trading-day-adjusts earlier via `ensureAustrianStockExchangeTradingDayOrElseEarlier`). Legacy uses the raw `gjEnde + 7M` without adjustment; mirroring that keeps us from firing FRIST_NOSN on 1–2-day windows where legacy stays silent. The GJ-entity's `lastChance` stays correct for its own consumers (`snEnde`, `mahnungAb`, korrekturfrist) — we just don't route the FRIST_NOSN comparison through it.
+Note this is divergent from how IFAS13 derives the GJ-entity's `lastChance` (which trading-day-adjusts earlier via `ensureAustrianBankingDayOrElseEarlier`). Legacy uses the raw `gjEnde + 7M` without adjustment; mirroring that keeps us from firing FRIST_NOSN on 1–2-day windows where legacy stays silent. The GJ-entity's `lastChance` stays correct for its own consumers (`snEnde`, `mahnungAb`, korrekturfrist) — we just don't route the FRIST_NOSN comparison through it.
 
 ## Fix shape
 
