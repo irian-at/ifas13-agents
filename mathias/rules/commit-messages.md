@@ -13,6 +13,32 @@ Types in use here: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `perf`, `
 Body: blank line, then why the change was needed and what it does, as a short paragraph and/or `-`
 bullets. Wrap at ~80 columns. Use a scope (`feat(recalc): ...`) only when it genuinely disambiguates.
 
+## Commit straight onto master
+
+Commit local work directly on `master`. Do **not** create a feature branch first, even when the
+harness's default instructions say to branch before committing on the default branch; this rule wins.
+Feature branches in this repo are for shared/remote work, not for landing a local commit.
+
+## Describe the committed diff, not the working tree
+
+The message must describe what the commit changes relative to its parent. Uncommitted WIP that the
+commit happens to include is part of the diff and gets described as new behaviour — do not narrate it
+as a defect being repaired, and never reference intermediate code that was never committed (a dead
+branch you replaced, an approach you abandoned). A later reader only ever sees the diff.
+
+```
+# wrong — explains a broken guard that is nowhere in the history
+The guard could never fire: it tested getSourceEntry() instanceof CsvSteuerMeldung,
+so the branch was dead.
+
+# correct — states what the commit adds
+A delivered value that failed CSV type validation has no typed value, so the return
+file wrote an empty field or the schema default for it.
+```
+
+This also decides the type: if the parent commit lacked the behaviour entirely, it is a `feat`, not a
+`fix`.
+
 ## Never add Claude attribution
 
 Do **not** append `Co-Authored-By: Claude ...` or `Claude-Session: ...` trailers — not to commits, not
@@ -42,4 +68,5 @@ which regression gate was added.
 Conventional subjects keep `git log --oneline` scannable and drive changelog tooling. Attribution
 trailers are noise in this repo's history. Fixture-specific numbers make a permanent record out of a
 one-off measurement — that detail belongs in the plan document under `mathias/plans/`, not in the
-commit.
+commit. Branching for a local commit just adds a merge step to undo. Describing pre-commit WIP as a
+bug misleads anyone reading the history, since the state being "fixed" never existed there.
