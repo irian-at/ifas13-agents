@@ -19,5 +19,7 @@
 - [gf1 field-diff null-vs-zero](project_gf1-fielddiff-null-vs-zero.md) — gf1's ~11151 GrossfileRecalc error field diffs are benign: new system omits zero country-vector entries (filterZeroValuesForCountries) that legacy wrote as explicit 0.0000, and the newReturnVsOldReturn config is strict about it. No calc bug, no data loss.
 - [STM guelt_ab unique-key test flake](project_stm-gueltab-unique-key-test-flake.md) — Multi-row SteuerMeldung test seeding with a shared now() for guelt_ab collides on AK_STUER_BEH_ALT_KEY_STEUER_M on coarse clocks; use a deterministic per-row timestamp.
 - [ValidationSetting flags have two effects](project_validationsetting-flags-have-two-effects.md) — Each recalc-artifact flag drives both the delta-report severity AND (via SteuerlicheErmittlungRecalcOptions.ignore*Errors) the meldung's result status; wiring only the report half leaves the STATUS_* return-file diffs in place.
+- [CheckLieferfristen status reachability](project_checklieferfristen-status-reachability.md) — ERR_FRIST_NOSN/ERR_FRIST_SN fire for NEW, CONFIRMED *and* UPDATE (never DELETE); the UPDATE call site at c_st_meldung.cpp:9260 is dropped by greps that filter `//` lines.
+- [QuickRecalculationTest stale test-classes](project_quick-recalc-stale-test-classes.md) — "must have at least one Melde-CSV" usually means a leftover zip in target/test-classes, not a bad zip; the extra resource pushes the test onto bundleOf(Collection), which never unzips.
 
 
