@@ -248,6 +248,24 @@ Coding standards are enforced via `.claude/rules/`. Key rules:
 | `async-processing.md` | `**/service/**` | Executor injection, no `@Async` within same class |
 | `ide-refactoring.md` | `**/*.java` | Use IDE/MCP tools for renames/moves |
 
+## Git Conventions
+
+### Branch Naming
+
+**Never use `claude/` (or any agent/tool name) as a branch prefix.** Branches are named after
+the kind of change they carry, using an abstract conventional-commit-style prefix:
+
+```
+feat/recalc-stats-failed-jobs-21c330      # new functionality
+fix/stichtag-resolution-off-by-one        # bug fix
+chore/bump-spring-boot-3.5.8              # maintenance, deps, tooling
+refactor/split-recalc-query-service       # behaviour-preserving restructuring
+docs/architecture-diagrams                # documentation only
+```
+
+This applies to branches created for agent worktrees as well — pick the prefix that matches the
+work, not the tool that produced it.
+
 ## Common Issues
 
 ### Annotation Processing Not Working
