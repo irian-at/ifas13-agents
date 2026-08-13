@@ -35,6 +35,33 @@ mvn test -Dtest=ClassName
 
 Database tests use TestContainers. Setup scripts: `ifas-database/ifas-database-flyway/src/main/resources/db/migration/`.
 
+### One-Time Bootstrap of the Local Maven Repository
+
+Without OeKB Nexus access, two steps are required to compile the modules that depend on the OeKB
+authentication libraries (`oekb-auth-support` and, transitively, `ifas-web-ui`,
+`ifas-main-application`, `ifas-main-war`):
+
+**1. Install the dummy master POM and the OeKB auth JARs into `~/.m2` (once per machine):**
+
+```bash
+mvn install -f support-libs/oekb-master-pom-dummy/pom.xml
+```
+
+This installs the dummy parent `at.oekb.master:maven-master:2.0.0` plus the binary JARs from
+`support-libs/oekb-libs/` (`oekb-components-authentication-core`,
+`oekb-components-authentication-filter-jakarta`) under their proper Maven coordinates.
+Symptom when missing: `Non-resolvable parent POM ... at.oekb.master:maven-master:2.0.0`.
+
+**2. Build with the `dev-build` profile:**
+
+```bash
+mvn clean install -Pdev-build
+```
+
+`dev-build` excludes the transitive `jespa:jespa-jakarta`, which exists only on OeKB Nexus and
+cannot be resolved from Maven Central. Symptom when missing:
+`Could not resolve dependencies ... jespa:jespa-jakarta:jar:2.0.5`.
+
 ## Running the Application
 
 Multiple entry points depending on database backend. **Never run `IfasMainApplication` directly** - it throws an exception by design.
