@@ -144,3 +144,25 @@ Keep every comment as short and precise as possible — the fewest words that ca
 - Prefer a single line. Only span multiple lines when each line adds a distinct fact (e.g. cause, decision, source/commit).
 - Drop narration, hedging, and background the reader can get from the code, git history, or a linked reference. Cite the reference (ticket, commit, `file:line`, legal §) instead of paraphrasing it.
 - Name the concrete anchor (method, code, commit hash, date) over prose describing it.
+
+### Describe the code, not the change
+
+A comment states what the code does now, for a reader who never saw the previous version. It is not a
+changelog entry and not a bug report. Keep out:
+
+- **Change history** — "used to", "previously", "now also", what an earlier implementation got wrong.
+  This belongs in the commit message.
+- **Debugging trail** — which test or fixture exposed the problem, how many rows/deviations were
+  counted, what the symptom looked like. Measurements go stale immediately; they belong in the plan
+  document, if anywhere.
+- **Scope beyond the member** — document the method or field the comment sits on. A caller's condition
+  is explained at the call site, not in the callee's Javadoc.
+
+```java
+// wrong — history, the fixture that exposed it, and a count that will go stale
+// The row used to be stored as field -> {BETRAG}, which threw ClassCastException in
+// extractCountryVector and broke StmDiffsTest T08/T10 (~152 such rows per return file).
+
+// correct — the rule that holds, stated once
+// Without a LAENDERCODE the BETRAG would land where the country level belongs.
+```
