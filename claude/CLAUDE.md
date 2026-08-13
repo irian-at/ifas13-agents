@@ -242,7 +242,8 @@ Coding standards are enforced via `.claude/rules/`. Key rules:
 | Rule file | Scope | Content |
 |-----------|-------|---------|
 | `forbidden-apis.md` | `**/*.java` | Temporal utilities, no console output, no reflection, JUnit 5 only |
-| `java-conventions.md` | `**/*.java` | No `var`, Lombok, `@Slf4j` logging, exception handling |
+| `java-conventions.md` | `**/*.java` | No `var`, Lombok, `@Slf4j` logging, exception handling, formatting |
+| `code-comments.md` | `**/*.java` | When a comment is warranted, brevity, no change history |
 | `testing-conventions.md` | `**/test/**` | Given-when-then, AssertJ, `@Inject`, multi-DB, test data |
 | `database-conventions.md` | `**/persistence*/**` | JPA, Flyway, multi-DB support |
 | `async-processing.md` | `**/service/**` | Executor injection, no `@Async` within same class |
