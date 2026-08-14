@@ -266,6 +266,19 @@ docs/architecture-diagrams                # documentation only
 This applies to branches created for agent worktrees as well — pick the prefix that matches the
 work, not the tool that produced it.
 
+**HARD RULE: check the branch name before every commit.** Worktrees often arrive pre-checked-out
+on a tool-generated branch (typically `claude/…`). Before the first `git commit` in a worktree,
+verify the current branch carries one of the prefixes above; if it does not, rename it first:
+
+```bash
+git branch -m <old-name> feat/<describes-the-change>
+```
+
+Run the rename from inside the worktree and use the two-argument form — `git -C <path> branch -m
+<new>` fails with `cannot rename the current branch while not on any` when the calling shell has
+a stale `GIT_DIR`/`GIT_WORK_TREE` set. Rename before committing, not after: it keeps the branch
+name right from the first commit and avoids fixing up references later.
+
 ## Common Issues
 
 ### Annotation Processing Not Working
