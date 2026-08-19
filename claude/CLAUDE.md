@@ -134,11 +134,19 @@ mvn exec:java -Dexec.mainClass="at.oekb.ifas.devtools.DatabaseSchemaTool"
 
 **`ifas-domain/`** - Business domain logic (DDD approach)
 - `ifas-domain-core` - Shared domain model and utilities
+    - `domain.core` - Kalender (Feiertage, Börsetag), Charsets, CSV-Meldefile-Typerkennung
+    - `domain.core.csv` - IFAS-wide CSV basics shared by all Meldung domains:
+      `CsvIfasDateFormat`, `CsvTypeConversions`, `CsvIfasValueTypeValidator`, `CsvIfasFilenameValidator`
 - `ifas-domain-stm` - Tax reporting domain (core business logic)
     - Processing of "SteuerMeldung" (tax reports)
     - Validation against "Ermittlungsvorgabe" (calculation rules)
     - Business calculations and transformations
-- `ifas-domain-recalc` - Excel recalculation domain logic
+    - Also hosts `domain.stm.recalc` (Excel recalculation — was its own `ifas-domain-recalc`
+      module until commit `28c55b3a6` folded it back in), plus `domain.stm.ausschuettung` and
+      `domain.stm.isinanforderung`
+- `ifas-domain-fondspreise` - Fondspreise domain
+    - Preismeldung (incl. LMT & Solvabilität): Lieferformat, parsing and validation
+    - Depends only on `ifas-domain-core` + `csv-schema`; deliberately independent of `ifas-domain-stm`
 
 **`ifas-services/`** - Application services
 - `ifas-main-service` - Core business services (orchestration layer)

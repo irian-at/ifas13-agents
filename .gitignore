@@ -6,3 +6,4 @@ claude/settings.local.json
 claude/rules/personal-*
 claude/skills/personal-*
 /claude/worktrees/
+claude/commands/personal-*
