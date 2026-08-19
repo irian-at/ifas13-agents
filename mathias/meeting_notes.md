@@ -8,10 +8,6 @@
 # REST schnittstelle dass wir die isin listen auch behandeln 
 
 
-q*xUmJqn*@73LMk
-NsQ8yfCpctoYQTNpyEaB
-# todo
-
 in gf5 - update on final meldung - legacy does not write 649528 - should we?
 
 START;LU0114064917;InvF;T;EUR;2025.01.01;2025.12.29;NEIN;;;2;;LU;NEIN;JA;NEIN;;NEIN;NEIN;2;549300KAINZSW5BOH873
@@ -21,8 +17,6 @@ END;LU0114064917;2026.07.21 18:55:46
 
 # todo 
 wie sieht unser Start header aus wenn ein datum ungültig ist?
-
-q*xUmJqn*@73LMk
 
 
 preis files:
