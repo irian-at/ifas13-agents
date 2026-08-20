@@ -1,10 +1,39 @@
+## Preisfiles
+
+fondspreis job -> verarbeiten file im job   -> hat status neues preisfile zB -> dann wird antwortfile erzeugt -> nächster status - warten auf batchjob 
+1) legen preismeldung job an -> mit pending und submitted
+2) wird verarbeitet -> return return files werden erzeugt (data.log, validierung anwerfen) 
+   -> gespeichert im job und committed -> job geht auf status ready_for_batch
+3) 14:00 job holt sich alle im ready_for_batch (werden neuerlich validiert, im speicher gesammelt,  und fplausib, und fondspreisfiles erzeugt)
+4) -> wenn alle jobs verarbeit -> tmp_if_last aktualisieren (entw. löschen oder updaten..)
 
 
-# Isin AnforderungsList neben STM OHNE diff
-# diff in namen unter rekalk hinzufügen
+entities: fondspreis job, statistics pro lieferung, letzter_kurs (tmp_if_last), kurs (kurs) 
+
+(eventuell neue detail table fondpreisJobKurse für die einzelnen preise eines jobs, aber das nur wenn wir es wirklich brauchen)
+
+
+lösch sätze löschen derzeit nur aus der tmp_if_kurs table
+
+data.log -> result file für import (wird das gebraucht? -> fa fragen)
+was passiert wenn 1 zeile ungültig -> wird rest importiert? -> alles ohne fehler wird importiert!
+
+fondspreise tabelle neu. -> linkt auf job, muss timestamp haben
+
+alle preisdaten werden in tmp_if_kurs gesammelt
+
+->fplausib.txt wird geschrieben für die fachabteilung (sammlung aller)
+
+-> letzter aktueller preis ist in tmp_if_last
+
+-> wird dann in kurs gesynced
+
+
+- zukünftiger 2. lauf soll alles nochmal durchgehen.
+
+
+
 # error zusammensetzung kontrollieren
-# eventuell packages auftröseln in diff und non-diff
-# ensure no NEU is appended in regular case
 # REST schnittstelle dass wir die isin listen auch behandeln 
 
 

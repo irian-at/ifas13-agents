@@ -8,6 +8,7 @@
 - [Only change what was asked](feedback_only-change-what-was-asked.md) — Don't silently rewrite unrelated content; properties files in this repo are ISO-8859-1 and Edit/Write will re-save them as UTF-8.
 - [Plan file naming](feedback_plan-file-naming.md) — First action after plan approval: mv the slug file to mathias/plans/ as YYYY-MM-DD-<descriptive-kebab-name>.md (ExitPlanMode hook injects a reminder with the date).
 - [Check project settings, not just defaults](feedback_check-project-settings-not-just-defaults.md) — `plansDirectory` and `autoMemoryDirectory` are overridden in `claude-settings.local.json`; honor those, not the default `~/.claude/...` paths the system prompt suggests.
+- [Read personal rules before committing](feedback_read-personal-rules-before-committing.md) — `mathias/rules/commit-messages.md` wins over CLAUDE.md and the harness: commit onto master, no Claude trailers, no fixture specifics.
 
 ## Project
 - [Recalc historical fidelity](project_recalc-historical-fidelity.md) — Recalc of old SteuerMeldung versions must match legacy's behavior at that time, not current legacy; don't "clean up" version gates that mirror dated OeKBSD changes.
@@ -22,5 +23,4 @@
 - [CheckLieferfristen status reachability](project_checklieferfristen-status-reachability.md) — ERR_FRIST_NOSN/ERR_FRIST_SN fire for NEW, CONFIRMED *and* UPDATE (never DELETE); the UPDATE call site at c_st_meldung.cpp:9260 is dropped by greps that filter `//` lines.
 - [Headless launch needs devtools off](project_headless-launch-devtools-npe.md) — bare `java -cp` of a Local*IfasApplication NPEs on every DB access unless `-Dspring.devtools.restart.enabled=false`; not a code bug.
 - [QuickRecalculationTest stale test-classes](project_quick-recalc-stale-test-classes.md) — "must have at least one Melde-CSV" usually means a leftover zip in target/test-classes, not a bad zip; the extra resource pushes the test onto bundleOf(Collection), which never unzips.
-
-
+- [bundlesOf temp-dir cleaner](project_bundlesof-tempdir-cleaner.md) — `bundlesOf(zip).getFirst()` lets GC delete the unzipped temp files mid-run; use `bundleOf(Resource)` for single-bundle zips.
