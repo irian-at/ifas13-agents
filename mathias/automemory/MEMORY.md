@@ -24,3 +24,4 @@
 - [Headless launch needs devtools off](project_headless-launch-devtools-npe.md) — bare `java -cp` of a Local*IfasApplication NPEs on every DB access unless `-Dspring.devtools.restart.enabled=false`; not a code bug.
 - [QuickRecalculationTest stale test-classes](project_quick-recalc-stale-test-classes.md) — "must have at least one Melde-CSV" usually means a leftover zip in target/test-classes, not a bad zip; the extra resource pushes the test onto bundleOf(Collection), which never unzips.
 - [bundlesOf temp-dir cleaner](project_bundlesof-tempdir-cleaner.md) — `bundlesOf(zip).getFirst()` lets GC delete the unzipped temp files mid-run; use `bundleOf(Resource)` for single-bundle zips.
+- [STB is Auslieferformat-only](project_stb-auslieferformat-only.md) — STB lives only in the Auslieferformat schema; the STB entries in CsvIfasStructureValidationRules for OPEN/ERROR/DELETED/FINAL are deliberate, not stale.
