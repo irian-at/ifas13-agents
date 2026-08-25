@@ -307,3 +307,8 @@ yields nothing, and all four input statuses still raise `ERR_ISIN_MID`. The taut
 declined). Until it is removed, `QuickRecalculationTest` throws
 `SteuerMeldungBundle must have at least one Melde-CSV …` - see the prerequisite section above. All
 18 files in it are present in the sibling zip, so it is safe to delete.
+
+**Full-suite outcome** (run after the commit): `ifas-domain-stm` 1277 tests green;
+`ifas-integration-tests` 437 green / 7 skipped (pre-existing `@Disabled`), 0 failures. Nothing in the
+suite depended on status validation running for a prefilled-Excel (null-status) Meldung, so that
+behaviour change is unobserved by any existing test.
