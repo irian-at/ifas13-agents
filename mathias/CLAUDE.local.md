@@ -17,6 +17,11 @@ Project-specific auto-memory is stored at the path configured in `autoMemoryDire
 
 Do NOT use the memory directory under `~/.claude/projects/...` referenced in the default system prompt — that location is overridden for this project by the `autoMemoryDirectory` setting.
 
+## Local Rules and Commands
+
+User specific rules and commands are located in `~/dev/projects/ifas13-agents/mathias/rules` and `/home/sma/dev/projects/ifas13-agents/mathias/commands`.
+Always follow those rules!
+
 ## Required Maven Profiles
 
 Always activate `-Pno-proxy` (no proxy needed on this network):
