@@ -25,3 +25,6 @@
 - [QuickRecalculationTest stale test-classes](project_quick-recalc-stale-test-classes.md) — "must have at least one Melde-CSV" usually means a leftover zip in target/test-classes, not a bad zip; the extra resource pushes the test onto bundleOf(Collection), which never unzips.
 - [bundlesOf temp-dir cleaner](project_bundlesof-tempdir-cleaner.md) — `bundlesOf(zip).getFirst()` lets GC delete the unzipped temp files mid-run; use `bundleOf(Resource)` for single-bundle zips.
 - [STB is Auslieferformat-only](project_stb-auslieferformat-only.md) — STB lives only in the Auslieferformat schema; the STB entries in CsvIfasStructureValidationRules for OPEN/ERROR/DELETED/FINAL are deliberate, not stale.
+- [@CsvSource TestTemplate limits](project_csvsource-testtemplate-provider-limits.md) — the multi-DB extension parses @CsvSource itself: no null columns, no enum conversion.
+- [YAML export tags with digits](project_yaml-export-entity-tags-have-digits.md) — `KEST98` is dropped by a `[A-Z_]+` block regex when trimming a fixture export.
+- [STM delivery-chain test harness](project_stm-delivery-chain-test-harness.md) — chains need processLieferung; recalc never persists and calculateBundle rejects confirm/delete files.
