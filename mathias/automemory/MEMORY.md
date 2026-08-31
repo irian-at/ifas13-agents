@@ -28,3 +28,5 @@
 - [@CsvSource TestTemplate limits](project_csvsource-testtemplate-provider-limits.md) — the multi-DB extension parses @CsvSource itself: no null columns, no enum conversion.
 - [YAML export tags with digits](project_yaml-export-entity-tags-have-digits.md) — `KEST98` is dropped by a `[A-Z_]+` block regex when trimming a fixture export.
 - [STM delivery-chain test harness](project_stm-delivery-chain-test-harness.md) — chains need processLieferung; recalc never persists and calculateBundle rejects confirm/delete files.
+- [Temporal type storage per DBMS](project_temporal-type-storage-per-dbms.md) — all 3 java.time types agree on the Instant, but offset types store UTC on Sybase/Postgres and Vienna on H2.
+- [Sybase testcontainer credentials](project_sybase-testcontainer-credentials.md) — repo-root .env now present; .idea's skip-sybase16-tests silently drops Sybase invocations; jTDS product name is exactly "ASE".
