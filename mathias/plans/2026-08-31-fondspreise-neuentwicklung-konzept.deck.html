@@ -1,0 +1,1549 @@
+<!doctype html>
+<!--
+  Deck template — copy, then replace everything between the SECTIONS markers.
+
+  Shape: one long scrolling document, with a sticky table of contents on the left.
+  Rules baked in here, do not undo them:
+    * Nothing is ever display:none. All text stays in the DOM for Ctrl+F. That also
+      rules out scroll-reveal animations that start at opacity:0 — see MOTION below.
+    * The table of contents BUILDS ITSELF from each <section>'s heading — just write
+      sections with an <h2> and they appear in the menu. Give a section an id to
+      control its anchor, otherwise one is slugged from the heading.
+    * Section numbers in the menu and above each <h2> are CSS counters. Do not
+      hand-number headings; the counters stay right when sections move.
+    * Mermaid sources are cached in JS so diagrams re-render on a theme change, and
+      mermaid is themed from the deck's own tokens — diagrams match the page.
+    * Everything is local: mermaid comes from the sibling _deck/ directory.
+
+  GEOMETRY IS LOAD-BEARING. --toc-w 17rem + main max-width 58rem + 3.5rem padding
+  give a content column of exactly 816px, which is the number every mermaid width
+  budget in references/diagram-patterns.md is derived from. Change the type, the
+  colour, the spacing — but leave those three alone unless you also redo that table.
+-->
+<!-- data-headings picks the heading treatment: "rule" for a diagram-heavy deck,
+     "accent" for a prose-heavy one. See HEADING TREATMENT in the stylesheet;
+     probe.sh reports which one fits and flags the attribute if it is missing.
+
+     data-palette is the deck's colour: ink (blue), ember (rust) or iris (indigo).
+     Pick one per deck rather than defaulting every time — decks that all look
+     identical are harder to tell apart at a glance. The reader can cycle it from
+     the sidebar, and that choice is remembered per file. -->
+<html lang="de" data-headings="rule" data-palette="iris">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fondspreise ohne tmp-Tabellen — Konzept IFAS13</title>
+<style>
+  /* ====================================================================== */
+  /*  STRUCTURAL TOKENS — the same in every palette                         */
+  /* ====================================================================== */
+  :root {
+    --sans: "Ubuntu", "Fira Sans", "Source Sans 3", "Segoe UI Variable Text",
+            "Segoe UI", "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+    --display: "TeX Gyre Pagella", "Palatino Linotype", "Iowan Old Style", Palatino,
+               "Book Antiqua", Georgia, ui-serif, serif;
+    --mono: "JetBrains Mono", "JetBrainsMono Nerd Font Mono", "IBM Plex Mono",
+            "Cascadia Mono", "SF Mono", Consolas, ui-monospace, monospace;
+
+    /* spacing scale — use these, do not invent one-off rem values */
+    --s1:.25rem; --s2:.5rem; --s3:.75rem; --s4:1rem; --s5:1.5rem;
+    --s6:2rem;   --s7:3rem;  --s8:4.5rem;
+    --r1:.35rem; --r2:.55rem; --r3:.85rem;
+
+    --toc-w:17rem;
+    --measure:64ch;   /* prose stops here; tables and diagrams run the full column */
+  }
+
+  /* ====================================================================== */
+  /*  PALETTES — set data-palette on <html>; the sidebar button cycles them  */
+  /*                                                                        */
+  /*  ink    blue on cool paper.   The documentation default: GitHub Primer  */
+  /*                              (#0969da), MDN, Tailwind all land here.    */
+  /*  ember  rust on warm bone.    Editorial, closer to print than to a UI.  */
+  /*  iris   indigo on cool paper. The Stripe/Linear register.               */
+  /*                                                                        */
+  /*  Accent text values are Radix Colors step 11 (light) and step 11 dark,  */
+  /*  which are tuned for text contrast against their own backgrounds; ink's */
+  /*  solid is Primer's link blue. Every palette keeps the SAME three        */
+  /*  semantics, so green never stops meaning safe — except --warn, which is */
+  /*  nudged per palette to stay clear of the accent (in ember an amber warn */
+  /*  is nearly the accent, so it goes olive).                               */
+  /* ====================================================================== */
+
+  /* ---- ink (default) ---------------------------------------------------- */
+  :root, :root[data-palette="ink"] {
+    --bg:#fbfcfd; --surface:#fff; --surface-2:#f1f4f8; --tint:#eef3f9;
+    --fg:#16191d; --ink-2:#383e46; --muted:#5f6771; --faint:#8a929c;
+    --line:#e0e5eb; --line-strong:#c4cbd4;
+    --accent:#0969da; --accent-ink:#0b5cad; --accent-wash:rgba(9,105,218,.08);
+    --ok:#2f7d46;     --ok-wash:rgba(47,125,70,.09);
+    --warn:#8a6206;   --warn-wash:rgba(138,98,6,.10);
+    --danger:#b42323; --danger-wash:rgba(180,35,35,.08);
+    --shadow:0 1px 2px rgba(16,24,40,.05), 0 8px 20px -14px rgba(16,24,40,.30);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]), :root[data-palette="ink"]:not([data-theme="light"]) {
+      --bg:#0f1216; --surface:#171b21; --surface-2:#0a0d11; --tint:#1a2431;
+      --fg:#e6eaef; --ink-2:#c3cad3; --muted:#97a0ab; --faint:#727b87;
+      --line:#252b33; --line-strong:#3b434f;
+      --accent:#70b8ff; --accent-ink:#8ecaff; --accent-wash:rgba(112,184,255,.10);
+      --ok:#6fc48a;     --ok-wash:rgba(111,196,138,.11);
+      --warn:#d8ab4a;   --warn-wash:rgba(216,171,74,.11);
+      --danger:#f07a72; --danger-wash:rgba(240,122,114,.11);
+      --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -16px rgba(0,0,0,.9);
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"], :root[data-palette="ink"][data-theme="dark"] {
+    --bg:#0f1216; --surface:#171b21; --surface-2:#0a0d11; --tint:#1a2431;
+    --fg:#e6eaef; --ink-2:#c3cad3; --muted:#97a0ab; --faint:#727b87;
+    --line:#252b33; --line-strong:#3b434f;
+    --accent:#70b8ff; --accent-ink:#8ecaff; --accent-wash:rgba(112,184,255,.10);
+    --ok:#6fc48a;     --ok-wash:rgba(111,196,138,.11);
+    --warn:#d8ab4a;   --warn-wash:rgba(216,171,74,.11);
+    --danger:#f07a72; --danger-wash:rgba(240,122,114,.11);
+    --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -16px rgba(0,0,0,.9);
+    color-scheme:dark;
+  }
+
+  /* ---- ember ------------------------------------------------------------ */
+  :root[data-palette="ember"] {
+    --bg:#fbfaf7; --surface:#fff; --surface-2:#f3f1ec; --tint:#f6efe6;
+    --fg:#1a1917; --ink-2:#3d3a35; --muted:#6a655c; --faint:#948e82;
+    --line:#e2ded4; --line-strong:#c8c2b4;
+    --accent:#b4530a; --accent-ink:#8f4108; --accent-wash:rgba(180,83,10,.08);
+    --ok:#3f7042;     --ok-wash:rgba(63,112,66,.09);
+    --warn:#6d6a0f;   --warn-wash:rgba(109,106,15,.11);
+    --danger:#a83232; --danger-wash:rgba(168,50,50,.08);
+    --shadow:0 1px 2px rgba(40,32,20,.05), 0 8px 20px -14px rgba(40,32,20,.28);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root[data-palette="ember"]:not([data-theme="light"]) {
+      --bg:#141311; --surface:#1d1b18; --surface-2:#100f0e; --tint:#241f19;
+      --fg:#ece7dd; --ink-2:#cdc7bb; --muted:#a09a8d; --faint:#7c766b;
+      --line:#2e2b26; --line-strong:#463f36;
+      --accent:#e8913c; --accent-ink:#f0a65c; --accent-wash:rgba(232,145,60,.10);
+      --ok:#7fb383;     --ok-wash:rgba(127,179,131,.11);
+      --warn:#c3c257;   --warn-wash:rgba(195,194,87,.11);
+      --danger:#e07a72; --danger-wash:rgba(224,122,114,.11);
+      --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -16px rgba(0,0,0,.9);
+      color-scheme:dark;
+    }
+  }
+  :root[data-palette="ember"][data-theme="dark"] {
+    --bg:#141311; --surface:#1d1b18; --surface-2:#100f0e; --tint:#241f19;
+    --fg:#ece7dd; --ink-2:#cdc7bb; --muted:#a09a8d; --faint:#7c766b;
+    --line:#2e2b26; --line-strong:#463f36;
+    --accent:#e8913c; --accent-ink:#f0a65c; --accent-wash:rgba(232,145,60,.10);
+    --ok:#7fb383;     --ok-wash:rgba(127,179,131,.11);
+    --warn:#c3c257;   --warn-wash:rgba(195,194,87,.11);
+    --danger:#e07a72; --danger-wash:rgba(224,122,114,.11);
+    --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -16px rgba(0,0,0,.9);
+    color-scheme:dark;
+  }
+
+  /* ---- iris ------------------------------------------------------------- */
+  :root[data-palette="iris"] {
+    --bg:#fdfdff; --surface:#fff; --surface-2:#f3f3fa; --tint:#f0f1fe;
+    --fg:#1a1a22; --ink-2:#3b3b47; --muted:#62626f; --faint:#8c8c9a;
+    --line:#e3e3ed; --line-strong:#c6c6d5;
+    --accent:#5753c6; --accent-ink:#4a46b0; --accent-wash:rgba(87,83,198,.08);
+    --ok:#2f7d46;     --ok-wash:rgba(47,125,70,.09);
+    --warn:#8a6206;   --warn-wash:rgba(138,98,6,.10);
+    --danger:#b42323; --danger-wash:rgba(180,35,35,.08);
+    --shadow:0 1px 2px rgba(20,20,43,.05), 0 8px 20px -14px rgba(20,20,43,.30);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root[data-palette="iris"]:not([data-theme="light"]) {
+      --bg:#121218; --surface:#1b1b24; --surface-2:#0d0d12; --tint:#202248;
+      --fg:#e8e7f0; --ink-2:#c9c8d6; --muted:#9c9bad; --faint:#787889;
+      --line:#282833; --line-strong:#41414f;
+      --accent:#b1a9ff; --accent-ink:#c5bfff; --accent-wash:rgba(177,169,255,.10);
+      --ok:#6fc48a;     --ok-wash:rgba(111,196,138,.11);
+      --warn:#d8ab4a;   --warn-wash:rgba(216,171,74,.11);
+      --danger:#f07a72; --danger-wash:rgba(240,122,114,.11);
+      --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -16px rgba(0,0,0,.9);
+      color-scheme:dark;
+    }
+  }
+  :root[data-palette="iris"][data-theme="dark"] {
+    --bg:#121218; --surface:#1b1b24; --surface-2:#0d0d12; --tint:#202248;
+    --fg:#e8e7f0; --ink-2:#c9c8d6; --muted:#9c9bad; --faint:#787889;
+    --line:#282833; --line-strong:#41414f;
+    --accent:#b1a9ff; --accent-ink:#c5bfff; --accent-wash:rgba(177,169,255,.10);
+    --ok:#6fc48a;     --ok-wash:rgba(111,196,138,.11);
+    --warn:#d8ab4a;   --warn-wash:rgba(216,171,74,.11);
+    --danger:#f07a72; --danger-wash:rgba(240,122,114,.11);
+    --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -16px rgba(0,0,0,.9);
+    color-scheme:dark;
+  }
+
+  /* ---- base ------------------------------------------------------------- */
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body {
+    margin:0; background:var(--bg); color:var(--fg);
+    font:400 1.125rem/1.7 var(--sans);
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  /* Atmosphere, not decoration: one soft accent wash behind the masthead so the
+     top of the page has depth instead of reading as a flat fill. Fixed, so it
+     fades out as the reader scrolls into the body. */
+  body::before {
+    content:""; position:fixed; inset:0 0 auto 0; height:38rem; pointer-events:none;
+    background:radial-gradient(58rem 26rem at 34% -12%, var(--accent-wash), transparent 68%);
+    z-index:0;
+  }
+  #toc, main { position:relative; z-index:1; }
+  ::selection { background:var(--accent-wash); }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:.2rem; }
+
+  /* ---- reading progress -------------------------------------------------- */
+  /* Orientation on a page that can run very long. No text, no layout cost. */
+  #progress {
+    position:fixed; top:0; left:var(--toc-w); right:0; height:2px; z-index:6;
+    background:var(--accent); transform:scaleX(0); transform-origin:0 50%;
+  }
+
+  /* ====================================================================== */
+  /*  TABLE OF CONTENTS                                                     */
+  /* ====================================================================== */
+  #toc {
+    position:fixed; top:0; left:0; width:var(--toc-w); height:100vh; overflow-y:auto;
+    background:var(--surface-2); border-right:1px solid var(--line);
+    padding:var(--s6) var(--s4) var(--s6) var(--s5);
+    display:flex; flex-direction:column;
+  }
+  #toc .deck-title {
+    font:600 1.15rem/1.25 var(--display); letter-spacing:-.01em;
+    margin:0 0 var(--s2); color:var(--fg);
+  }
+  #toc .deck-meta {
+    font:500 .7rem/1.5 var(--mono); letter-spacing:.08em; text-transform:uppercase;
+    color:var(--faint); margin:0 0 var(--s6);
+  }
+  /* the rail: one hairline the active marker sits on top of */
+  #toc nav { display:flex; flex-direction:column; border-left:1px solid var(--line); }
+  #toc nav { counter-reset:toc; }
+  #toc a {
+    display:grid; grid-template-columns:1.7rem 1fr; align-items:baseline;
+    margin-left:-1px; border-left:2px solid transparent;
+    text-decoration:none; color:var(--muted);
+    font-size:.92rem; line-height:1.35; padding:.42rem .6rem .42rem .75rem;
+    transition:color .14s ease, background-color .14s ease, border-color .14s ease;
+  }
+  #toc a:not(.lvl1) { counter-increment:toc; }
+  #toc a:not(.lvl1)::before {
+    content:counter(toc,decimal-leading-zero);
+    font:500 .68rem/1.6 var(--mono); color:var(--faint); letter-spacing:.02em;
+  }
+  #toc a.lvl1 { font-weight:600; color:var(--ink-2); }
+  #toc a.lvl1::before { content:"§"; font:500 .7rem/1.6 var(--mono); color:var(--faint); }
+  #toc a:hover { color:var(--fg); background:var(--accent-wash); }
+  #toc a.active { color:var(--accent-ink); border-left-color:var(--accent); font-weight:600; }
+  #toc a.active::before { color:var(--accent); }
+  #toc .spacer { flex:1 1 auto; min-height:var(--s5); }
+  #toc .hint {
+    font-size:.72rem; line-height:1.45; color:var(--faint); margin:0 0 var(--s3);
+  }
+  #toc .controls { display:flex; flex-wrap:wrap; gap:.4rem; }
+  #toc button {
+    font:500 .72rem/1 var(--mono); letter-spacing:.06em; text-transform:uppercase;
+    cursor:pointer; text-align:left;
+    background:none; border:1px solid var(--line-strong); color:var(--muted);
+    border-radius:var(--r1); padding:.5rem .7rem;
+    transition:color .14s ease, border-color .14s ease, background-color .14s ease;
+  }
+  #toc button:hover { color:var(--accent-ink); border-color:var(--accent); background:var(--accent-wash); }
+
+  /* ====================================================================== */
+  /*  PAGE                                                                  */
+  /* ====================================================================== */
+  main { margin-left:var(--toc-w); max-width:58rem; padding:var(--s8) 3.5rem 10rem;
+         counter-reset:sec; }
+  section { padding:var(--s7) 0; scroll-margin-top:var(--s5); }
+  section:first-child { padding-top:var(--s2); }
+  section + section { border-top:1px solid var(--line); }
+  main > section:has(h2) { counter-increment:sec; }
+
+  /* Prose stops at the measure; everything visual keeps the full 816px column.
+     The resulting asymmetry is deliberate — it is what makes the page read as a
+     document rather than a wall. */
+  section > :is(p, ul, ol, dl, blockquote, .note, .lede), figcaption {
+    max-width:var(--measure);
+  }
+
+  /* ---- headings ---------------------------------------------------------- */
+  h1 {
+    font:600 clamp(2.3rem,4.8vw,3.3rem)/1.08 var(--display);
+    letter-spacing:-.022em; margin:0 0 var(--s4); max-width:20ch;
+  }
+  h2 {
+    font:600 clamp(1.6rem,3.1vw,2.15rem)/1.18 var(--display);
+    letter-spacing:-.014em; margin:0 0 var(--s5); color:var(--fg);
+  }
+  /* HEADING TREATMENT — chosen per deck with `data-headings` on <html>, because
+     what makes a long page scannable depends on what is in it. probe.sh measures
+     the ratio and tells you which one this deck wants.
+
+       data-headings="rule"    diagram-heavy decks. Ink heading, a short accent
+                               rule opening each section. The diagrams are already
+                               the landmarks, and they need the accent to mark what
+                               changes — so the headings stay out of its way.
+
+       data-headings="accent"  prose-heavy decks. Accent heading, no rule. With few
+                               diagrams nothing competes for the accent, and a
+                               coloured heading is by far the strongest landmark
+                               when scrolling a wall of text.
+
+     The number stays faint in both. Do not mix them within one deck. */
+  main > section:has(h2)::before {
+    content:""; display:block; width:2.6rem; height:3px; border-radius:2px;
+    background:var(--accent); margin-bottom:var(--s5);
+  }
+  :root[data-headings="accent"] main > section:has(h2)::before { content:none; }
+  :root[data-headings="accent"] h2 { color:var(--accent); }
+  main > section:has(h2) > h2::before {
+    content:counter(sec,decimal-leading-zero);
+    display:block; font:600 .72rem/1 var(--mono); letter-spacing:.16em;
+    color:var(--faint); margin-bottom:.7rem;
+  }
+  h3 {
+    font:600 1.02rem/1.4 var(--sans); letter-spacing:.02em;
+    margin:var(--s6) 0 var(--s2); color:var(--fg);
+  }
+  h4 { font:600 .8rem/1.4 var(--mono); letter-spacing:.1em; text-transform:uppercase;
+       color:var(--muted); margin:var(--s5) 0 var(--s2); }
+
+  p { margin:0 0 var(--s4); }
+  strong { font-weight:600; color:var(--fg); }
+  em { font-style:italic; }
+  a { color:var(--accent-ink); text-underline-offset:.18em; text-decoration-thickness:1px; }
+
+  .eyebrow {
+    font:600 .74rem/1 var(--mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--accent); margin:0 0 var(--s4);
+  }
+  .lede {
+    font:400 1.35rem/1.55 var(--display); color:var(--ink-2);
+    max-width:44ch; margin-bottom:var(--s5);
+  }
+  .meta { font:500 .8rem/1.6 var(--mono); letter-spacing:.05em; color:var(--faint); }
+
+  /* ---- lists ------------------------------------------------------------- */
+  ol,ul { padding-left:1.4rem; margin:0 0 var(--s4); }
+  li { margin:.45rem 0; }
+  li::marker { color:var(--accent); }
+  ol { list-style:none; counter-reset:step; padding-left:2.4rem; }
+  ol > li { counter-increment:step; position:relative; }
+  ol > li::before {
+    content:counter(step) "."; position:absolute; left:-2.4rem; top:0;
+    width:1.7rem; text-align:right;
+    font:600 .95rem/1.78 var(--mono); color:var(--accent);
+  }
+
+  /* Absolute marker, NOT flex — flex would turn every inline <code> in the item
+     into a flex item and shred the line into columns. */
+  ul.todo { list-style:none; padding-left:1.9rem; }
+  ul.todo li { position:relative; }
+  ul.todo li::before { content:"\2610"; color:var(--accent); font-size:1.05em;
+                       position:absolute; left:-1.9rem; }
+  ul.todo li.done::before { content:"\2611"; color:var(--ok); }
+  ul.todo li.done { color:var(--muted); }
+
+  /* gap:0 with padding on the cells instead — a column gap would break the row
+     rule into two floating hairlines with a hole between them */
+  dl { display:grid; grid-template-columns:minmax(7rem,13rem) 1fr; gap:0;
+       margin:var(--s5) 0; max-width:none; }
+  dt { font-weight:600; padding:.55rem var(--s5) .55rem 0; border-top:1px solid var(--line); }
+  dd { margin:0; color:var(--ink-2); padding:.55rem 0; border-top:1px solid var(--line); }
+
+  /* ---- code -------------------------------------------------------------- */
+  /* Inline code carries no border: at the density of a technical plan, a boxed
+     chip every few words turns running prose into confetti. */
+  code { font:.88em/1.5 var(--mono); background:var(--tint); color:var(--ink-2);
+         border-radius:.28rem; padding:.12em .34em; }
+  pre:not(.mermaid) {
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r2);
+    padding:var(--s4) var(--s5); overflow-x:auto;
+    font-size:.92rem; line-height:1.6; margin:var(--s5) 0;
+    box-shadow:var(--shadow);
+  }
+  pre:not(.mermaid) code { background:none; padding:0; font-size:1em; color:var(--fg); }
+
+  /* ---- callouts ---------------------------------------------------------- */
+  .note {
+    border-left:3px solid var(--accent); background:var(--accent-wash);
+    padding:var(--s3) var(--s4); border-radius:0 var(--r1) var(--r1) 0;
+    color:var(--ink-2); margin:var(--s5) 0;
+  }
+  .note > :last-child { margin-bottom:0; }
+  .note.ok     { border-left-color:var(--ok);     background:var(--ok-wash); }
+  .note.warn   { border-left-color:var(--warn);   background:var(--warn-wash); }
+  .note.danger { border-left-color:var(--danger); background:var(--danger-wash); }
+
+  blockquote {
+    margin:var(--s5) 0; padding:.1rem 0 .1rem var(--s5);
+    border-left:2px solid var(--line-strong); color:var(--ink-2);
+    font:400 1.15rem/1.6 var(--display); font-style:italic;
+  }
+
+  /* ---- tags -------------------------------------------------------------- */
+  .tag {
+    display:inline-block; font:600 .7rem/1.6 var(--mono); letter-spacing:.07em;
+    text-transform:uppercase; padding:.05em .45em; border-radius:.28rem;
+    border:1px solid var(--line-strong); color:var(--muted); background:var(--surface);
+    vertical-align:.08em;
+  }
+  .tag.accent { color:var(--accent-ink); border-color:var(--accent); background:var(--accent-wash); }
+  .tag.ok     { color:var(--ok);     border-color:var(--ok);     background:var(--ok-wash); }
+  .tag.warn   { color:var(--warn);   border-color:var(--warn);   background:var(--warn-wash); }
+  .tag.danger { color:var(--danger); border-color:var(--danger); background:var(--danger-wash); }
+
+  /* ---- stats — only for counts the source actually states ---------------- */
+  .stats { display:flex; flex-wrap:wrap; gap:var(--s5) var(--s7); margin:var(--s6) 0; }
+  .stat b {
+    display:block; font:600 2.2rem/1 var(--display); letter-spacing:-.02em;
+    font-variant-numeric:tabular-nums; color:var(--fg);
+  }
+  .stat span {
+    display:block; margin-top:.3rem;
+    font:500 .72rem/1.4 var(--mono); letter-spacing:.1em; text-transform:uppercase;
+    color:var(--faint);
+  }
+
+  /* ---- cards ------------------------------------------------------------- */
+  .grid { display:grid; gap:var(--s4) var(--s5); margin:var(--s5) 0;
+          grid-template-columns:repeat(var(--cols,2),minmax(0,1fr)); }
+  .card {
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r2);
+    padding:var(--s4) var(--s5); box-shadow:var(--shadow);
+  }
+  .card h3 { margin:0 0 var(--s2); font:600 1.02rem/1.35 var(--sans); letter-spacing:0; }
+  .card p  { margin:0; color:var(--ink-2); font-size:.98rem; line-height:1.6; }
+  .card p + p { margin-top:var(--s2); }
+  /* a spine, not a ring — the colour reads at a glance without boxing the card in */
+  .card.accent, .card.ok, .card.warn, .card.danger {
+    padding-left:calc(var(--s5) - 3px); border-left:3px solid var(--spine);
+  }
+  .card.accent { --spine:var(--accent); }
+  .card.ok     { --spine:var(--ok); }
+  .card.warn   { --spine:var(--warn); }
+  .card.danger { --spine:var(--danger); }
+
+  /* ---- tables ------------------------------------------------------------ */
+  /* .scrollx wraps anything that could be wider than the column — a table that
+     overflows makes the whole PAGE scroll sideways, which the probe fails. */
+  .scrollx { overflow-x:auto; margin:var(--s5) 0; }
+  .scrollx > table { margin:0; }
+  table {
+    border-collapse:collapse; width:100%; margin:var(--s5) 0;
+    font-size:.98rem; font-variant-numeric:tabular-nums;
+  }
+  th,td { text-align:left; padding:.55rem .8rem; vertical-align:top;
+          border-bottom:1px solid var(--line); }
+  th {
+    color:var(--muted); font:600 .72rem/1.5 var(--mono); letter-spacing:.1em;
+    text-transform:uppercase; border-bottom:1px solid var(--line-strong);
+    padding-bottom:.5rem;
+  }
+  tbody tr:last-child td { border-bottom:0; }
+  td:first-child { color:var(--fg); }
+
+  /* ---- figures ----------------------------------------------------------- */
+  figure { margin:var(--s6) 0; }
+  figcaption {
+    font-size:.9rem; color:var(--muted); margin-top:var(--s3);
+    padding-left:var(--s3); border-left:2px solid var(--line);
+  }
+  pre.mermaid { background:none; border:0; box-shadow:none; padding:0;
+                margin:var(--s6) 0; text-align:center; }
+  pre.mermaid svg, figure svg { max-width:100%; height:auto; }
+  /* Hand-authored SVG is drawn at the COLUMN's scale: a full-width figure has a
+     viewBox around 660–816 units wide, so one unit is about one pixel and
+     font-size 15 lands on the deck's own body size. A drawing much narrower than
+     that gets upscaled by max-width:100% until its labels are larger than the
+     headings — put those in <figure class="narrow"> rather than redrawing them. */
+  figure.narrow { max-width:34rem; }
+
+  .split { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);
+           gap:var(--s6); align-items:center; margin:var(--s5) 0; }
+  .split > :is(p,ul,ol) { max-width:none; }
+
+  /* ====================================================================== */
+  /*  CSS BOX DIAGRAMS                                                      */
+  /*  The browser lays the text out, so a label can never overrun its box    */
+  /*  and "make that one wider" is a single property. Reach for these before */
+  /*  hand-SVG whenever the shape is a stack, a pipeline, a matrix or a      */
+  /*  before/after pair.                                                     */
+  /* ====================================================================== */
+  .bx {
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r2);
+    padding:.7rem .9rem; font-size:.96rem; line-height:1.4;
+    font-variant-numeric:tabular-nums;
+  }
+  .bx small { display:block; color:var(--muted); font-size:.78rem; line-height:1.35;
+              margin-top:.22rem; }
+  .bx strong { font-weight:600; }
+  .bx.accent { border-color:var(--accent); border-width:2px; background:var(--accent-wash);
+               padding:calc(.7rem - 1px) calc(.9rem - 1px); }
+  .bx.ok     { border-color:var(--ok);     border-width:2px; background:var(--ok-wash);
+               padding:calc(.7rem - 1px) calc(.9rem - 1px); }
+  .bx.danger { border-color:var(--danger); border-width:2px; background:var(--danger-wash);
+               padding:calc(.7rem - 1px) calc(.9rem - 1px); }
+  .bx.ghost  { background:none; border-style:dashed; color:var(--muted); }
+
+  /* pipeline — boxes in a row, arrows between; add .down to run it vertically.
+     An .arrow may carry a <small> label: what flows is usually the point. */
+  .boxflow { display:flex; flex-wrap:wrap; align-items:stretch; gap:.6rem; margin:var(--s6) 0; }
+  .boxflow > .bx { flex:1 1 0; min-width:8rem; }
+  .boxflow > .arrow {
+    flex:0 0 auto; align-self:center; color:var(--muted);
+    display:flex; flex-direction:column; align-items:center; gap:.1rem;
+    font-size:1.15rem; line-height:1;
+  }
+  .boxflow > .arrow small {
+    font:500 .7rem/1.25 var(--mono); color:var(--faint); text-align:center;
+    max-width:7rem; letter-spacing:.02em;
+  }
+  .boxflow > .arrow.accent { color:var(--accent); }
+  .boxflow.down { flex-direction:column; align-items:stretch; }
+  .boxflow.down > .bx { flex:0 0 auto; }
+
+  /* stack — layers butted together, top to bottom */
+  .boxstack { display:flex; flex-direction:column; margin:var(--s6) 0;
+              border:1px solid var(--line); border-radius:var(--r2); overflow:hidden;
+              box-shadow:var(--shadow); }
+  .boxstack > .bx { border:0; border-bottom:1px solid var(--line); border-radius:0;
+                    background:var(--surface); }
+  /* inside a stack the accent is a spine, not a ring — and must not re-add the
+     divider the :last-child rule below removes, hence the explicit colour */
+  .boxstack > .bx.accent, .boxstack > .bx.ok, .boxstack > .bx.danger {
+    border-width:0 0 1px; border-bottom-color:var(--line);
+    padding:.7rem .9rem .7rem 1.1rem;
+  }
+  .boxstack > .bx.accent { box-shadow:inset 3px 0 0 var(--accent); }
+  .boxstack > .bx.ok     { box-shadow:inset 3px 0 0 var(--ok); }
+  .boxstack > .bx.danger { box-shadow:inset 3px 0 0 var(--danger); }
+  .boxstack > .bx:last-child { border-bottom:0; }
+
+  /* matrix — set --cols to the column count */
+  .boxgrid { display:grid; gap:.6rem; margin:var(--s6) 0;
+             grid-template-columns:repeat(var(--cols,3),minmax(0,1fr)); }
+  .boxgrid > .head { color:var(--muted); font:600 .72rem/1.5 var(--mono);
+                     letter-spacing:.1em; text-transform:uppercase; padding:0 .2rem; }
+
+  /* before/after — identical geometry twice, so only the change stands out */
+  .beforeafter { display:grid; grid-template-columns:1fr 1fr; gap:var(--s6);
+                 margin:var(--s6) 0; }
+  .beforeafter h4 { margin:0 0 var(--s3); }
+  .beforeafter .boxflow, .beforeafter .boxstack, .beforeafter .boxgrid { margin:0; }
+
+  /* ---- narrow: TOC becomes a bar on top --------------------------------- */
+  @media (max-width:62rem) {
+    #toc { position:static; width:auto; height:auto; flex-direction:column;
+           border-right:0; border-bottom:1px solid var(--line); padding:var(--s5); }
+    #toc nav { flex-direction:row; flex-wrap:wrap; border-left:0; gap:.2rem; }
+    #toc a { border-left:0; border-bottom:2px solid transparent; margin-left:0;
+             grid-template-columns:auto auto; gap:.4rem; padding:.35rem .5rem; }
+    #toc a.active { border-left:0; border-bottom-color:var(--accent); }
+    #toc .spacer, #toc .hint { display:none; }
+    #toc button { margin-top:var(--s4); }
+    #progress { left:0; }
+    main { margin-left:0; padding:var(--s6) var(--s5) 6rem; }
+    .grid, .split, .beforeafter { grid-template-columns:1fr; }
+    .boxgrid { --cols:1; }
+    dl { grid-template-columns:1fr; gap:0; }
+    dd { border-top:0; padding-top:0; padding-bottom:var(--s3); }
+  }
+
+  /* ---- MOTION ------------------------------------------------------------ */
+  /* Deliberately confined to hover, focus and the active marker. No entrance
+     animations and no scroll reveals: anything that starts at opacity:0 is
+     invisible to a printed page and to a reader who lands mid-document via
+     Ctrl+F, which is exactly what this deck exists to support. */
+  @media (prefers-reduced-motion:reduce) {
+    html { scroll-behavior:auto; }
+    *, *::before, *::after { transition:none !important; animation:none !important; }
+  }
+
+  @media print {
+    /* Force paper — printing while the deck is in dark mode would otherwise put
+       dark cards and boxes on white paper. The selector list has to reach the
+       specificity of the palette blocks above (0,3,0) or their dark values
+       outrank this; it comes later in the file, so equal specificity wins. */
+    :root, :root[data-theme], :root[data-palette], :root[data-palette][data-theme],
+    :root:not([data-theme="light"]), :root[data-palette]:not([data-theme="light"]) {
+      --bg:#fff; --surface:#fff; --surface-2:#fff; --tint:#f2f2f2;
+      --fg:#000; --ink-2:#222; --muted:#555; --faint:#666;
+      --line:#bbb; --line-strong:#888;
+      --accent:#8f4108; --accent-ink:#8f4108; --accent-wash:transparent;
+      --ok:#2f5a32; --warn:#6f4d06; --danger:#8a2020;
+      --ok-wash:transparent; --warn-wash:transparent; --danger-wash:transparent;
+      --shadow:none;
+    }
+    body::before, #toc, #progress { display:none; }
+    main { margin-left:0; max-width:none; padding:0; }
+    body { background:#fff; color:#000; font-size:11pt; }
+    section { page-break-inside:avoid; }
+    h1,h2,h3 { page-break-after:avoid; }
+    .boxflow, .boxstack, .boxgrid, .beforeafter, figure, .card { page-break-inside:avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+
+<aside id="toc">
+  <p class="deck-title">Fondspreise — Konzept</p>
+  <p class="deck-meta">2026-08-31 · IFAS13 · Neuentwicklung</p>
+  <nav></nav>
+  <div class="spacer"></div>
+  <p class="hint">← → jump between sections</p>
+  <div class="controls">
+    <button id="theme">Theme</button>
+    <button id="palette">Palette</button>
+  </div>
+</aside>
+
+<main>
+
+<section data-nav="Überblick">
+  <p class="eyebrow">Konzept · IFAS13 · Fondspreise</p>
+  <h1>Fondspreise ohne tmp-Tabellen</h1>
+  <p class="lede">Der Tagessammelzustand liegt in den Jobs des bestehenden Job-/Work-Queue-Systems, nicht in einer geteilten veränderlichen Tabelle.</p>
+  <p class="meta">2026-08-31 · abgeleitet aus <code>2026-08-31-fondspreise-neuentwicklung-konzept.md</code> und der Ist-Analyse <code>docs/Fondspreise/fondspreise-legacy-analyse.md</code></p>
+  <div class="stats">
+    <div class="stat"><b>10</b><span>Entscheidungen</span></div>
+    <div class="stat"><b>8</b><span>offene Punkte</span></div>
+    <div class="stat"><b>4</b><span>Legacy-Stufen</span></div>
+    <div class="stat"><b>4</b><span>Korrekturen an der Ist-Analyse</span></div>
+  </div>
+  <p>Fondspreise sind in IFAS13 bisher als <em>out of scope</em> geführt. Vorhanden ist allein das
+     Lieferformat der eingehenden Preismeldung — Schema, Codelisten und die feldübergreifenden
+     LMT-Regeln in <code>ifas-domain-fondspreise</code>. Es gibt keine Persistenz, keine
+     Plausibilität, keine Filegenerierung und keine Verteilung;
+     <code>PreisMeldungDiffJobSubmissionService</code> ist ein Stub, der jede Lieferung als
+     <code>BadInputJob</code> mit dem Vermerk „not yet implemented" ablegt.</p>
+  <p>Dieses Deck hält den Stand der Konzeptdiskussion fest: was entschieden ist, was daraus folgt,
+     und was noch offen ist — mit den Optionen, zwischen denen zu wählen bleibt.</p>
+</section>
+
+<section>
+  <h2>Das Altsystem in vier Stufen</h2>
+  <p>Die Ist-Analyse beschreibt eine Kette aus drei C++-Programmen, gesteuert über C-Shell-Batchscripts. Die Sammeltabelle <code>kurs..tmp_if_kurs</code> ist die Nahtstelle: sie wird zwischen 6:05 und 17:55 alle zehn Minuten gefüllt und im Tagesjob ausgewertet.</p>
+  <div class="boxflow">
+    <div class="bx">Sammlung<small>preis_ins.e</small></div>
+    <div class="arrow">&rarr;<small>füllt</small></div>
+    <div class="bx accent">tmp_if_kurs<small>Sammeltabelle</small></div>
+    <div class="arrow">&rarr;<small>liest</small></div>
+    <div class="bx">Plausibilität<small>preis_dld.e -P</small></div>
+  </div>
+  <div class="boxflow">
+    <div class="bx accent">tmp_if_kurs<small>+ tmp_if_last</small></div>
+    <div class="arrow">&rarr;<small>liest</small></div>
+    <div class="bx">Filegenerierung<small>preis_dld.e -fPREISE</small></div>
+    <div class="arrow">&rarr;<small>dann</small></div>
+    <div class="bx">Einspielung<small>preise.e -p0 &rarr; kurs</small></div>
+  </div>
+  <p class="note">Die Reihenfolge ist nicht beliebig: <strong>Stufe 3 läuft vor Stufe 4.</strong> Die Preisfiles entstehen aus der Sammeltabelle, <em>bevor</em> die Preise dauerhaft in <code>kurs</code> landen.</p>
+</section>
+
+<section>
+  <h2>Woran das Konzept anknüpft</h2>
+  <p>Das Job-/Work-Queue-System trägt das Konzept fast unverändert — die Bausteine sind da, teils ungenutzt.</p>
+  <dl>
+    <dt><code>AbstractJobWorkQueueHandler</code> — <code>service/job/</code></dt>
+    <dd>Nimmt den <code>completedStatus</code> im Konstruktor. Der Ingest-Job kann damit nach
+        <code>READY_FOR_BATCH</code> abschließen, ohne den Basis-Handler zu umgehen.</dd>
+
+    <dt><code>StmCalcJobStatus.WAITING_FOR_START_OF_DAY</code></dt>
+    <dd>Präzedenz für einen Parkstatus — bisher unbenutzt und nirgends referenziert.</dd>
+
+    <dt><code>(keyDate, laufnummer)</code> als Job-UK</dt>
+    <dd>Muster für mehrere Läufe pro Tag, in <code>EstbDailyReportJob</code>,
+        <code>FristenpruefungJob</code> und <code>MeldefondsListenJob</code>. STM fährt schon drei.</dd>
+
+    <dt><code>ScheduledTask</code> mit Werktagsprüfung und manuellem Trigger</dt>
+    <dd>Cron, Feiertage und die „Geplante Aufgaben"-Seite — vorgeführt in
+        <code>IsinAnforderungslistenBatchJobScheduleService</code>.</dd>
+
+    <dt><code>OrchestrationJobHelper</code> und serielle Verkettung</dt>
+    <dd>Reihenfolge-Auflagen zwischen Jobs ausdrücken, wie „STM Lauf 1" es mit seinen
+        Teilschritten tut. Genau das, was der Sync nach dem letzten Batchlauf braucht.</dd>
+
+    <dt>Ergebnisfiles am Job als Filestore-URI</dt>
+    <dd>Das Return-ZIP hängt am Job, wie <code>StmCalcJob.resultBundleFile</code>.</dd>
+  </dl>
+</section>
+
+<section>
+  <h2>Satzart-Identifier <code>I2</code> / <code>I3</code> / <code>I4</code></h2>
+  <p>Die erste Spalte jeder Zeile im <strong>ausgehenden</strong> <code>preis*.csv</code> ist ein zweistelliger Identifier (<code>m_fp_rec.CPP</code>, Ist-Analyse 4.3).</p>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Identifier</th><th>Bedeutung</th></tr></thead>
+    <tbody>
+      <tr><td><code>I1</code></td><td>Header — Kursdatum, Erstelldatum, Erstellzeit</td></tr>
+      <tr><td><code>I2</code></td><td>Preis, <strong>Insert</strong></td></tr>
+      <tr><td><code>I3</code></td><td>Preis, <strong>Delete</strong></td></tr>
+      <tr><td><code>I4</code></td><td>Preis, <strong>Update / Korrektur</strong></td></tr>
+      <tr><td><code>I9</code></td><td>Footer — Anzahl Deletes, Inserts, Korrekturen</td></tr>
+      <tr><td><code>S1</code>/<code>S2</code>/<code>S3</code></td><td>Solvabilität, Ziffer = Stufe</td></tr>
+      <tr><td><code>D1</code>/<code>D2</code>/<code>D3</code></td><td>Solvabilität, Delete</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p><code>GetOutAktionscode</code> (<code>m_fp_rec.CPP:5986-5993</code>) bildet auf <code>2</code> = Insert, <code>3</code> = Delete, <code>4</code> = Update ab; <code>0</code> bedeutet „nicht ausgeben, Satz bereits vorhanden".</p>
+  <p>Ein <code>I3</code> sagt dem Bezieher: <strong>wirf diesen Preis weg.</strong> Es ist das ausgehende Gegenstück zur eingehenden Aktion <code>D</code>. Achtung auf die Asymmetrie — <strong>eingehend</strong> steht die Aktion als Buchstabe in Spalte 6 des Lieferformats (<code>N</code>/<code>D</code>/<code>I</code>), <strong>ausgehend</strong> ist sie in den Identifier der Spalte 1 eingebacken.</p>
+  <p class="note">Ob ein <code>I3</code> das Haus verlässt, ist der Kern der D/N-Auflösung und der offenen Punkte D und E.</p>
+</section>
+
+<section>
+  <h2>LMT — die Kategorien <code>L1</code> / <code>L2</code> / <code>L3</code></h2>
+  <p>Neu mit Lieferformat <strong>V3.0</strong> (2026, <code>202604-LMT-Preismeldung_ISINs_2026.pdf</code>); die Vorgängerversion V2.0 von 2025 kennt sie nicht.</p>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Code</th><th>Bedeutung</th><th>Wertebefüllung (Spalte 5)</th></tr></thead>
+    <tbody>
+      <tr><td><code>L1</code></td><td>Rücknahmebeschränkung</td><td>Quote — Prozentzahl wenn Spalte 9 = <code>J</code>, sonst Geldwert</td></tr>
+      <tr><td><code>L2</code></td><td>Verlängerung der Rückgabefrist</td><td>Anzahl Tage; bei <code>0</code> trägt Spalte 10 den Stichtag</td></tr>
+      <tr><td><code>L3</code></td><td>Rückgabegebühr</td><td>Gebühr, Prozent oder Geldwert je Spalte 9</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Dazu die zwei LMT-Felder des Lieferformats: <code>LMT_PROZENTKENNZEICHEN</code> (Spalte 9, <code>J</code>/<code>N</code>) und <code>LMT_STICHTAG</code> (Spalte 10, nur bei <code>L2</code>). Die Aktion <code>I</code> (Inaktivierung) existiert <strong>ausschließlich</strong> für <code>L2</code> und kam ebenfalls erst mit V3.0.</p>
+  <p>Die Abkürzung ist weder im Repo noch in der Ist-Analyse ausgeschrieben. Branchenüblich steht LMT für <strong>Liquidity Management Tools</strong> — die Instrumente, die Fonds nach der EU-AIFMD/UCITS-Novelle wählen und melden müssen; Rücknahmebeschränkung, Verlängerung der Rückgabefrist und Rückgabegebühr sind drei aus dem Standardkatalog, und <code>PreisAktion.java:10</code> nennt <code>L2</code> selbst „the LMT tool".</p>
+  <p class="note warn">Aus unseren Quellen belegt ist die Auflösung <strong>nicht</strong> — für ein Dokument nach außen bei der Fachabteilung bestätigen lassen.</p>
+</section>
+
+<section>
+  <h2>Leitgedanke: kein Nachbau der tmp-Tabellen</h2>
+  <p>Das Altsystem trägt den Tag in vier Tabellen, von denen drei reine Zwischenstufen sind. Im neuen Konzept liegt der Tag in den Jobs — und die einzige Tabelle, die fachlich überlebt, wandert vom Eingang an den Ausgang.</p>
+  <div class="beforeafter">
+    <div>
+      <h4>Altsystem</h4>
+      <div class="boxstack">
+        <div class="bx">tmp_if_kurs<small>Sammlung, wird geleert</small></div>
+        <div class="bx">tmp_if_cop<small>Kopie vor dem Leeren</small></div>
+        <div class="bx">tmp_if_last<small>Eingang &rarr; kurs</small></div>
+        <div class="bx">liefer_bugs / liefer_zeit<small>Lieferprotokoll</small></div>
+      </div>
+    </div>
+    <div>
+      <h4>Konzept</h4>
+      <div class="boxstack">
+        <div class="bx accent">Zeilen am Job<small>append-only, ein Besitzer</small></div>
+        <div class="bx ghost">entfällt<small>der Job ist die Kopie</small></div>
+        <div class="bx accent">tmp_if_last<small>Projektion, Ausgang</small></div>
+        <div class="bx ghost">entfällt<small>schon heute im Job</small></div>
+      </div>
+    </div>
+  </div>
+  <p><code>liefer_bugs</code> und <code>liefer_zeit</code> existieren in IFAS13 nirgends — kein Java, kein Flyway. Das Lieferprotokoll lebt für STM bereits im Job. Das Konzept setzt das fort, statt etwas Neues einzuführen.</p>
+</section>
+
+<section>
+  <h2>Was <code>tmp_if_kurs</code> leistet, und wo es hinwandert</h2>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Leistung im Altsystem</th><th>im Konzept</th></tr></thead>
+    <tbody>
+      <tr><td>Akkumulator, „letzte Lieferung gewinnt" pro Preisschlüssel</td><td>Auflösung im Batchlauf, über die Zeilen aller Jobs des Tages</td></tr>
+      <tr><td>Datenquelle für Plausi / Files / Einspielung</td><td>dieselben Zeilen, drei Verbraucher</td></tr>
+      <tr><td>Puffer für Spätlieferungen (<code>RemoveTmpKurse</code> mit Stichzeitpunkt, QMS 644)</td><td><span class="tag ok">entfällt</span> ein spät eingelangter Job bleibt auf <code>READY_FOR_BATCH</code> liegen</td></tr>
+      <tr><td>Cross-File-Abgleich <strong>beim Ingest</strong> (<code>Check4DeleteInTmp</code>)</td><td><span class="tag accent">verschoben</span> in den Batchlauf</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Nebeneffekt der Verschiebung: die Ingest-Jobs laufen parallel, ohne sich zu koppeln. Legacy musste dafür serialisieren — PID-File, Lieferanten der Reihe nach, Dateien alphabetisch.</p>
+</section>
+
+<section>
+  <h2>Die Zielarchitektur</h2>
+  <figure>
+    <svg viewBox="0 0 666 280" role="img" xmlns="http://www.w3.org/2000/svg">
+      <title>Landezone mit drei Verbrauchern: Batchlauf, Sync-Job und Projektion</title>
+      <rect x="4" y="11" width="170" height="258" rx="8"
+            fill="var(--accent-wash)" stroke="var(--accent)" stroke-width="2"/>
+      <text x="89" y="133" text-anchor="middle" fill="currentColor" font-size="15">Preismeldung-Jobs</text>
+      <text x="89" y="153" text-anchor="middle" fill="var(--muted)" font-size="12">Zeilen, append-only</text>
+
+      <line x1="178" y1="46" x2="244" y2="46" stroke="var(--muted)" stroke-width="2"/>
+      <text x="211" y="38" text-anchor="middle" fill="var(--muted)" font-size="12">löst auf</text>
+      <line x1="178" y1="140" x2="244" y2="140" stroke="var(--muted)" stroke-width="2"/>
+      <text x="211" y="132" text-anchor="middle" fill="var(--muted)" font-size="12">filtert</text>
+      <line x1="178" y1="234" x2="244" y2="234" stroke="var(--muted)" stroke-width="2"/>
+      <text x="211" y="226" text-anchor="middle" fill="var(--muted)" font-size="12">gruppiert</text>
+
+      <rect x="248" y="11" width="170" height="70" rx="8"
+            fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="333" y="41" text-anchor="middle" fill="currentColor" font-size="15">Batchlauf 1 / 2</text>
+      <text x="333" y="61" text-anchor="middle" fill="var(--muted)" font-size="12">keyDate, laufnummer</text>
+
+      <rect x="248" y="105" width="170" height="70" rx="8"
+            fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="333" y="135" text-anchor="middle" fill="currentColor" font-size="15">Sync-Job</text>
+      <text x="333" y="155" text-anchor="middle" fill="var(--muted)" font-size="12">nach dem letzten Lauf</text>
+
+      <rect x="248" y="199" width="170" height="70" rx="8"
+            fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="333" y="229" text-anchor="middle" fill="currentColor" font-size="15">Projektion</text>
+      <text x="333" y="249" text-anchor="middle" fill="var(--muted)" font-size="12">je ISIN jüngster Preis</text>
+
+      <line x1="422" y1="46" x2="488" y2="46" stroke="var(--muted)" stroke-width="2"/>
+      <text x="455" y="38" text-anchor="middle" fill="var(--muted)" font-size="12">erzeugt</text>
+      <line x1="422" y1="140" x2="488" y2="140" stroke="var(--muted)" stroke-width="2"/>
+      <text x="455" y="132" text-anchor="middle" fill="var(--muted)" font-size="12">schreibt</text>
+      <line x1="422" y1="234" x2="488" y2="234" stroke="var(--muted)" stroke-width="2"/>
+      <text x="455" y="226" text-anchor="middle" fill="var(--muted)" font-size="12">ergibt</text>
+
+      <rect x="492" y="11" width="170" height="70" rx="8"
+            fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="577" y="41" text-anchor="middle" fill="currentColor" font-size="15">Preisfiles + Plausi</text>
+      <text x="577" y="61" text-anchor="middle" fill="var(--muted)" font-size="12">MFT, T2S, NetApp</text>
+
+      <rect x="492" y="105" width="170" height="70" rx="8"
+            fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="577" y="135" text-anchor="middle" fill="currentColor" font-size="15">kurs</text>
+      <text x="577" y="155" text-anchor="middle" fill="var(--muted)" font-size="12">+ pool_if_kurs</text>
+
+      <rect x="492" y="199" width="170" height="70" rx="8"
+            fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="577" y="229" text-anchor="middle" fill="currentColor" font-size="15">tmp_if_last</text>
+      <text x="577" y="249" text-anchor="middle" fill="var(--muted)" font-size="12">Fallback für Lauf 1</text>
+    </svg>
+    <figcaption>Eine Quelle, drei Verbraucher. Die Auflösung — „letzte gewinnt" plus D/N-Verrechnung — liegt in einer Komponente, die Batchlauf und Sync gemeinsam aufrufen.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>Die Landezone: gelieferte Zeilen am Job</h2>
+  <p>Im Kern <code>tmp_if_kurs</code> minus alles, was der Job schon weiß.</p>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Spalte</th><th>Inhalt</th><th>Anmerkung</th></tr></thead>
+    <tbody>
+      <tr><td><code>job_id</code></td><td>FK auf den Preismeldung-Job</td><td>ersetzt <code>liefer_id</code> <strong>und</strong> <code>eintragezeit</code> — beides steht am Job</td></tr>
+      <tr><td><code>zeilen_nr</code></td><td>Zeile im Lieferfile</td><td>Rückbindung an <code>data.log</code>/<code>error.log</code>, Reihenfolge innerhalb der Datei</td></tr>
+      <tr><td><code>isin</code></td><td></td><td></td></tr>
+      <tr><td><code>preisdatum</code></td><td>Berechnungsdatum, Spalte 1 des Lieferformats</td><td></td></tr>
+      <tr><td><code>waehrung</code></td><td>Währung der Lieferung</td><td>nicht die Fondswährung</td></tr>
+      <tr><td><code>meldekategorie</code></td><td><code>R</code>/<code>E</code>/<code>Z</code>/<code>S</code>/<code>S2</code>/<code>S3</code>/<code>X</code>/<code>L1</code>/<code>L2</code>/<code>L3</code></td><td>nach Alias-Auflösung (<code>tax_code.alias</code>), also der Zielcode</td></tr>
+      <tr><td><code>aktion</code></td><td><code>N</code>/<code>D</code>/<code>I</code></td><td></td></tr>
+      <tr><td><code>wert</code></td><td>normalisiert</td><td>Komma&rarr;Punkt, Blanks entfernt, <code>ignore_null='J'</code> &rarr; <code>0</code></td></tr>
+      <tr><td><code>fondsbezeichnung</code></td><td>wie geliefert</td><td>Fallback, wenn <code>INV</code> keine hat</td></tr>
+      <tr><td><code>lmt_prozentkennzeichen</code>, <code>lmt_stichtag</code></td><td></td><td>siehe offener Punkt G</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>PK <code>(job_id, zeilen_nr)</code>. Drei Eigenschaften machen den Unterschied zu <code>tmp_if_kurs</code>:</p>
+  <ul>
+    <li><strong>Kein Unique-Key auf dem Preisschlüssel.</strong> Duplikate über den Tag sind der Normalfall; „letzte gewinnt" ist eine Regel im Batch, keine Constraint in der DB.</li>
+    <li><strong>Append-only.</strong> Nichts wird nachträglich geändert oder gelöscht. Kein Leeren, kein <code>tmp_if_cop</code>.</li>
+    <li><strong>Gehört genau einem Job.</strong> Kein lieferantenübergreifender veränderlicher Zustand.</li>
+  </ul>
+  <p>Nicht übernommen: <code>num_ausschuettung</code> und <code>dat_zahltag</code> — die Ausschüttungsangaben im Preisfile kommen aus den Stammdaten, nicht aus der Lieferung. Ebenso <code>intervall</code>, das produktiv seit 2017 ersatzlos geleert wird (<code>daNoEuQust</code> ist hart auf <code>2017.01.01</code> verdrahtet).</p>
+</section>
+
+<section>
+  <h2>Was die Child Table einbringt</h2>
+  <p>Der Wunsch war, ohne zusätzliche Tabelle auszukommen. Was sie im Gegenzug liefert:</p>
+  <div class="grid" style="--cols:2">
+    <div class="card ok"><h3>Ein Wahrheitsort</h3><p>Die gelieferte Zeile existiert genau einmal, in genau einem Besitz. Kein zweites Artefakt, das von der Quelle abweichen kann.</p></div>
+    <div class="card ok"><h3>Abfragbar</h3><p>„Welcher Lieferant hat für diese ISIN heute was geliefert" ist ein <code>SELECT</code>. Als Blob im Filestore wäre es ein Download und ein Parser.</p></div>
+    <div class="card ok"><h3><code>tmp_if_last</code> wird ableitbar</h3><p>Die Projektion ist eine gruppierte Abfrage. Ohne Tabelle müsste <code>tmp_if_last</code> zwangsläufig geführter Zustand bleiben — über 65 Tage Blobs kann man nicht gruppieren.</p></div>
+    <div class="card ok"><h3>Append-only statt veränderlich</h3><p>Keine Races beim parallelen Ingest, kein Leeren, kein <code>tmp_if_cop</code>. Ein Tag ist im Nachhinein rekonstruierbar, Lieferung für Lieferung.</p></div>
+    <div class="card ok"><h3>LMT kostet zwei Spalten</h3><p>Offener Punkt 11 der Ist-Analyse verschiebt sich von „welches Datenmodell" auf „an wen weitergeben".</p></div>
+    <div class="card warn"><h3>Der Preis</h3><p>Die Nutzdaten liegen neben dem Originalfile ein zweites Mal, und „was liegt heute vor" ist kein reines <code>SELECT</code>, sondern <code>SELECT</code> plus Auflösung.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>Die vier Varianten der Landezone</h2>
+  <p>Verglichen auf den Achsen, die im Gespräch tatsächlich den Unterschied gemacht haben.</p>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Variante</th><th>abfragbar</th><th>geteilter veränderlicher Zustand</th><th><code>tmp_if_last</code> als Abfrage</th><th>Nutzdaten doppelt</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Zeilen pro Job</strong> <span class="tag accent">gewählt</span></td><td>ja</td><td>nein</td><td>möglich</td><td>einmal</td></tr>
+      <tr><td>Gemeinsame Sammeltabelle</td><td>ja, Tagesstand direkt</td><td><strong>ja</strong> — Races beim parallelen Ingest</td><td>möglich</td><td>einmal, aber überschrieben</td></tr>
+      <tr><td>Zeilen + aufgelöste Tagesmenge</td><td>ja, beides</td><td>nein</td><td>möglich</td><td><strong>zweimal</strong></td></tr>
+      <tr><td>Blob im Filestore</td><td><strong>nein</strong></td><td>nein</td><td><strong>unmöglich</strong></td><td>einmal</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Die beiden ernsthaften Kandidaten unterscheiden sich darin, wo „letzte Lieferung gewinnt" durchgesetzt wird:</p>
+  <div class="beforeafter">
+    <div>
+      <h4>Zeilen pro Job — gewählt</h4>
+      <div class="boxstack">
+        <div class="bx accent">PK (job_id, zeilen_nr)</div>
+        <div class="bx">jede Lieferzeile bleibt</div>
+        <div class="bx">last-wins = Regel im Batch</div>
+        <div class="bx">Ingest schreibt nur an</div>
+      </div>
+    </div>
+    <div>
+      <h4>Gemeinsame Sammeltabelle</h4>
+      <div class="boxstack">
+        <div class="bx">PK (isin, datum, whrg, code, aktion)</div>
+        <div class="bx ghost">überschriebene Lieferung nur im ZIP</div>
+        <div class="bx">last-wins = Constraint der DB</div>
+        <div class="bx ghost">Ingest löscht und schreibt</div>
+      </div>
+    </div>
+  </div>
+  <p class="note">Die Sammeltabelle ist die legacy-nähere Variante und macht den Parallelbetrieb-Vergleich einfacher. Sie holt aber genau die Kopplung zurück, die das Job-Modell losgeworden ist — und die Work Queue arbeitet parallel, wo Legacy serialisiert hat.</p>
+</section>
+
+<section>
+  <h2>Das Ingest-Urteil gilt</h2>
+  <p>Der Ingest führt die Eingangsprüfung genau einmal durch — ISIN und Prüfziffer, Datumsgrenzen aus <code>tax_code</code>, Wertbereich, <code>max_nk</code>, Währung, Aktionscode, LMT-Feldregeln — und erzeugt die Rückmeldung an den Lieferanten. <strong>Der Batchlauf wiederholt sie nicht.</strong></p>
+  <ul>
+    <li>Legacy verhält sich identisch: eine Zeile in <code>tmp_if_kurs</code> wird nie wieder geprüft.</li>
+    <li>Die einzigen Stammdaten, die sich untertags realistisch bewegen, sind die <strong>Anlage eines Fonds</strong> (vorher <code>ERR_ISIN06</code>, Zeile abgelehnt, der Lieferant hat einen echten Bug bekommen) und <strong><code>fonds_ende</code></strong> (vorher akzeptiert, der Preis wird publiziert). In beiden Fällen tut Legacy dasselbe. <code>tax_code</code> und <code>HWA</code> sind Konfiguration und bewegen sich nicht untertags.</li>
+    <li>Legacy hat für „Stammdaten und Lieferung passen nicht zusammen" bereits einen Platz, und der ist der Batch: <code>makeNichtVorhanden</code>, <code>makeFondsNotInINV</code>, <code>makePreisVorFondsBeginn</code>, <code>makePreisNachFondsEnde</code>, <code>makePreisNichtInFondswhrg</code> und <code>makeVorlFonds</code> prüfen zur Batchzeit gegen die dann aktuellen Stammdaten und <strong>melden</strong>, statt zurückzunehmen.</li>
+  </ul>
+  <p>Ausgabeseitige, stammdatenabhängige Entscheidungen trifft der Batch dagegen jedes Mal frisch — <code>INV.veroeffentlichung</code>, <code>cod_art_f</code> (TEST/AIF), <code>FONDS_ZGRU</code>. Das ist legacy-konform (<code>cFondsRecord::ReadStammdaten</code> in Stufe 3).</p>
+  <p class="note">Es sind zwei verschiedene Fragen, nicht dieselbe zweimal: <em>„ist diese Lieferzeile gültig?"</em> wird einmal beantwortet, <em>„darf dieser Preis heute an wen raus?"</em> jedes Mal neu.</p>
+</section>
+
+<section>
+  <h2>Die Auflösung, durchgespielt</h2>
+  <p>Der Batch bildet aus den Zeilen aller Jobs des Tages die Tagesmenge: Sortierung nach Job-Ankunftszeit, innerhalb des Jobs nach <code>zeilen_nr</code>; dann <strong>letzte Lieferung gewinnt</strong> pro <code>(ISIN, Preisdatum, Währung, Code, Aktion)</code> — datumsgenau; dann die D/N-Verrechnung.</p>
+<pre><code>job  zeile  isin          datum       whrg  code  aktion  wert
+A    1      AT0000A3GBF8  2026-05-12  EUR   R     N       12,3456
+B    1      AT0000A3GBF8  2026-05-08  EUR   R     N       11,9900
+B    2      AT0000A3GBF8  2026-05-12  EUR   R     D       12,3456</code></pre>
+  <ul>
+    <li><strong>12.05.</strong> — B ist später, das <code>D</code> streicht das <code>N</code>; dann die Frage nach <code>kurs</code>: nichts da &rarr; das <code>D</code> fällt selbst weg. Ergebnis: <em>nichts</em> für den 12.05.</li>
+    <li><strong>08.05.</strong> — nur ein <code>N</code>, Preisdatum vor dem Stichtag, <code>kurs</code> hat einen Wert &rarr; <code>I4</code>-Korrektur, 11,9900.</li>
+  </ul>
+  <p>Verschiedene Preisdatümer zum selben Fonds sind <strong>kein Konflikt, sondern zwei Fakten</strong> und müssen beide durch — der Beispielreport zählt 107 Korrekturen an einem Tag. Genau daran scheitert <code>tmp_if_last</code> als Landezone.</p>
+  <p class="note warn">Weil Batchlauf <strong>und</strong> Sync-Job diese Auflösung brauchen, liegt sie in <em>einer</em> Komponente, die beide aufrufen. Zweimal implementiert, laufen Preisfiles und <code>kurs</code> auseinander.</p>
+  <p>Die Verschiebung des Cross-File-Abgleichs vom Ingest in den Batch hat eine sichtbare Folge: die vier <code>INFO_DEL_*</code>-Meldungen stehen nicht mehr im <code>info.log</code> des Lieferanten, sondern im Batch-Protokoll. Vertretbar, weil es Infos sind, die das Urteil <code>ERROR</code>/<code>INFO</code> nicht berühren — das hängt allein an der Zeilenzahl in <code>error.log</code> —, weil die Texte OeKB-Interna beschreiben („Delete-DS wurde aus TMP-Tabelle entfernt"), und weil die Fachabteilung sie über <code>liefer_bugs</code> ohnehin ein zweites Mal im <code>fplausib.txt</code> sieht. Aufgegeben wird die Korrekturschleife innerhalb des Tages.</p>
+</section>
+
+<section>
+  <h2>Zwei Batchläufe und das Statusmodell</h2>
+  <p>Identität <code>(keyDate, laufnummer)</code> wie bei den STM-Batchjobs, beide Zeiten konfigurierbar — Diskussionsstand ~14:00 und ~16:00. Der Stempel nach Lauf 1 heißt <strong>nicht</strong> „fertig", weil Lauf 2 revidieren darf.</p>
+  <figure>
+    <svg viewBox="0 0 674 200" role="img" xmlns="http://www.w3.org/2000/svg">
+      <title>Statusmodell einer Preismeldung: READY_FOR_BATCH, PUBLISHED, SYNCED</title>
+
+      <text x="337" y="30" text-anchor="middle" fill="var(--accent)" font-size="12">nächster Batchlauf</text>
+      <text x="337" y="44" text-anchor="middle" fill="var(--accent)" font-size="12">revidiert den Tag</text>
+      <path d="M 300,100 C 300,52 374,52 374,100" fill="none"
+            stroke="var(--accent)" stroke-width="2"/>
+      <polygon points="374,100 369,90 379,90" fill="var(--accent)"/>
+
+      <rect x="4" y="100" width="150" height="70" rx="8"
+            fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="79" y="130" text-anchor="middle" fill="currentColor" font-size="15">READY_FOR_BATCH</text>
+      <text x="79" y="150" text-anchor="middle" fill="var(--muted)" font-size="12">noch kein Lauf</text>
+      <text x="79" y="192" text-anchor="middle" fill="var(--faint)" font-size="12">entsteht beim Ingest</text>
+
+      <line x1="158" y1="135" x2="254" y2="135" stroke="var(--muted)" stroke-width="2"/>
+      <polygon points="258,135 248,130 248,140" fill="var(--muted)"/>
+      <text x="206" y="113" text-anchor="middle" fill="var(--muted)" font-size="12">Batchlauf</text>
+      <text x="206" y="127" text-anchor="middle" fill="var(--muted)" font-size="12">erzeugt Files</text>
+
+      <rect x="262" y="100" width="150" height="70" rx="8"
+            fill="var(--accent-wash)" stroke="var(--accent)" stroke-width="2"/>
+      <text x="337" y="130" text-anchor="middle" fill="currentColor" font-size="15">PUBLISHED</text>
+      <text x="337" y="150" text-anchor="middle" fill="var(--muted)" font-size="12">mindestens ein Lauf</text>
+
+      <line x1="416" y1="135" x2="512" y2="135" stroke="var(--muted)" stroke-width="2"/>
+      <polygon points="516,135 506,130 506,140" fill="var(--muted)"/>
+      <text x="464" y="113" text-anchor="middle" fill="var(--muted)" font-size="12">Sync nach kurs</text>
+      <text x="464" y="127" text-anchor="middle" fill="var(--muted)" font-size="12">letzter Lauf</text>
+
+      <rect x="520" y="100" width="150" height="70" rx="8"
+            fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="595" y="130" text-anchor="middle" fill="currentColor" font-size="15">SYNCED</text>
+      <text x="595" y="150" text-anchor="middle" fill="var(--muted)" font-size="12">in kurs, geschlossen</text>
+      <text x="595" y="192" text-anchor="middle" fill="var(--faint)" font-size="12">Job ist fertig</text>
+    </svg>
+    <figcaption>Die Rückführung auf <code>PUBLISHED</code> ist der Kern: der Stempel nach Lauf 1 ist kein Endzustand. Deshalb liest der Batch über <code>READY_FOR_BATCH</code> <em>und</em> <code>PUBLISHED</code>.</figcaption>
+  </figure>
+  <ul>
+    <li>Der Batch liest <strong><code>READY_FOR_BATCH</code> ∪ <code>PUBLISHED</code></strong> und stempelt alles neu. Läse er nur <code>READY_FOR_BATCH</code>, würde Lauf 2 ein Delta erzeugen — im Widerspruch zum Ersatz-File.</li>
+    <li>Der Batch muss wissen, <strong>was der vorige Lauf ausgeliefert hat</strong>. Nötig für die Rücknahme eines Preises, der um 14:00 als <code>I2</code> rausging und um 15:30 per <code>D</code> zurückgezogen wird: der Preis ist nicht in <code>kurs</code>, die Legacy-Regel würde das <code>D</code> verwerfen, und der Bezieher behielte ihn.</li>
+    <li>Der Status beschreibt den <strong>Job</strong>, nicht seine Zeilen. Eine Lieferung kann <code>PUBLISHED</code> sein, während einzelne ihrer Zeilen in der Auflösung verloren haben.</li>
+  </ul>
+  <p class="note ok">Damit entfällt das heutige manuelle Stoppen des Batchs bei gemeldeter Verspätung — nicht wegen des zweiten Laufs, sondern wegen der Jobs: eine um 15:30 eingelangte Lieferung bleibt einfach liegen. Fällt Lauf 2 aus, ist sie morgen dran statt verloren.</p>
+</section>
+
+<section>
+  <h2>Die Reihenfolge im Tag</h2>
+  <div class="boxflow">
+    <div class="bx">Ingest<small>laufend, parallel</small></div>
+    <div class="arrow">&rarr;</div>
+    <div class="bx">Batchlauf 1<small>Plausi + Files</small></div>
+    <div class="arrow">&rarr;</div>
+    <div class="bx">Batchlauf 2<small>Ersatz-File</small></div>
+    <div class="arrow accent">&rarr;<small>erst danach</small></div>
+    <div class="bx accent">Sync &rarr; kurs</div>
+    <div class="arrow">&rarr;</div>
+    <div class="bx">Kennzahlen<small>eigenständig</small></div>
+  </div>
+  <p><strong>Harte Reihenfolge-Auflage:</strong> der Sync läuft nach dem letzten Batchlauf des Tages. Weil Batch und Sync sich dieselbe Menge teilen, würde ein Sync zwischen den Läufen die Jobs schließen und Lauf 2 lautlos zu einem Delta degradieren — das Ergebnis von Lauf 2 hinge davon ab, ob ein anderer Job zufällig vorher lief. Die Auflage muss explizit verkettet werden, Muster „STM Lauf 1", nicht über Cron-Zeiten gehofft.</p>
+  <p class="note danger">Nicht durch eine Transaktion abgedeckt: die Verteilung. MFT-Upload, NetApp-Archivierung und <code>pr_ready.txt</code> liegen außerhalb. Legacy hat dasselbe Problem und löst es nicht — <code>create_preise.csh</code> erzeugt bei einem Archivierungsfehler eine Mail mit Neustartanleitung und bricht nicht ab.</p>
+</section>
+
+<section>
+  <h2>Lauf 2 liefert ein vollständiges Ersatz-File</h2>
+  <p>Nicht ein Delta. Der ganze Tag noch einmal, inklusive des <code>tmp_if_last</code>-Fallbacks für Fonds ohne heutigen Preis.</p>
+  <p>Begründung: die Identifier <code>I2</code>/<code>I3</code>/<code>I4</code> bleiben gegen den persistierten Stand gerechnet, wie heute. Bei einem Delta bräuchten sie einen neuen Bezugspunkt — „was haben wir heute schon ausgeliefert" —, sonst steht <code>I2</code>, wo <code>I4</code> hingehört. Und der Fehlerfall ist gutartiger:</p>
+  <div class="grid" style="--cols:2">
+    <div class="card warn"><h3>Delta verpasst</h3><p>Der Bezieher hat <strong>falsche</strong> Daten und weiß es nicht — im 14:00-File steht nichts davon, dass noch etwas kommt.</p></div>
+    <div class="card ok"><h3>Ersatz-File verpasst</h3><p>Der Bezieher hat <strong>veraltete, aber in sich stimmige</strong> Daten.</p></div>
+  </div>
+  <p class="note warn">Konsequenz für den Bezieher: „letztes File des Tages gewinnt" braucht eine präzise Lesart — <em>alles für das Kursdatum im Header verwerfen und die Datei neu anwenden</em>. Eine Auslassung ist in einem Operationsformat sonst <strong>keine</strong> Rücknahme. Siehe offener Punkt D.</p>
+</section>
+
+<section>
+  <h2><code>tmp_if_last</code> ist eine Projektion, kein Eingang</h2>
+  <p>Die einzige tmp-Tabelle, die fachlich überlebt — aber nicht auf dem Weg nach <code>kurs</code>. Definition: je <code>(ISIN, Währung, Code)</code> die Zeile mit dem höchsten <code>preisdatum</code>, ohne Löschsätze, ohne die Ausschlüsse des Sync, innerhalb von <code>Tage_TmpIfLast</code> (65) Tagen; beendete Fonds nach <code>Tage_TmpIfLast_Beendete</code> (35) Tagen entfernt. Einziger Verbraucher: der Fallback in Lauf 1 der Filegenerierung.</p>
+  <div class="beforeafter">
+    <div>
+      <h4>Als Landezone — bricht</h4>
+      <div class="boxstack">
+        <div class="bx ghost">09:10 Preis 12.05. landet</div>
+        <div class="bx ghost">11:20 Korrektur 08.05. verdrängt ihn</div>
+        <div class="bx ghost">12.05. erreicht kurs nie</div>
+      </div>
+    </div>
+    <div>
+      <h4>Als Projektion — trägt</h4>
+      <div class="boxstack">
+        <div class="bx">beide Zeilen stehen in der Landezone</div>
+        <div class="bx">beide gehen nach kurs</div>
+        <div class="bx accent">Projektion zeigt den 12.05.</div>
+      </div>
+    </div>
+  </div>
+  <p>Der Grund ist strukturell: der Delete-vor-Insert-Schlüssel in <code>WriteLastKurse</code> (<code>preisekennzahl.cpp:1226</code>) enthält <strong>kein</strong> <code>dat_kurs</code>. Es gibt genau einen Platz je (ISIN, Währung, Code) — kein Filter auf der Leseseite holt eine überschriebene Zeile zurück. Zusätzlich setzt <code>WriteLastKurse</code> <code>cod_ex</code> hart auf <code>'N'</code>: Löschsätze existieren dort nicht und wären auf diesem Weg strukturell unsichtbar. Das Datum in den Schlüssel aufzunehmen löst es nicht, sondern macht daraus die Sammeltabelle — die Lauf-1-Abfrage joint nur über <code>num_okb</code> und würde mehrere abgestandene Preise je Fonds ausgeben.</p>
+  <p>Gespeichert wird der <strong>gelieferte</strong> Wert (<code>cPrTyp[i].dPreis</code>); es gibt keine Spalte für ein Rechenergebnis, aus der Nachrechnung fließt nichts zurück. <code>tmp_if_last</code> ist damit eine reine Funktion der Lieferungen — und <strong>nicht</strong> aus <code>kurs</code> ableitbar, weil es Werte trägt, die <code>kurs</code> nie sieht: unbekannte ISIN, Währungsabweichung.</p>
+</section>
+
+<section>
+  <h2>Einspielung nach <code>kurs</code></h2>
+  <p>Der Sync-Job liest dieselben Zeilen, wendet dieselbe Auflösung an und legt seinen <strong>Berechtigungsfilter</strong> darüber. Diese Logik gehört in den Sync, nicht in die Tabelle:</p>
+  <ul>
+    <li>ISIN in IFAS nicht auflösbar &rarr; <code>pool_if_kurs</code>, <code>kurs</code> unberührt</li>
+    <li>Preiswährung ≠ Fondswährung &rarr; nicht nach <code>kurs</code></li>
+    <li>TEST-ISIN, C-Plan, AIF, Fonds in Liquidation &rarr; Ausschlüsse über die <code>InsPreise*</code>-Schalter</li>
+    <li>vorläufiger Fonds mit <code>R</code>-Wert &rarr; Aktivierungsversuch, bei Misserfolg <code>pool_if_kurs</code></li>
+    <li>Löschungen &rarr; <code>DeleteKurseReally</code> in <code>kurs</code>, bei <code>R</code> zusätzlich die abhängigen Kennzahlen und <code>del_protokoll</code></li>
+  </ul>
+  <p class="note">Ein <code>D</code>-Satz löscht <strong>in erster Linie aus <code>kurs</code></strong> — nicht aus einer Tageszwischenmenge. Der Normalfall ist die Korrektur eines Preises aus einem früheren Lauf, und deshalb kann „es kann nur gelöscht werden, was im aktuellen Batch liegt" nicht gelten.</p>
+</section>
+
+<section>
+  <h2>Kennzahlen als eigenständiger Job</h2>
+  <p>Berichtigte Kurse, Reinvestitionsfaktoren, Performance, Volatilität und Risikokennzahlen wandern ebenfalls nach IFAS13, als eigener, unabhängig terminierbarer Job.</p>
+  <ul>
+    <li><strong>Keine Abhängigkeit zu den Preisfiles.</strong> Das Preisfile schreibt den gelieferten Preis; <code>kurs</code> wird bei der Filegenerierung nur nach <em>Existenz</em> gefragt, für <code>I2</code>/<code>I3</code>/<code>I4</code>. Die Reihenfolge im Legacy-Tagesjob ist Ablauf, nicht Abhängigkeit.</li>
+    <li><strong>Basis ist <code>kurs</code>, nicht <code>tmp_if_last</code>.</strong> Kennzahlen sind Zeitreihen; <code>tmp_if_last</code> hat keine Historie, ist auf die ISIN geschlüsselt (<code>kurs</code> auf <code>num_wfs_ku</code>) und hat keine Ergebnisspalte.</li>
+    <li><strong>Legacy trennt hier schon fachlich:</strong> <code>CalcCPlan</code>/<code>InsPreiseCPlan</code> = <code>0</code>/<code>1</code>, ebenso für AIF und Fonds in Liquidation. Preise werden eingespielt, Kennzahlen nicht gerechnet — zwei Geltungsbereiche, zwei Schalter.</li>
+  </ul>
+  <p class="note warn"><strong>Obergrenze für „später":</strong> vor dem nächsten Plausi-Lauf. <code>makeAbweichung</code> vergleicht den <em>berichtigten</em> Kurs (<code>pdPreis_ber</code>), damit Ausschüttungen und Splits keine Scheintreffer erzeugen. Hinkt die Berechnung nach, degradiert dieser Abschnitt des Reports.</p>
+  <p class="note danger"><strong>Historientreue:</strong> <code>StetigeVolaAb</code> = <code>2007.01.01</code> und <code>PerfYtdFbY1Neu</code> = <code>2007.01.01</code> sind datumsgesteuerte <strong>Formelwechsel</strong>. Eine Nachrechnung ist nicht „ab Datum X vorwärts rechnen", sondern „die Historie ab X mit den Regeln nachrechnen, die zu jedem Zeitpunkt gegolten haben" — dieselbe Klasse von Anforderung wie bei der STM-Recalc-Historientreue.</p>
+</section>
+
+<section>
+  <h2>Die acht offenen Punkte im Überblick</h2>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th></th><th>Frage</th><th>entscheidet</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td><strong>A</strong></td><td>Braucht jemand <code>kurs</code> untertags aktuell?</td><td>Fachabteilung</td><td><span class="tag accent">TODO User</span></td></tr>
+      <tr><td><strong>B</strong></td><td><code>tmp_if_last</code> — geführte Tabelle oder Abfrage?</td><td>intern</td><td><span class="tag">offen</span></td></tr>
+      <tr><td><strong>C</strong></td><td>Kennzahlen — Invalidierung oder Auftragsübergabe?</td><td>intern</td><td><span class="tag">offen</span></td></tr>
+      <tr><td><strong>D</strong></td><td>Rücknahme explizit oder implizit?</td><td>Bezieher-Vertrag</td><td><span class="tag">offen</span></td></tr>
+      <tr><td><strong>E</strong></td><td>Ausschüttungs-Veto bei <code>R</code>-Löschungen</td><td>Fachabteilung</td><td><span class="tag">offen</span></td></tr>
+      <tr><td><strong>F</strong></td><td>Dateinamen und Ready-File für zwei Auslieferungen</td><td>Fachabteilung</td><td><span class="tag">offen</span></td></tr>
+      <tr><td><strong>G</strong></td><td>LMT persistieren und weitergeben?</td><td>Fachabteilung</td><td><span class="tag">offen</span></td></tr>
+      <tr><td><strong>H</strong></td><td>Produktionsdaten beschaffen</td><td>Betrieb / DB</td><td><span class="tag warn">blockiert Ingest</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2>A — braucht jemand <code>kurs</code> untertags aktuell?</h2>
+  <p>Entscheidet, ob die Reihenfolge-Auflage „Sync nach dem letzten Batchlauf" tragbar ist — und damit, ob eine zweite Tabelle dazukommt.</p>
+  <div class="beforeafter">
+    <div>
+      <h4>A1 — nein, niemand</h4>
+      <div class="boxstack">
+        <div class="bx accent">Zeilen am Job</div>
+        <div class="bx">Batchlauf 1 + 2 lesen sie</div>
+        <div class="bx">Sync liest sie danach</div>
+        <div class="bx ok">eine Tabelle, ein Wahrheitsort</div>
+      </div>
+    </div>
+    <div>
+      <h4>A2 — ja, jemand braucht es</h4>
+      <div class="boxstack">
+        <div class="bx accent">Zeilen am Job</div>
+        <div class="bx">Batchlauf friert sein Ergebnis ein</div>
+        <div class="bx accent">preis_tageswerte je Lauf</div>
+        <div class="bx">Sync liest nur diese — frei terminierbar</div>
+      </div>
+    </div>
+  </div>
+  <p><strong>A1:</strong> Landezone bleibt wie beschrieben, nichts weiter zu tun.</p>
+  <p><strong>A2:</strong> Batch und Sync dürfen sich die Menge nicht teilen. Preis: Nutzdaten zweimal, zwei Schreibschritte, zwei Artefakte konsistent zu halten. Gewinn: der Sync ist frei terminierbar, „was hat Lauf 1 ausgeliefert" steht als Tabelle da, und der Scoping-Fehler — Sync schließt Jobs, die Lauf 2 noch braucht — ist strukturell unmöglich.</p>
+</section>
+
+<section>
+  <h2>B — <code>tmp_if_last</code> geführt oder abgefragt?</h2>
+  <div class="beforeafter">
+    <div>
+      <h4>B1 — geführte Tabelle</h4>
+      <div class="boxstack">
+        <div class="bx">Batchlauf schreibt fort</div>
+        <div class="bx">tmp_if_last als Tabelle</div>
+        <div class="bx">Aufräumen: 65 / 35 Tage</div>
+        <div class="bx ghost">kann veralten</div>
+      </div>
+    </div>
+    <div>
+      <h4>B2 — Abfrage zur Laufzeit</h4>
+      <div class="boxstack">
+        <div class="bx ghost">nichts zu schreiben</div>
+        <div class="bx accent">GROUP BY über die Landezone</div>
+        <div class="bx ok">nichts aufzuräumen</div>
+        <div class="bx ok">kann nicht veralten</div>
+      </div>
+    </div>
+  </div>
+  <p><strong>B1</strong> liest wie heute direkt, muss aber am Ende jedes Batchlaufs fortgeschrieben werden — mit Aufräumregeln für die 65 Tage und die beendeten Fonds nach 35 Tagen. Expliziter, sichtbarer Zustand, der veralten kann.</p>
+  <p><strong>B2</strong> hat keinen Zustand. Über 65 Tage sind es bei ~4200 Preisen pro Tag rund 270.000 Zeilen — für eine gruppierte Abfrage unkritisch. Damit bliebe <strong>keine</strong> der Legacy-tmp-Tabellen übrig.</p>
+  <p class="note">B2 setzt voraus, dass die Landezone eine Tabelle ist. Durch die Wahl „Zeilen pro Job" gegeben — mit einem Blob im Filestore wäre B1 erzwungen.</p>
+</section>
+
+<section>
+  <h2>C — Kennzahlen: Invalidierung oder Auftragsübergabe?</h2>
+  <p>Der Auslöser ist in Legacy flüchtig: <code>daLastDatum</code> — je Fonds das früheste betroffene Preisdatum — wird in <code>MakeTmpPreise</code> im Speicher gemerkt und sofort verbraucht. Die drei Fälle verhalten sich unterschiedlich:</p>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Fall</th><th>Zustand in <code>kurs</code> danach</th><th>selbst erkennbar?</th></tr></thead>
+    <tbody>
+      <tr><td>neuer Preis</td><td>Preis da, Kennzahl fehlt</td><td><span class="tag ok">ja — Lücke</span></td></tr>
+      <tr><td>gelöschter <code>R</code></td><td>Preis weg, Kennzahlen von <code>DeleteKennzahlen</code> mitgelöscht</td><td><span class="tag ok">ja — Lücke</span></td></tr>
+      <tr><td><strong>korrigierter Preis</strong></td><td>Preis neu, Kennzahl da, aber <strong>falsch</strong></td><td><span class="tag danger">nein</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="grid" style="--cols:3">
+    <div class="card accent"><h3>C1 — Invalidierung</h3><p>Der Sync räumt bei <em>jeder</em> Änderung die abhängigen Kennzahlen weg. Alle drei Fälle werden dieselbe Lücke; der Job sucht Preise ohne Kennzahl und rechnet sie, wann immer er läuft — beliebig terminierbar, wiederholbar, selbstheilend.<br><br><strong>Preis:</strong> Kennzahlen sind zwischenzeitlich <em>abwesend</em> statt veraltet.</p></div>
+    <div class="card"><h3>C2 — Auftragsübergabe</h3><p>Der Sync hinterlässt eine Arbeitsliste je Fonds mit dem frühesten betroffenen Datum. Kennzahlen bleiben veraltet statt abwesend.<br><br><strong>Preis:</strong> ein zusätzliches Artefakt und ein Aufräummechanismus für nicht abgearbeitete Aufträge.</p></div>
+    <div class="card warn"><h3>C3 — aus <code>kurs.guelt</code></h3><p><code>guelt</code> ist ein Zeitstempel je Zeile; „welche Fonds ab wann" ist eine Abfrage. Deckt Korrekturen und Neuwerte ab, <strong>nicht</strong> Löschungen — eine gelöschte Zeile hinterlässt nichts.<br><br>Taugt als <em>Reparaturpfad</em>, nicht als vollständiger Auslöser.</p></div>
+  </div>
+  <p>Für <code>makeAbweichung</code> ist eine abwesende Kennzahl vermutlich besser als eine falsche — Sätze ohne Vergleichswert überspringt der Check ohnehin. Für andere Verbraucher von Kennzahlen ist zu prüfen, ob eine Lücke tolerierbar ist.</p>
+</section>
+
+<section>
+  <h2>D — Rücknahme explizit oder implizit?</h2>
+  <p>Der Fall: ein Preis geht um 14:00 als <code>I2</code> raus und wird um 15:30 per <code>D</code> zurückgezogen. Der Sync ist noch nicht gelaufen, <code>kurs</code> weiß nichts von dem Preis.</p>
+  <div class="boxflow">
+    <div class="bx">09:10<small>Preis 12.05. geliefert</small></div>
+    <div class="arrow">&rarr;</div>
+    <div class="bx">14:00<small>geht als I2 raus</small></div>
+    <div class="arrow">&rarr;</div>
+    <div class="bx">15:30<small>D für 12.05.</small></div>
+    <div class="arrow accent">&rarr;</div>
+    <div class="bx accent">16:00<small>Ersatz-File — und dann?</small></div>
+  </div>
+  <div class="beforeafter">
+    <div>
+      <h4>D1 — explizites <code>I3</code></h4>
+      <div class="boxstack">
+        <div class="bx accent">Ersatz-File enthält I3</div>
+        <div class="bx ok">wirkt bei jeder Anwendungsart</div>
+        <div class="bx">Abweichung vom Altsystem</div>
+      </div>
+    </div>
+    <div>
+      <h4>D2 — Auslassung genügt</h4>
+      <div class="boxstack">
+        <div class="bx">Ersatz-File lässt den Preis weg</div>
+        <div class="bx ghost">nur wirksam, wenn der Bezieher ersetzt</div>
+        <div class="bx ok">keine Codeänderung</div>
+      </div>
+    </div>
+  </div>
+  <p><strong>D1</strong> gibt den Löschsatz aus, obwohl die Legacy-Regel („nicht in <code>kurs</code>" &rarr; verwerfen) ihn verwerfen würde. Funktioniert unabhängig davon, wie der Bezieher das File anwendet — bewusste Abweichung, im Parallelbetrieb als bekannte Abweichung zu führen.</p>
+  <p><strong>D2</strong> setzt voraus, dass jeder Bezieher „alles für das Kursdatum im Header verwerfen und neu anwenden" umsetzt. Keine Codeänderung, aber eine Zusage, die von außen kommen muss.</p>
+  <p class="note">In beiden Fällen muss der Lauf wissen, was der vorige ausgeliefert hat. Die Batch-Stempel an den Jobs sind also keine Folge dieser Wahl, sondern eine Voraussetzung in beiden Welten.</p>
+</section>
+
+<section>
+  <h2>E — Ausschüttungs-Veto bei <code>R</code>-Löschungen</h2>
+  <p>Heute: liegt zum Preisdatum eine Ausschüttung vor, wird die Löschung verweigert und es passiert <em>nichts</em> — keine Löschung, keine Kennzahlenbereinigung, nur eine Zeile im Programm-Logfile. Kein Delivery-Bug, kein <code>liefer_bugs</code>-Eintrag, keine Rückmeldung an den Lieferanten. Der <code>I3</code> ist zu diesem Zeitpunkt beim Bezieher schon draußen. Im Quelltext steht an der Stelle, an der die Behandlung stünde, wörtlich <code>// ????</code>.</p>
+  <div class="grid" style="--cols:2">
+    <div class="card danger"><h3>E1 — wie heute</h3><p>Die Divergenz bleibt: der Preis ist beim Bezieher weg und in <code>kurs</code> vorhanden. Mit entkoppeltem Sync wird das Fenster größer statt kleiner.</p></div>
+    <div class="card ok"><h3>E2 — Batch erkennt es vorab</h3><p>Der Batch prüft die Ausschüttung schon bei der Auflösung und gibt den <code>I3</code> gar nicht aus; der Lieferant bekommt eine Rückmeldung, dass die Löschung nicht möglich ist. Kein Auseinanderlaufen — Abweichung vom Altsystem.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>F — Dateinamen und Ready-File</h2>
+  <p><code>preis.csv</code>, <code>solva.csv</code> und das eine <code>pr_ready.txt</code> als Vollständigkeitssignal sind fix. Zwei Auslieferungen pro Tag brauchen Nummerierung — Legacy hat dafür <code>-N&lt;nr&gt;</code> mit laufender Nummer aus dem <code>event_log</code>, für Fondspreise ungenutzt. Nur der T2S-Strom kann es schon heute, weil er <code>preis.csv</code> als <code>&lt;YYYY-MM-DD_HH-MM&gt;_preis.csv</code> ablegt.</p>
+  <p>Die kundenseitige Formatbeschreibung — <code>2025_Funddata_Provision.xlsx</code>, Version 2.0, gültig ab 17.11.2025 — kennt <strong>eine</strong> Lieferung pro Tag. Das ist eine Änderung nach außen, nicht bloß intern.</p>
+  <div class="grid" style="--cols:3">
+    <div class="card"><h3>Nummerierte Zweitfiles</h3><p>Eigenes Ready-File je Lauf. Sauber, aber Vertragsänderung.</p></div>
+    <div class="card"><h3>Gleiche Namen, überschreiben</h3><p>Setzt D2 voraus — der Bezieher muss ersetzen, nicht anwenden.</p></div>
+    <div class="card ok"><h3>Rückfallposition</h3><p><strong>Ein</strong> Lauf, später terminiert. Kein Zweitlauf, keine Vertragsänderung, die <code>I2</code>/<code>I4</code>-Frage entsteht nie. Preis: alle bekommen die Preise später.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>G — LMT persistieren und weitergeben?</h2>
+  <p>Offener Punkt 11 der Ist-Analyse. Das Altsystem validiert <code>L1</code>/<code>L2</code>/<code>L3</code> vollständig — Prozentkennzeichen <code>J</code>/<code>N</code> über <code>ERR_LMTPROZENT1</code>, Stichtag nur bei <code>L2</code> und nur bei 0 Tagen über <code>ERR_LMTRUECKL2</code> und <code>ERR_LMTRUECKL2_0</code>, Aktion <code>I</code> nur bei <code>L2</code> über <code>CheckAktionL2</code> — und speichert nichts:</p>
+<pre><code>// M_INSERT.CPP:2049-2056
+if (strcmp(cPrCodes.GetGruppe(cPrRecords[i].szCode), "LMT") == 0)
+{
+    // LMT Daten sollen derzeit nicht gespeichert werden</code></pre>
+  <p>Keine LMT-Spalten in <code>tmp_if_kurs</code>, keine in <code>kurs</code>, in keinem Ausgabeformat. Die LMT-Felder des Lieferformats sind heute reine Eingangsvalidierung — Daten, die die KAGs liefern und die im Nichts landen.</p>
+  <p>IFAS13 prüft in <code>CsvPreismeldungValidations</code> bereits <strong>mehr</strong> als das Altsystem: bei <code>L1</code>/<code>L3</code> keine <code>0</code>-Meldungen, die Inaktivierung <code>I</code> muss immer <code>0</code> melden, und <code>L2</code> mit 0 Tagen verlangt — außer bei Inaktivierung — einen Stichtag.</p>
+  <p class="note">Mit der Landezone kostet die Persistenz zwei Spalten. Die Frage verschiebt sich damit auf: <strong>an wen weitergeben, in welchem Format?</strong> Heute existiert kein Ausgabestrom, der LMT transportiert; ein neuer wäre eine Änderung am Bezieher-Vertrag.</p>
+</section>
+
+<section>
+  <h2>H — was noch zu beschaffen ist</h2>
+  <ul class="todo">
+    <li><strong>Produktive <code>tax_code</code>-Zeilen exportieren.</strong> <code>L1</code>/<code>L2</code>/<code>L3</code> fehlen in allen eingecheckten <code>insert_tax_code*.cr</code>; <code>S2</code>, <code>S3</code> und <code>X</code> stehen nur in <code>v_preiscode</code>. Die real gültigen Grenzwerte, <code>max_nk</code>, <code>future</code>, <code>isinwaehrung</code>, <code>ignore_null</code> und Datumsgrenzen definieren das gesamte Prüfverhalten und liegen nur in der Produktionsdatenbank.</li>
+    <li><strong>Toleranzen der Kursabweichung:</strong> <code>ifas..preise_check</code> mit <code>WFS_WKN = -1</code> und <code>preise_check_faktor</code>.</li>
+    <li><strong>Produktive INI-Werte</strong>, insbesondere <code>AllowOldPreisFormat</code> — davon hängt ab, ob das alte Format 1 überhaupt bedient werden muss — und <code>AllowTxtExt4PreisFile</code>.</li>
+    <li><strong><code>MFT_*.INI</code></strong> — Zielverzeichnisse und Accounts sind nicht im Repo.</li>
+    <li><strong>Vollständiger <code>fplausib.txt</code></strong> mit Treffern in allen Abschnitten, um die Meldungstexte wörtlich übernehmen zu können.</li>
+    <li><strong>Aktuelle <code>preis.dtd</code></strong>, wie sie tatsächlich ausgeliefert wird.</li>
+    <li><strong><code>datum_min</code>-Vergleichsrichtung</strong> — <code>M_INSERT.CPP:2020,2906</code> vergleichen mit <code>&gt; daDatumMin</code>, entgegen der Feldbeschreibung.</li>
+    <li><strong><code>makeGleicherKurs</code></strong> — „mindestens 5 mal hintereinander derselbe Preis" ist im Confluence beschrieben, existiert im Code nicht. Fachlich gewünscht?</li>
+  </ul>
+  <p class="note warn">Die <code>tax_code</code>-Zeilen sind Voraussetzung für jede Ingest-Implementierung, nicht ein Detail am Rand.</p>
+</section>
+
+<section>
+  <h2>Abgrenzung</h2>
+  <div class="beforeafter">
+    <div>
+      <h4>Enthalten</h4>
+      <div class="boxstack">
+        <div class="bx">Ingest + Landezone</div>
+        <div class="bx">Plausibilität</div>
+        <div class="bx">Filegenerierung + Verteilung</div>
+        <div class="bx">Sync nach kurs, pool_if_kurs</div>
+        <div class="bx">tmp_if_last als Projektion</div>
+        <div class="bx">Kennzahlen — nur die Naht</div>
+      </div>
+    </div>
+    <div>
+      <h4>Nicht enthalten</h4>
+      <div class="boxstack">
+        <div class="bx ghost">Formeln der Nachrechnung</div>
+        <div class="bx ghost">Ausländische Fonds (-R1)</div>
+        <div class="bx ghost">STM und Ausschüttungen</div>
+        <div class="bx ghost">Meldefonds-Listen, Fristen, Mahnungen</div>
+        <div class="bx ghost">Stammdatenfiles Börse / Vendoren / WDBO</div>
+      </div>
+    </div>
+  </div>
+  <p>Für die Formeln der Kennzahlen-, Performance- und Volatilitätsnachrechnung (<code>preisekennzahl.cpp</code>, <code>fondskennzahl.cpp</code>, <code>c_calc.cpp</code>) fehlt noch eine eigene Ist-Analyse. Entscheidung 10 legt nur die Naht fest, nicht den Inhalt.</p>
+</section>
+
+<section>
+  <h2>Vorgehen</h2>
+  <ul class="todo">
+    <li><strong>Offene Punkte A–G klären.</strong> A liegt beim User, D/E/F/G brauchen die Fachabteilung, B und C sind intern entscheidbar. Vor A steht die Landezone fest, aber nicht, ob eine zweite Tabelle für die aufgelöste Tagesmenge dazukommt — das betrifft den Zuschnitt der ersten Schritte.</li>
+    <li><strong>Datenbeschaffung H anstoßen</strong>, mit den <code>tax_code</code>-Zeilen zuerst.</li>
+    <li><strong>Konzept in <code>docs/Fondspreise/fondspreise-soll-konzept.md</code> ablegen</strong>, neben der Ist-Analyse, sobald A–C entschieden sind. Der Plan ist der Arbeitsstand, das Dokument im Repo das Ergebnis.</li>
+    <li><strong>Implementierung in Schnitten:</strong> Ingest + Landezone &rarr; Auflösung &rarr; Plausi-Report &rarr; Filegenerierung &rarr; Verteilung und Archivierung &rarr; Sync nach <code>kurs</code> &rarr; <code>tmp_if_last</code>-Projektion &rarr; Zweitlauf. Die Auflösung ist der Angelpunkt — von Batch und Sync geteilt, deshalb früh und isoliert getestet.</li>
+    <li><strong><code>docs/Technische Konzepte/ifas13-jobs.md</code> aktualisieren</strong> — der Eintrag „Fondspreise, out of scope" stimmt dann nicht mehr.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Verifikation</h2>
+  <p>Noch kein Code — prüfbar ist bisher nur die Konsistenz des Konzepts.</p>
+  <ul>
+    <li>Jede Aussage über das Altsystem gegen die Ist-Analyse und, wo dort nicht belegt, gegen <code>file:line</code> im Legacy-Repo. Die Quellen sind ISO-8859-1, also <code>grep -a</code> beziehungsweise <code>iconv</code>.</li>
+    <li>Die Anforderungen an die Landezone gegen alle vier Verbraucher durchspielen — Batch, Plausi, Sync, Projektion. Jeder muss aus den Zeilen am Job vollständig bedient werden können.</li>
+    <li>Das Statusmodell gegen die Fehlerfälle durchspielen: Lauf 2 fällt aus; Sync fällt aus; eine Lieferung trifft nach Lauf 2 ein; Lauf 1 wird wiederholt.</li>
+    <li>Die D/N-Auflösung an den drei Fällen aus der Diskussion: zwei Lieferungen zum gleichen Preisdatum (last wins), zwei Lieferungen zu verschiedenen Preisdatümern (beide gültig), <code>D</code> in Lauf 2 auf einen in Lauf 1 ausgelieferten Preis.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Korrekturen an der Ist-Analyse</h2>
+  <p>Während der Diskussion in <code>docs/Fondspreise/fondspreise-legacy-analyse.md</code> behoben:</p>
+  <dl>
+    <dt>2.9 — <code>oekbinfo.log</code></dt>
+    <dd>Enthielt fälschlich <code>INFO_DEL_NEW</code>. Im Fondspreis-Pfad landen dort nur <code>INFO_DATE02</code> und <code>INFO_CURRENCY02</code> (<code>cLieferBugs::WriteOekbInfo</code>, <code>M_INSERT.CPP:2979,3409</code>).</dd>
+    <dt>2.7 — wohin die <code>INFO_DEL_*</code> gehen</dt>
+    <dd>Ergänzt: alle vier gehen über <code>WriteInfo</code>/<code>WriteInfo2Rows</code> nach <code>info.log</code> (<code>c_insert.cpp:3111,3216</code>), also in das ZIP beim Lieferanten, und als <code>bug_info='I'</code> nach <code>liefer_bugs</code>.</dd>
+    <dt>5.2 Schritt 7 — der Löschpfad</dt>
+    <dd>Ergänzt: Löschung über <code>DeleteKurseReally</code> in <code>kurs..kurs</code>; beide Zweige stehen unter dem Vorbehalt Preiswährung = Fondswährung, bei Abweichung passiert stillschweigend nichts; das Ausschüttungs-Veto ohne jede Rückmeldung, mit <code>// ????</code> im Quelltext.</dd>
+    <dt>5.2 Schritt 8 — <code>tmp_if_last</code></dt>
+    <dd>„Aktualisiert in jedem Fall" war falsch: die Ausschlüsse kehren vorher zurück, geschrieben wird nur je Preis-Typ mit Wert, <code>cod_ex</code> ist hart <code>'N'</code>, der Delete-Schlüssel enthält kein <code>dat_kurs</code>, und gespeichert wird der gelieferte Wert.</dd>
+  </dl>
+</section>
+
+</main>
+
+<script>
+(function () {
+  var sections = Array.prototype.slice.call(document.querySelectorAll('main > section'));
+  var mNodes   = Array.prototype.slice.call(document.querySelectorAll('pre.mermaid'));
+  var mSrc     = mNodes.map(function (n) { return n.textContent; });
+  var root     = document.documentElement;
+
+  /* ---- keep the reader's place across a reload -------------------------- */
+  /* The deck is refined interactively — edit, reload, look. Being thrown back to
+     the top on every reload is the real latency in that loop. Keyed on the file
+     path so two decks never share a position. Restored after mermaid has drawn,
+     because rendering the diagrams changes the page height. */
+  var POS = 'deck-scroll:' + location.pathname;
+  var savedY = null;
+  try { savedY = sessionStorage.getItem(POS); } catch (e) {}
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  addEventListener('beforeunload', function () {
+    try { sessionStorage.setItem(POS, String(scrollY)); } catch (e) {}
+  });
+
+  function restoreScroll() {
+    var y = parseInt(savedY, 10);
+    if (!(y > 0)) return;
+    var prev = root.style.scrollBehavior;
+    root.style.scrollBehavior = 'auto';        /* land, do not animate the whole page */
+    scrollTo(0, y);
+    root.style.scrollBehavior = prev;
+    tick();
+  }
+
+  /* ---- build the menu from the headings -------------------------------- */
+  var nav = document.querySelector('#toc nav');
+  var links = [];
+  function slug(s) {
+    return s.toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-').slice(0, 40);
+  }
+  sections.forEach(function (sec, i) {
+    var head = sec.querySelector('h1, h2');
+    if (!head) return;
+    if (!sec.id) sec.id = slug(head.textContent) || ('section-' + (i + 1));
+    /* data-nav="Short label" overrides the menu text — use it when the heading is
+       too long to read in a 17rem column, e.g. the title section. */
+    var a = document.createElement('a');
+    a.href = '#' + sec.id;
+    a.textContent = sec.dataset.nav || head.textContent;
+    /* .lvl1 marks the title entry so the CSS counter skips it and the numbers in
+       the menu line up with the ones above each <h2>. */
+    if (head.tagName === 'H1') a.className = 'lvl1';
+    nav.appendChild(a);
+    links.push({ a: a, sec: sec });
+  });
+
+  /* ---- scrollspy -------------------------------------------------------- */
+  /* Read from geometry on every scroll frame, not from an IntersectionObserver.
+     `section` carries scroll-margin-top, so a jump lands with the boundary a few
+     px BELOW the viewport top and the previous section still overlaps any band
+     anchored there. An observer that marks the topmost intersecting section then
+     names the section above the one the reader just landed on — and the arrow
+     keys, which read the marked entry, target where they already are and stop
+     moving. The menu entries are the spine: `current` indexes links, so a
+     section without a heading cannot strand the keyboard on an unlisted one. */
+  var SPY_LINE = 0.28;         /* a section top at or above here owns the menu */
+  var current  = 0;            /* index into links */
+
+  /* Held while a jump is in flight: the mark is already on the target, and the
+     positions the page passes through on the way must not drag it back. Every
+     scroll event re-arms it, so it releases once the motion stops, however long
+     the smooth scroll takes. */
+  var hold = 0, holdTimer = null;
+
+  function mark(i) {
+    current = i;
+    links.forEach(function (l, k) { l.a.classList.toggle('active', k === i); });
+  }
+
+  function spy() {
+    if (hold || !links.length) return;
+    var line = Math.max(48, innerHeight * SPY_LINE), i = 0;
+    for (var k = 0; k < links.length; k++) {
+      if (links[k].sec.getBoundingClientRect().top <= line) i = k;
+    }
+    /* the last section is usually too short to ever reach the line, so the
+       bottom of the document hands it the mark — but only on a page that
+       actually scrolls, or a one-screen deck would open on its last entry */
+    var max = root.scrollHeight - innerHeight;
+    if (max > 4 && scrollY >= max - 2) i = links.length - 1;
+    mark(i);
+  }
+
+  function holdSpy() {
+    hold = 1;
+    clearTimeout(holdTimer);
+    holdTimer = setTimeout(function () { hold = 0; spy(); }, 400);
+  }
+
+  /* One jump, from the keyboard. The menu marks the target immediately, so a
+     second keypress mid-scroll moves on instead of bouncing back. */
+  function go(i) {
+    if (!links.length) return;
+    i = Math.max(0, Math.min(i, links.length - 1));
+    mark(i);
+    holdSpy();
+    links[i].sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  /* A menu click keeps the native anchor jump — that is what updates the hash
+     and feeds the back button — and only pins the mark. */
+  links.forEach(function (l, i) {
+    l.a.addEventListener('click', function () { mark(i); holdSpy(); });
+  });
+
+  /* ---- reading progress ------------------------------------------------- */
+  var bar = document.getElementById('progress'), queued = false;
+  function tick() {
+    queued = false;
+    var max = root.scrollHeight - innerHeight;
+    var p = max > 0 ? Math.min(1, Math.max(0, scrollY / max)) : 0;
+    bar.style.transform = 'scaleX(' + p.toFixed(4) + ')';
+    spy();
+  }
+  addEventListener('scroll', function () {
+    if (hold) holdSpy();       /* still moving: keep the mark on the target */
+    if (!queued) { queued = true; requestAnimationFrame(tick); }
+  }, { passive: true });
+  addEventListener('resize', tick);
+
+  /* ---- theme ----------------------------------------------------------- */
+  function stored() { try { return localStorage.getItem('deck-theme'); } catch (e) { return null; } }
+  function save(v)  { try { localStorage.setItem('deck-theme', v); } catch (e) {} }
+
+  var override = stored();
+  if (override) root.setAttribute('data-theme', override);
+
+  function isDark() {
+    var o = root.getAttribute('data-theme');
+    if (o === 'dark')  return true;
+    if (o === 'light') return false;
+    return matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+
+  /* ---- mermaid, themed from the deck's own tokens ----------------------- */
+  /* Read every colour back out of CSS so a diagram is made of the same palette
+     as the page around it. Without this, mermaid's stock themes drop a grey-blue
+     diagram into a warm document and it reads as a screenshot from elsewhere. */
+  function tok(n) { return getComputedStyle(root).getPropertyValue(n).trim(); }
+
+  function draw() {
+    if (typeof mermaid === 'undefined' || !mNodes.length) return null;
+    mNodes.forEach(function (n, i) {
+      n.innerHTML = mSrc[i];
+      n.removeAttribute('data-processed');
+    });
+    var fg = tok('--fg'), muted = tok('--muted'), line = tok('--line-strong');
+    var surface = tok('--surface'), surface2 = tok('--surface-2'), bg = tok('--bg');
+    var accent = tok('--accent'), tint = tok('--tint');
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'base',
+      themeVariables: {
+        darkMode: isDark(),
+        fontFamily: tok('--sans'), fontSize: '15px',
+        background: bg,
+        primaryColor: surface, primaryTextColor: fg, primaryBorderColor: line,
+        secondaryColor: surface2, secondaryTextColor: fg, secondaryBorderColor: line,
+        tertiaryColor: tint, tertiaryTextColor: fg, tertiaryBorderColor: line,
+        mainBkg: surface, nodeBorder: line, nodeTextColor: fg, textColor: fg,
+        lineColor: muted, titleColor: fg,
+        edgeLabelBackground: bg, labelBackground: bg,
+        clusterBkg: surface2, clusterBorder: line,
+        /* sequence */
+        actorBkg: surface, actorBorder: line, actorTextColor: fg, actorLineColor: line,
+        signalColor: muted, signalTextColor: fg,
+        labelBoxBkgColor: surface, labelBoxBorderColor: line, labelTextColor: fg,
+        loopTextColor: fg, activationBkgColor: tint, activationBorderColor: accent,
+        noteBkgColor: tint, noteTextColor: fg, noteBorderColor: accent,
+        sequenceNumberColor: bg,
+        /* state + class */
+        transitionColor: muted, transitionLabelColor: fg,
+        stateBkg: surface, stateLabelColor: fg, altBackground: surface2,
+        compositeBackground: surface2, compositeBorder: line, compositeTitleBackground: surface2,
+        specialStateColor: accent, innerEndBackground: accent,
+        classText: fg,
+        /* er */
+        attributeBackgroundColorOdd: surface, attributeBackgroundColorEven: surface2
+      },
+      flowchart: { curve: 'basis', useMaxWidth: true, htmlLabels: true, padding: 10 },
+      sequence:  { useMaxWidth: true, actorMargin: 60 },
+      state:     { useMaxWidth: true },
+      er:        { useMaxWidth: true }
+    });
+    try {
+      var p = mermaid.run({ nodes: mNodes });
+      return p && p.catch ? p.catch(function (e) { console.error('mermaid', e); }) : null;
+    } catch (e) { console.error('mermaid', e); return null; }
+  }
+
+  document.getElementById('theme').addEventListener('click', function () {
+    var next = isDark() ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    save(next);
+    draw();
+  });
+
+  /* ---- palette --------------------------------------------------------- */
+  /* Keyed on the file, NOT globally like the theme: the point of having three
+     palettes is that different decks look different, and one global override
+     would flatten them all back to whichever the reader last clicked. */
+  var PALETTES = ['ink', 'ember', 'iris'];
+  var PKEY = 'deck-palette:' + location.pathname;
+  var pbtn = document.getElementById('palette');
+
+  function paletteName() { return root.getAttribute('data-palette') || 'ink'; }
+  function label() { var p = paletteName(); pbtn.textContent = p.charAt(0).toUpperCase() + p.slice(1); }
+
+  try {
+    var storedP = localStorage.getItem(PKEY);
+    if (storedP && PALETTES.indexOf(storedP) !== -1) root.setAttribute('data-palette', storedP);
+  } catch (e) {}
+  label();
+
+  pbtn.addEventListener('click', function () {
+    var next = PALETTES[(PALETTES.indexOf(paletteName()) + 1) % PALETTES.length];
+    root.setAttribute('data-palette', next);
+    try { localStorage.setItem(PKEY, next); } catch (e) {}
+    label();
+    draw();                      /* mermaid is built from the tokens, so re-run it */
+  });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+    if (!root.getAttribute('data-theme')) draw();
+  });
+
+  /* ---- jump between sections with the arrow keys ------------------------ */
+  addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;          // leave Ctrl+F alone
+    var t = e.target.tagName;
+    if (t === 'INPUT' || t === 'TEXTAREA') return;
+    var dir = (e.key === 'ArrowRight' || e.key === 'PageDown') ? 1
+            : (e.key === 'ArrowLeft'  || e.key === 'PageUp')   ? -1 : 0;
+    if (!dir) return;
+    e.preventDefault();
+    go(current + dir);
+  });
+
+  tick();
+  var drawn = draw();
+  if (drawn && drawn.then) drawn.then(restoreScroll); else restoreScroll();
+})();
+</script>
+</body>
+</html>
