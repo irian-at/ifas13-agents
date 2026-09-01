@@ -32,7 +32,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Fondspreise ohne tmp-Tabellen — Konzept IFAS13</title>
+<title>Fondspreise — Neuentwicklung in IFAS13</title>
 <style>
   /* ====================================================================== */
   /*  STRUCTURAL TOKENS — the same in every palette                         */
@@ -596,8 +596,8 @@
 <div id="progress"></div>
 
 <aside id="toc">
-  <p class="deck-title">Fondspreise — Konzept</p>
-  <p class="deck-meta">2026-08-31 · IFAS13 · Neuentwicklung</p>
+  <p class="deck-title">Fondspreise · Neuentwicklung</p>
+  <p class="deck-meta">2026-09-01 · ifas13 · 2026-08-31-fondspreise-neuentwicklung-konzept.md</p>
   <nav></nav>
   <div class="spacer"></div>
   <p class="hint">← → jump between sections</p>
@@ -609,694 +609,1444 @@
 
 <main>
 
-<section data-nav="Überblick">
+<section data-nav="Übersicht">
   <p class="eyebrow">Konzept · IFAS13 · Fondspreise</p>
-  <h1>Fondspreise ohne tmp-Tabellen</h1>
-  <p class="lede">Der Tagessammelzustand liegt in den Jobs des bestehenden Job-/Work-Queue-Systems, nicht in einer geteilten veränderlichen Tabelle.</p>
-  <p class="meta">2026-08-31 · abgeleitet aus <code>2026-08-31-fondspreise-neuentwicklung-konzept.md</code> und der Ist-Analyse <code>docs/Fondspreise/fondspreise-legacy-analyse.md</code></p>
+  <h1>Fondspreise — Neuentwicklung in IFAS13</h1>
+  <p class="lede">Der manuell gestartete Tagesjob des Altsystems wird zu einer Lieferkette mit
+     Stufen plus vier terminierten Jobs. Was pro Lieferung gehen kann, geht pro Lieferung;
+     gesammelt wird nur, was gesammelt werden muss.</p>
+  <p class="meta">Stand 2026-09-01 · Diskussion vom 2026-08-31, fachlicher Input von Markus und
+     die Nachfragen zum Jobschnitt vom 2026-09-01 · abgeleitet aus
+     <code>docs/Fondspreise/fondspreise-legacy-analyse.md</code> und dem Legacy-Quelltext, nicht
+     aus einer Spezifikation</p>
   <div class="stats">
-    <div class="stat"><b>10</b><span>Entscheidungen</span></div>
-    <div class="stat"><b>8</b><span>offene Punkte</span></div>
-    <div class="stat"><b>4</b><span>Legacy-Stufen</span></div>
-    <div class="stat"><b>4</b><span>Korrekturen an der Ist-Analyse</span></div>
+    <div class="stat"><b>5</b><span>Jobs — einer pro Lieferung, vier terminiert</span></div>
+    <div class="stat"><b>2</b><span>unabhängige Statusachsen</span></div>
+    <div class="stat"><b>15</b><span>getroffene Entscheidungen</span></div>
+    <div class="stat"><b>0</b><span>nachgebaute tmp-Tabellen</span></div>
   </div>
-  <p>Fondspreise sind in IFAS13 bisher als <em>out of scope</em> geführt. Vorhanden ist allein das
-     Lieferformat der eingehenden Preismeldung — Schema, Codelisten und die feldübergreifenden
-     LMT-Regeln in <code>ifas-domain-fondspreise</code>. Es gibt keine Persistenz, keine
-     Plausibilität, keine Filegenerierung und keine Verteilung;
-     <code>PreisMeldungDiffJobSubmissionService</code> ist ein Stub, der jede Lieferung als
-     <code>BadInputJob</code> mit dem Vermerk „not yet implemented" ablegt.</p>
-  <p>Dieses Deck hält den Stand der Konzeptdiskussion fest: was entschieden ist, was daraus folgt,
-     und was noch offen ist — mit den Optionen, zwischen denen zu wählen bleibt.</p>
 </section>
 
-<section>
-  <h2>Das Altsystem in vier Stufen</h2>
-  <p>Die Ist-Analyse beschreibt eine Kette aus drei C++-Programmen, gesteuert über C-Shell-Batchscripts. Die Sammeltabelle <code>kurs..tmp_if_kurs</code> ist die Nahtstelle: sie wird zwischen 6:05 und 17:55 alle zehn Minuten gefüllt und im Tagesjob ausgewertet.</p>
-  <div class="boxflow">
-    <div class="bx">Sammlung<small>preis_ins.e</small></div>
-    <div class="arrow">&rarr;<small>füllt</small></div>
-    <div class="bx accent">tmp_if_kurs<small>Sammeltabelle</small></div>
-    <div class="arrow">&rarr;<small>liest</small></div>
-    <div class="bx">Plausibilität<small>preis_dld.e -P</small></div>
-  </div>
-  <div class="boxflow">
-    <div class="bx accent">tmp_if_kurs<small>+ tmp_if_last</small></div>
-    <div class="arrow">&rarr;<small>liest</small></div>
-    <div class="bx">Filegenerierung<small>preis_dld.e -fPREISE</small></div>
-    <div class="arrow">&rarr;<small>dann</small></div>
-    <div class="bx">Einspielung<small>preise.e -p0 &rarr; kurs</small></div>
-  </div>
-  <p class="note">Die Reihenfolge ist nicht beliebig: <strong>Stufe 3 läuft vor Stufe 4.</strong> Die Preisfiles entstehen aus der Sammeltabelle, <em>bevor</em> die Preise dauerhaft in <code>kurs</code> landen.</p>
+<section id="jobs" data-nav="Die fünf Jobs">
+  <h2>Neuarchitektur: welche Jobs wir brauchen</h2>
+  <p class="lede">Vom Eingang der Lieferdatei bis zur Kennzahlenberechnung. Ein Job läuft pro
+     Lieferdatei und hat Stufen; vier Jobs sind terminiert und lesen mit.</p>
+  <figure>
+    <svg viewBox="0 0 816 536" role="img" xmlns="http://www.w3.org/2000/svg">
+      <title>Die künftige Job-Architektur der Fondspreise: eine Lieferkette mit Stufen plus vier terminierte Jobs</title>
+      <defs>
+        <marker id="m" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="7"
+                orient="auto-start-reverse">
+          <path d="M0,0 L10,4 L0,8 z" fill="var(--muted)"/>
+        </marker>
+        <marker id="ma" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="7"
+                orient="auto-start-reverse">
+          <path d="M0,0 L10,4 L0,8 z" fill="var(--accent)"/>
+        </marker>
+      </defs>
+
+      <!-- ===== Aussenwelt oben ===== -->
+      <rect x="4" y="6" width="246" height="44" rx="8"
+            fill="var(--surface)" stroke="var(--faint)" stroke-dasharray="4 3"/>
+      <text x="20" y="34" fill="var(--muted)" font-size="15">Lieferant · MFT-Eingang</text>
+
+      <rect x="286" y="6" width="390" height="44" rx="8"
+            fill="var(--surface)" stroke="var(--faint)" stroke-dasharray="4 3"/>
+      <text x="302" y="26" fill="var(--muted)" font-size="14">Rückmeldung an den Lieferanten</text>
+      <text x="302" y="42" fill="var(--muted)" font-size="12">error.log · info.log · statistics.log · data.log</text>
+
+      <line x1="127" y1="50" x2="127" y2="78" stroke="var(--accent)" stroke-width="2" marker-end="url(#ma)"/>
+      <text x="137" y="70" fill="var(--accent-ink)" font-size="12">sofort, ohne Batch</text>
+
+      <line x1="430" y1="78" x2="430" y2="52" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
+      <text x="440" y="70" fill="var(--muted)" font-size="12">ZIP</text>
+
+      <!-- ===== Container: der Job pro Lieferdatei ===== -->
+      <rect x="4" y="80" width="808" height="150" rx="10"
+            fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+      <text x="20" y="105" fill="var(--accent-ink)" font-size="12" font-weight="700">JOB 1 — PREISMELDUNGS-JOB, PRO LIEFERDATEI · drei Stufen, ein Status: → COMPLETED</text>
+
+      <!-- Stufe 1 -->
+      <rect x="18" y="118" width="232" height="96" rx="8"
+            fill="var(--tint)" stroke="var(--line-strong)"/>
+      <text x="32" y="142" fill="currentColor" font-size="15">parsen · prüfen · antworten</text>
+      <text x="32" y="161" fill="var(--muted)" font-size="12">Eingangsprüfung · Landezone · ZIP</text>
+      <text x="32" y="196" fill="var(--muted)" font-size="12">parallel über alle Lieferungen</text>
+
+      <line x1="254" y1="166" x2="288" y2="166" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
+
+      <!-- Stufe 2 -->
+      <rect x="292" y="118" width="232" height="96" rx="8"
+            fill="var(--tint)" stroke="var(--line-strong)"/>
+      <text x="306" y="142" fill="currentColor" font-size="15">nach kurs</text>
+      <text x="306" y="161" fill="var(--muted)" font-size="12">Berechtigungsfilter · Löschungen</text>
+      <text x="306" y="196" fill="var(--muted)" font-size="12">seriell — Auflage, siehe unten</text>
+
+      <line x1="528" y1="166" x2="562" y2="166" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
+
+      <!-- Stufe 3 -->
+      <rect x="566" y="118" width="232" height="96" rx="8"
+            fill="var(--tint)" stroke="var(--line-strong)"/>
+      <text x="580" y="142" fill="currentColor" font-size="15">Kennzahlen</text>
+      <text x="580" y="161" fill="var(--muted)" font-size="12">die betroffenen des Fonds</text>
+      <text x="580" y="196" fill="var(--muted)" font-size="12">Versuch · darf unvollständig bleiben</text>
+
+      <!-- ===== Datenhaltung, spaltengleich unter den Stufen ===== -->
+      <line x1="134" y1="230" x2="134" y2="256" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
+      <line x1="408" y1="230" x2="408" y2="256" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
+      <line x1="682" y1="230" x2="682" y2="256" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
+
+      <rect x="4" y="258" width="246" height="52" rx="8"
+            fill="var(--accent-wash)" stroke="var(--line-strong)"/>
+      <text x="20" y="281" fill="currentColor" font-size="15">Landezone</text>
+      <text x="20" y="299" fill="var(--muted)" font-size="12">Zeilen pro Job · append-only</text>
+
+      <rect x="280" y="258" width="246" height="52" rx="8"
+            fill="var(--accent-wash)" stroke="var(--line-strong)"/>
+      <text x="296" y="281" fill="currentColor" font-size="15">kurs · pool_if_kurs</text>
+      <text x="296" y="299" fill="var(--muted)" font-size="12">+ tmp_if_last · del_protokoll</text>
+
+      <rect x="556" y="258" width="256" height="52" rx="8"
+            fill="var(--accent-wash)" stroke="var(--line-strong)"/>
+      <text x="572" y="281" fill="currentColor" font-size="15">Kennzahlen</text>
+      <text x="572" y="299" fill="var(--muted)" font-size="12">berichtigte Kurse · Perf · Vola</text>
+
+      <!-- ===== Die vier terminierten Jobs ===== -->
+      <line x1="96"  y1="338" x2="140" y2="314" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
+      <line x1="304" y1="338" x2="182" y2="314" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
+      <line x1="512" y1="338" x2="216" y2="314" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
+      <text x="450" y="328" text-anchor="middle" fill="var(--muted)" font-size="12">lesen die Landezone</text>
+      <line x1="720" y1="338" x2="720" y2="314" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
+
+      <rect x="4" y="340" width="184" height="104" rx="8"
+            fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+      <text x="18" y="362" fill="var(--accent-ink)" font-size="12" font-weight="700">JOB 2 · CUTOFF 1</text>
+      <text x="18" y="384" fill="currentColor" font-size="15">Sammelreport Lauf 1</text>
+      <text x="18" y="404" fill="var(--muted)" font-size="12">Zwischenstand + Fallback</text>
+      <text x="18" y="424" fill="var(--muted)" font-size="12">→ preis.csv · Plausi</text>
+
+      <rect x="212" y="340" width="184" height="104" rx="8"
+            fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+      <text x="226" y="362" fill="var(--accent-ink)" font-size="12" font-weight="700">JOB 3 · CUTOFF 2</text>
+      <text x="226" y="384" fill="currentColor" font-size="15">Sammelreport Lauf 2</text>
+      <text x="226" y="404" fill="var(--muted)" font-size="12">nur das Delta</text>
+      <text x="226" y="424" fill="var(--muted)" font-size="12">→ preis.csv · Plausi</text>
+
+      <rect x="420" y="340" width="184" height="104" rx="8"
+            fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+      <text x="434" y="362" fill="var(--accent-ink)" font-size="12" font-weight="700">JOB 4 · CA. 17:00</text>
+      <text x="434" y="384" fill="currentColor" font-size="15">Fehlmeldungs-Job</text>
+      <text x="434" y="404" fill="var(--muted)" font-size="12">Soll − Ist</text>
+      <text x="434" y="424" fill="var(--muted)" font-size="12">→ Mail an Lieferant / FA</text>
+
+      <rect x="628" y="340" width="184" height="104" rx="8"
+            fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+      <text x="642" y="362" fill="var(--accent-ink)" font-size="12" font-weight="700">JOB 5 · PERIODISCH</text>
+      <text x="642" y="384" fill="currentColor" font-size="15">Kennzahlen-Sweep</text>
+      <text x="642" y="404" fill="var(--muted)" font-size="12">Preise ohne Kennzahl</text>
+      <text x="642" y="424" fill="var(--muted)" font-size="12">holt EZB-Nachzügler</text>
+
+      <!-- ===== Publikationsprotokoll ===== -->
+      <line x1="96"  y1="444" x2="96"  y2="472" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
+      <line x1="304" y1="444" x2="304" y2="472" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
+      <polyline points="350,472 350,448" fill="none"
+                stroke="var(--accent)" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#ma)"/>
+      <text x="358" y="464" fill="var(--accent-ink)" font-size="12">I3-Bezug</text>
+
+      <rect x="4" y="474" width="412" height="52" rx="8"
+            fill="var(--accent-wash)" stroke="var(--line-strong)"/>
+      <text x="20" y="497" fill="currentColor" font-size="15">Publikationsprotokoll</text>
+      <text x="20" y="515" fill="var(--muted)" font-size="12">je Schlüssel, je Lauf: I2 oder I3</text>
+    </svg>
+    <figcaption>Der Akzent markiert die Jobs; die Stufen im Container sind gefüllt, weil sie keine
+      eigene Identität haben. Die drei Spalten stehen untereinander: jede Stufe schreibt genau die
+      Datenhaltung unter sich. Drei der vier terminierten Jobs lesen die Landezone, nur der Sweep
+      liest die Kennzahlen. Die gestrichelte Kante ist der einzige Rückgriff: Lauf 2 braucht das
+      Protokoll von Lauf 1, um einen bereits berichteten Preis zurücknehmen zu können. Die Stufen
+      tragen <strong>keine</strong> eigenen Statuswerte — der Job hat einen.</figcaption>
+  </figure>
+
+  <p>Drei Dinge, die man an der Form ablesen kann.</p>
+  <p>Erstens hängt die <strong>Rückmeldung an den Lieferanten an der ersten Stufe</strong>, nicht an
+     einem Lauf — sie geht Minuten nach der Lieferung raus. Das ist die Trennung, die im Altsystem
+     fehlt und die Markus mit „preisfiles sofort verarbeiten" meint.</p>
+  <p>Zweitens sind <strong>Sync und Kennzahlen keine eigenen Jobs</strong>, sondern Stufen. Sie haben
+     dieselbe Arbeitseinheit wie der Ingest — eine Lieferdatei —, müssen innerhalb dieser Einheit in
+     Reihenfolge laufen, und der Fortschritt ist genau das, was der Status ohnehin festhält. Eigene
+     Jobs bräuchten je eigene Identität, eigenes Retry und eine Rückbindung an die Lieferung:
+     Buchhaltung ohne Gewinn.</p>
+  <p>Drittens ist der <strong>Kennzahlen-Sweep die eine Ausnahme</strong>, weil seine Arbeitseinheit
+     „alle Preise ohne Kennzahl" ist und nicht eine Lieferung. Er fängt, was die Stufe nicht konnte —
+     vor allem Fremdwährungsfonds, deren EZB-Referenzkurs noch fehlte.</p>
+
+  <p class="note"><strong>Alle drei Stufen laufen auf beiden Servern parallel.</strong> Auch die
+     schreibende: dass zwei gleichzeitige Sync-Stufen auf denselben Preisschlüssel „letzte Lieferung
+     gewinnt" nicht verletzen, erzwingt ein monotoner Guard statt einer Serialisierung — siehe
+     <em>Zwei Server, ein Pool</em>. Legacy serialisiert dafür den <em>ganzen</em> Ingest (PID-File,
+     alphabetisch je Lieferant).</p>
 </section>
 
-<section>
-  <h2>Woran das Konzept anknüpft</h2>
-  <p>Das Job-/Work-Queue-System trägt das Konzept fast unverändert — die Bausteine sind da, teils ungenutzt.</p>
+<section id="status" data-nav="Status &amp; Retry">
+  <h2>Status und Wiederholbarkeit</h2>
+  <p class="lede">Ein vierstufiges eigenes Enum war über-modelliert. Der Test ist: was fragt den
+     Status überhaupt ab?</p>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Wer</th><th>fragt</th><th>braucht einen Fortschritts-Status?</th></tr></thead>
+    <tbody>
+      <tr><td>Sammelreport-Lauf</td><td><code>sammelreport_lauf IS NULL</code></td><td>nein</td></tr>
+      <tr><td>Kennzahlen-Sweep</td>
+          <td>„Preise ohne Kennzahl" — <strong>aus den Daten</strong>, nicht aus dem Jobzustand</td>
+          <td>nein</td></tr>
+      <tr><td>Fehlmeldungs-Job</td><td>die Landezone</td><td>nein</td></tr>
+      <tr><td>Betrieb / UI</td><td>„durch oder nicht"</td><td>nur terminal + Fehler</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p><code>CALCULATED</code> ist damit <strong>redundant</strong>: der Sweep ist gerade deshalb
+     selbstheilend, weil er seine Arbeit aus den Daten ableitet und nicht aus Jobzuständen. Und
+     <code>IN_KURS</code> fragt niemand ab.</p>
+  <p>Dazu die Konvention der Codebase: <code>JobStatus</code> ist ausdrücklich der „<em>Informal
+     business status … not to be confused with the technical state of a Work Queue Item</em>". Alle
+     Domänen-Enums sind dieselben fünf, und <code>StmCalcJobStatus</code> fügt genau
+     <strong>einen</strong> hinzu — <code>WAITING_FOR_START_OF_DAY</code>, also einen
+     <em>Wartezustand auf etwas außerhalb</em>, keinen Fortschrittsmarker. Das ist das Kriterium.</p>
+<pre><code>PreismeldungsJobStatus  =  PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED
+
+am Job zusätzlich:         sammelreport_lauf     : null | 1 | 2
+                           rueckmeldung_gesendet : timestamp</code></pre>
+  <p class="note">Revision des eigenen Arguments: die Orthogonalität war mit dem Fall „berichtet,
+     aber noch nicht <code>IN_KURS</code>" begründet. Besser — <strong>der Sammelreport nimmt nur
+     <code>COMPLETED</code>-Jobs mit.</strong> Der begründende Zustand verschwindet, <code>kurs</code>
+     und das ausgehende File bleiben konsistent, und der Preis ist nur Latenz: eine im seriellen Sync
+     steckende Lieferung verpasst den Cutoff und geht im nächsten Lauf mit. Die Abfrage lautet
+     <code>status = COMPLETED AND sammelreport_lauf IS NULL</code>.</p>
+
+  <h3>Reproduzierbarkeit: die Daten ja, die Außenwirkung nein</h3>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Stufe</th><th>Datenseite</th><th>Außenwirkung</th></tr></thead>
+    <tbody>
+      <tr><td>parsen, prüfen</td><td>rein, beliebig wiederholbar</td><td>—</td></tr>
+      <tr><td>Landezone schreiben</td>
+          <td>idempotent <strong>nur wenn</strong> auf <code>job_id</code> gescoped — PK ist
+              <code>(job_id, zeilen_nr)</code>, ein naives Re-Insert knallt</td><td>—</td></tr>
+      <tr><td>Rückmeldung</td><td>—</td>
+          <td><span class="tag danger">nicht idempotent</span> zweite Mail beim Lieferanten. Guard:
+              <code>rueckmeldung_gesendet</code></td></tr>
+      <tr><td>nach <code>kurs</code></td>
+          <td>Upsert idempotent; <code>D</code> auf gelöschte Zeile ist No-op;
+              <code>tmp_if_last</code> schreibt „nur wenn neuer" → No-op</td>
+          <td><code>del_protokoll</code> bekommt einen zweiten Eintrag
+              (<code>Del_Protokoll</code> Default <code>0</code>)</td></tr>
+      <tr><td>Kennzahlen</td><td>deterministisch, gleiche Eingaben → gleiche Werte</td>
+          <td><code>ASF.r_faktor</code> identisch — <strong>aber</strong>
+              <code>r_faktor_ges</code> muss vorwärts kaskadieren
+              (<code>MakeNextReinvestFaktor</code>)</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Daraus die Regel: <strong>idempotente Datenarbeit von nicht-idempotenter Außenwirkung trennen
+     und festhalten, was hinausgegangen ist.</strong> Das Publikationsprotokoll tut das für das
+     Preisfile; dasselbe braucht die Rückmeldung und die Fehlmeldung — sonst mailt jeder Retry
+     erneut.</p>
+
+  <h3>Die eine echte Gefahr ist nicht Wiederholung, sondern Reihenfolge</h3>
+  <pre class="mermaid">
+sequenceDiagram
+  participant A as Lieferung A · 08:00
+  participant K as kurs
+  participant B as Lieferung B · 08:05
+  A-xK: Sync scheitert
+  Note over A: Job FAILED
+  B->>K: Sync ok, B steht in kurs
+  A->>K: Retry von A
+  Note over K: A überschreibt B<br/>mit älteren Daten
+  </pre>
+  <p>Der Sync ist für <strong>eine</strong> Lieferung isoliert idempotent, aber
+     <strong>nicht umsortierbar</strong>. Den <em>neuesten</em> Job wiederholen ist sicher, einen
+     <em>alten</em> nicht.</p>
+  <p class="note ok"><strong>War als akzeptiertes Risiko protokolliert</strong> — „Wenn jemand
+     manuell einen Job wiederholt, muss er wissen was er tut." <strong>Erledigt in Runde 4:</strong>
+     der monotone Guard aus <em>Zwei Server, ein Pool</em> löst das als Beifang — der wiederholte A
+     verliert am Prädikat <code>angekommen_am &lt; @arrival</code> und überspringt still.</p>
+  <p class="note">Das ist relevant, weil der Retry nicht nur manuell passiert: die Work Queue holt
+     <code>FAILED</code>-Items <strong>selbst</strong> wieder — <code>findItemsReadyForRetry</code>
+     selektiert
+     <code>status = FAILED AND attemptCount &lt; maxAttempts AND nextRetryAt &lt;= now</code>. Beim
+     manuellen Retry weiß der Mensch, was er tut; beim automatischen weiß es niemand.</p>
+
+  <h3>Das Preisfile ist beim Bezieher inhalts-idempotent</h3>
+  <p>Folgt aus dem <code>I4</code>-Befund: <code>I2</code> ist ein Upsert, <code>I3</code> ein Delete.
+     Dasselbe File zweimal angewandt ändert nichts — ein versehentlich doppelt verschicktes File ist
+     harmlos. <strong>„Lauf wiederholen" ist deshalb zweideutig</strong>, und das löst die Frage, die
+     bei Entscheidung 7 offen stand:</p>
+  <div class="beforeafter">
+    <div>
+      <h4>erneut senden</h4>
+      <div class="boxstack">
+        <div class="bx">das aufgezeichnete Ergebnis noch einmal ausliefern</div>
+        <div class="bx ok">idempotent, harmlos<small>braucht das Publikationsprotokoll</small></div>
+      </div>
+    </div>
+    <div>
+      <h4>neu laufen lassen</h4>
+      <div class="boxstack">
+        <div class="bx">neu selektieren</div>
+        <div class="bx danger">anderes File, sobald Lieferungen dazukamen<small>kein Wiederholen — ein neuer Lauf, als Lauf 1b zu nummerieren</small></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="reihenfolge" data-nav="Zwei Server">
+  <h2>Zwei Server, ein Pool: die Reihenfolge</h2>
+  <p class="lede">Das Neusystem läuft auf zwei Servern, die beide Items aus demselben Pool ziehen.
+     Ohne Maßnahme kann die neuere Lieferung vor der älteren verarbeitet werden — und Locks wollen
+     wir nicht, weil Deadlocks ein echtes Problem sind.</p>
+  <p><strong>Der Kern: es braucht keine Reihenfolge, sondern Kommutativität.</strong> Die Anforderung
+     ist nicht „A vor B verarbeiten", sondern: <em>der Endzustand muss der sein, den die spätere
+     Ankunft impliziert.</em> Das ist ohne Koordination erreichbar.</p>
+
+  <h3>Was die Work Queue schon mitbringt</h3>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Baustein</th><th>Leistung</th></tr></thead>
+    <tbody>
+      <tr><td><code>required_server</code></td>
+          <td>Server-Affinität, über <code>SubmitOptions</code> setzbar;
+              <code>findNextPendingItemIds</code> respektiert
+              <code>(requiredServer IS NULL OR requiredServer = :serverId)</code></td></tr>
+      <tr><td><code>ORDER BY priority, createdAt</code></td>
+          <td>Kandidaten werden in Ankunftsreihenfolge gezogen</td></tr>
+      <tr><td><code>claimItem</code></td>
+          <td>atomares Compare-and-Set (<code>UPDATE … WHERE status = 'PENDING'</code>), kein Lock,
+              liefert 1/0</td></tr>
+      <tr><td><code>heartbeatAt</code> + Orphan-Recovery</td>
+          <td>abgestürzte Server geben Items frei</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note warn">Was fehlt: <strong>geordnete Auswahl ist nicht geordnete
+     Fertigstellung.</strong> Es gibt einen Pool je Server (<code>executorPoolSize</code>) und
+     <em>keine</em> Concurrency-Grenze je Task-Type — auch auf einem Server laufen mehrere Items
+     gleichzeitig.</p>
+
+  <h3>Gewählt: monotoner Guard (Last-Write-Wins nach Ankunft)</h3>
+  <p>Eine eigene kleine Tabelle als Serialisierungspunkt je Preisschlüssel — nicht in
+     <code>kurs</code>, weil dort keine Spalte dafür existiert und die Tabelle im Parallelbetrieb mit
+     dem Altsystem geteilt wird:</p>
+<pre><code>preis_herkunft   PK (num_wfs_ku, dat_kurs, cod_fliesscode, waehrung)
+                 → job_id, angekommen_am
+
+update preis_herkunft
+   set job_id = @job, angekommen_am = @arrival
+ where &lt;schlüssel&gt; = ...
+   and angekommen_am &lt; @arrival
+
+-- rowcount = 1 → wir sind die Neueste → kurs schreiben
+-- rowcount = 0 → Zeile fehlt (insert, bei PK-Verstoß update wiederholen)
+--                oder eine Neuere hat gewonnen → still überspringen, korrekt</code></pre>
+  <p>Warum das ordnungsunabhängig ist — beide Bearbeitungsreihenfolgen, gleiches Ergebnis:</p>
+  <div class="beforeafter">
+    <div>
+      <h4>A (älter) läuft zuerst</h4>
+      <div class="boxstack">
+        <div class="bx">A gewinnt den Guard → schreibt</div>
+        <div class="bx">B gewinnt den Guard → überschreibt</div>
+        <div class="bx ok">Endzustand: B</div>
+      </div>
+    </div>
+    <div>
+      <h4>B (neuer) läuft zuerst</h4>
+      <div class="boxstack">
+        <div class="bx">B gewinnt den Guard → schreibt</div>
+        <div class="bx ghost">A verliert den Guard → überspringt</div>
+        <div class="bx ok">Endzustand: B</div>
+      </div>
+    </div>
+  </div>
+  <p>Dasselbe Muster nutzt die Codebase schon: <code>claimItem</code> ist ein bedingtes
+     <code>UPDATE</code>, und <code>WorkQueueExecutor</code> nennt es ausdrücklich „<em>Cluster-safe:
+     Uses optimistic concurrency</em>". Gleiche Form, anderes Prädikat — statt
+     <code>status = 'PENDING'</code> eben <code>angekommen_am &lt; @arrival</code>.</p>
+  <p class="note"><strong>Versionsbasiertes optimistisches Sperren löst ein Reihenfolgeproblem
+     nicht</strong> — ein Vergleich auf einem <em>monoton wachsenden fachlichen Wert</em> löst es.
+     Das ist der ganze Unterschied. <code>angekommen_am</code> muss dafür aus <strong>einer</strong>
+     Uhr kommen, bei zwei Servern also nicht aus der Serverzeit:
+     <code>work_queue_items.created_at</code> wird in der DB erzeugt, ist einuhrig und schon
+     vorhanden. Gleichstand deterministisch über <code>job_id</code> brechen.</p>
+
+  <h3>Die eine Einschränkung</h3>
+  <p>Guard-Update und <code>kurs</code>-Schreiben müssen in <strong>einer Transaktion</strong>
+     liegen, sonst kann A den Guard gewinnen und sein <code>kurs</code>-Write <em>nach</em> dem von B
+     landen. Damit gibt es eine kurze Zeilensperre auf <code>preis_herkunft</code> — eine DB-Rowlock
+     über Millisekunden, <strong>kein</strong> Applikations-Lock. Deadlockfrei bleibt es durch:</p>
+  <ul>
+    <li><strong>eine Transaktion pro Preisschlüssel</strong> statt pro Datei, und</li>
+    <li>die Schlüssel in <strong>deterministischer Reihenfolge</strong> (sortiert) abarbeiten.</li>
+  </ul>
+  <p>Bei ~4200 Preisen/Tag ist der Overhead irrelevant. Wäre eine Spalte in <code>kurs</code>
+     erlaubt, fiele selbst das weg — dann <em>ist</em> das bedingte Update der
+     <code>kurs</code>-Write: ein Statement, atomar, keine Transaktion, keine Sperre. Offener
+     Punkt M.</p>
+
+  <h3><code>tmp_if_last</code> braucht dieselbe Behandlung</h3>
+  <p>Legacy schreibt dort „nur wenn Preisdatum neuer" — schon ein monotoner Guard, aber der falsche:
+     zwei Lieferungen zum <strong>gleichen</strong> Preisdatum (eine Korrektur) würden am Prädikat
+     <code>preisdatum &lt;</code> scheitern. Der Guard muss lexikografisch über
+     <code>(preisdatum, angekommen_am)</code> gehen. Weil <code>tmp_if_last</code> unsere eigene
+     Projektion ist, kann die Zeile <code>angekommen_am</code> einfach mitführen.</p>
+
+  <h3>Zwei Nebeneffekte</h3>
+  <div class="grid">
+    <div class="card ok"><h3>Die Serialisierungsauflage fällt weg</h3>
+      <p>Eine frühere Fassung verlangte, die Sync-Stufe unter Lock oder in einer einthreadigen Queue
+         zu fahren. Nicht nötig — die Stufe darf auf beiden Servern voll parallel laufen.</p></div>
+    <div class="card ok"><h3>Das Retry-Risiko aus Runde 3 ist erledigt</h3>
+      <p>„A scheitert, B überholt, A wird wiederholt" war als akzeptiertes Risiko protokolliert. Der
+         wiederholte A verliert am Prädikat und überspringt — unabhängig davon, ob der Retry manuell
+         oder automatisch ausgelöst wurde.</p></div>
+  </div>
+
+  <h3>Verworfene Alternativen</h3>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Ansatz</th><th>warum nicht</th></tr></thead>
+    <tbody>
+      <tr><td>Affinität je Lieferant via <code>required_server</code></td>
+          <td>Reduziert Kollisionen, löst es nicht — der Pool dieses Servers läuft weiter parallel.
+              Und ob „je Lieferant" ein <em>gültiger</em> Partitionsschlüssel ist, entscheidet erst
+              Q1/Q3; produktiv wurde die Zuordnung nie erzwungen (<code>-K0</code>)</td></tr>
+      <tr><td>Sync als eigener Task-Type, gepinnt, Concurrency 1</td>
+          <td>Concurrency-Grenze je Task-Type gibt es nicht; der Job zerfällt in zwei; der Knoten
+              wird Single Point of Failure für die Stufe</td></tr>
+      <tr><td>Sequenz-Gate: Item <em>n</em> erst nach <em>n−1</em></td>
+          <td>Head-of-line blocking — ein gescheitertes Item blockiert den Schlüssel dauerhaft</td></tr>
+      <tr><td>Reihenfolge ignorieren</td>
+          <td>Das Fenster ist die Dauer der Sync-Stufe, die Kollision also selten. Aber der Fehler
+              ist still und landet beim Bezieher</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+
+<section id="abhaengig" data-nav="Abhängigkeiten">
+  <h2>Abhängigkeiten: was die Kette braucht — und wer sie braucht</h2>
+  <p class="lede">Die Frage „kommen wir ohne Batch aus?" entscheidet sich nicht an den Preisen,
+     sondern an den Ausschüttungen. Dort hat das Altsystem eine zirkuläre zeitliche Abhängigkeit,
+     die es nicht auflöst.</p>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Bereich</th><th>Quelle</th><th>wofür</th></tr></thead>
+    <tbody>
+      <tr><td>Identität</td><td><code>vwkn..wkn_hist</code></td>
+          <td>ISIN → <code>num_wfs</code>/<code>num_wfs_ku</code>; historisiert <strong>und</strong>
+              auf Währung geschlüsselt</td></tr>
+      <tr><td></td><td><code>vwkn..wkn_desc</code></td>
+          <td><code>cod_art_f</code> (FOND/TECH/C-PL/TEST), Bezeichnungen</td></tr>
+      <tr><td>Fondsstammdaten</td><td><code>ifas..INV</code></td>
+          <td>KAG, Währung, Status, <code>fonds_beginn</code>/<code>-ende</code>,
+              <code>veroeffentlichung</code>, <code>FONDS_ZGRU</code>, <code>preismeldung</code></td></tr>
+      <tr><td>Konfiguration</td><td><code>kurs..tax_code</code></td>
+          <td><strong>jede</strong> Ingest-Prüfung hängt daran</td></tr>
+      <tr><td></td><td><code>HWA</code> / <code>waehrungen</code></td><td>Währungsprüfung</td></tr>
+      <tr><td></td><td><code>lieferanten</code>, <code>KAG_lieferanten</code></td>
+          <td>Rückmeldeadressen, Berechtigung (produktiv abgeschaltet)</td></tr>
+      <tr><td></td><td>Kalender / Börsetage</td><td>Werktagsprüfung, Altersfenster</td></tr>
+      <tr><td>Nachbardomänen</td><td><strong><code>ifas..ASF</code></strong></td>
+          <td><strong>Ausschüttungen und Splits</strong> — gelesen <em>und</em> geschrieben</td></tr>
+      <tr><td></td><td><code>zeas..adev</code></td>
+          <td>EZB-Referenzkurse; nur Kennzahlen, nur Fremdwährungsfonds</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Geschrieben werden <code>kurs..kurs</code>, <code>pool_if_kurs</code>,
+     <code>tmp_if_last</code>, die Kennzahlentabellen, <code>ifas..del_protokoll</code> (→ IFASNXT),
+     die Preisfiles (→ MFT/T2S), die Rückmeldung (→ Lieferant) — <strong>und
+     <code>ifas..ASF.r_faktor</code></strong>.</p>
+
+  <h3>Der IST-Ablauf, bezogen auf die Tabellen</h3>
+  <pre class="mermaid">
+flowchart TD
+  L["Lieferung · MFT"] --> INS["preis_ins.e<br/>alle 10 Min"]
+  INS --> TK[("tmp_if_kurs")]
+  INS --> TA[("tmp_aussch")]
+  TK --> CP["create_preise<br/>Tagesjob 1"]
+  TK --> EIN["run_preise_einspielen<br/>Tagesjob 4"]
+  TA --> AUS["run_aussch.csh<br/>eigene crontab"]
+  ASF[("ifas..ASF")] --> CP
+  AUS --> ASF
+  EIN --> KU[("kurs..kurs")]
+  KU --> AUS
+  KU --> CALC["run_calc<br/>Tagesjob 7"]
+  CALC --> ASF
+  CP --> FI["preis.csv<br/>an die Bezieher"]
+  </pre>
+  <p>Ein Programm sammelt alle zehn Minuten und trennt die Meldungsarten selbst
+     (<code>preis_ins.e</code>); danach laufen drei voneinander unabhängige Terminketten. Das
+     <code>ifas..ASF</code> in der Mitte wird von zwei Seiten beschrieben und von zwei Seiten
+     gelesen.</p>
+
+  <h3>Ausschüttungen: sechs Berührungspunkte, drei Richtungen</h3>
+  <p>Alles hängt an einer Tabelle: <code>ifas..ASF</code>, PK
+     <code>(WFS_WKN, ASF_DATUM, waehrung, aussch_status)</code>,
+     <code>aussch_status in ('A','V','D')</code>. Sie trägt Ausschüttungen <strong>und</strong>
+     Splits, und sie trägt den Reinvestitionsfaktor.</p>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>#</th><th>Wo</th><th>Richtung</th><th>Was genau</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Filegenerierung</td><td>Preis <strong>braucht</strong> Ausschüttung</td>
+          <td>Spalten 7–9 des Preissatzes: Ex-Code <code>EA</code>, Betrag, Zahltag.
+              <code>ReadAusschuettung</code> liest ASF mit
+              <code>&lt;preisdatum&gt; between ASF_DATUM and isnull(aussch_datum, ASF_DATUM)</code>.
+              Nur Stream „alle", nur Inland.</td></tr>
+      <tr><td>2</td><td>Kennzahlen</td><td>Ausschüttung <strong>braucht</strong> Preis</td>
+          <td><code>dR_faktor = (dNav + dAusschuettung) / dNav</code>
+              (<code>fondsbasis.cpp:1960ff</code>). Ohne Kurs <code>return -1</code>.
+              <code>r_faktor_ges</code> ist das kumulierte Produkt über alle früheren
+              Ausschüttungen.</td></tr>
+      <tr><td>3</td><td>Plausi 18–20</td><td>Kontrolle der Paarung</td>
+          <td><code>makeAusOhnePreis</code>: <code>ASF_DATUM = Stichtag</code>,
+              <code>aussch_status &lt;&gt; 'V'</code>, inländisch — aber kein Preis geliefert. Genau
+              die Konstellation, in der 2 scheitert. <strong>Markus Punkt 8.</strong></td></tr>
+      <tr><td>4</td><td>Einspielung, <code>R</code>-Löschung</td>
+          <td>Ausschüttung <strong>blockiert</strong></td>
+          <td>Liegt zum Preisdatum eine Ausschüttung vor, wird die Löschung verweigert — ohne jede
+              Rückmeldung, mit <code>// ????</code> im Quelltext
+              (<code>preisekennzahl.cpp:2539-2547</code>). Offener Punkt E.</td></tr>
+      <tr><td>5</td><td>Plausi <code>makeAbweichung</code></td>
+          <td>Ausschüttung <strong>verzerrt</strong></td>
+          <td><code>pdPreis_ber = pdPreis * dSplitfaktor (+ dAusschuettung)</code>, lokal gerechnet.
+              Entfällt mit Punkt 14.</td></tr>
+      <tr><td>6</td><td><code>run_asf_vorl</code> (Tagesjob 5)</td>
+          <td>Ausschüttung <strong>löst aus</strong></td>
+          <td><code>ASF_VORL → ASF</code>, „inkl. kompletter Nachrechnung der r/s_faktor_ges, der
+              berichtigten Kurse und aller Kennzahlen".</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Der Zirkel: Schritt 1 braucht, was Schritt 4 erst erzeugt</h3>
+  <figure>
+    <svg viewBox="0 0 816 452" role="img" xmlns="http://www.w3.org/2000/svg">
+      <title>Die zirkuläre zeitliche Abhängigkeit zwischen Preisfile, ASF und der Preis-Einspielung im Altsystem</title>
+      <defs>
+        <marker id="md" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="7"
+                orient="auto-start-reverse">
+          <path d="M0,0 L10,4 L0,8 z" fill="var(--danger)"/>
+        </marker>
+      </defs>
+
+      <text x="4" y="18" fill="var(--muted)" font-size="12">läuft wann</text>
+      <text x="214" y="18" fill="var(--muted)" font-size="12">Programm bzw. Tabelle</text>
+      <text x="624" y="18" fill="var(--muted)" font-size="12">was auf der Kante fließt</text>
+
+      <!-- Reihe 1 -->
+      <rect x="4" y="30" width="196" height="58" rx="8"
+            fill="var(--danger-wash)" stroke="var(--danger)" stroke-width="2"/>
+      <text x="18" y="54" fill="currentColor" font-size="15">Tagesjob Schritt 1</text>
+      <text x="18" y="74" fill="var(--muted)" font-size="12">zuerst</text>
+
+      <rect x="214" y="30" width="376" height="58" rx="8"
+            fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="230" y="54" fill="currentColor" font-size="15">create_preise → preis.csv</text>
+      <text x="230" y="74" fill="var(--muted)" font-size="12">Filegenerierung, geht an die Bezieher</text>
+
+      <line x1="402" y1="146" x2="402" y2="92" stroke="var(--danger)" stroke-width="2" marker-end="url(#md)"/>
+      <text x="624" y="124" fill="var(--muted)" font-size="12">liest Ex-Code, Betrag, Zahltag</text>
+
+      <!-- Reihe 2 -->
+      <rect x="214" y="148" width="376" height="58" rx="8"
+            fill="var(--accent-wash)" stroke="var(--line-strong)"/>
+      <text x="230" y="172" fill="currentColor" font-size="15">ifas..ASF</text>
+      <text x="230" y="192" fill="var(--muted)" font-size="12">Ausschüttungen, Splits, r_faktor</text>
+
+      <line x1="402" y1="264" x2="402" y2="210" stroke="var(--danger)" stroke-width="2" marker-end="url(#md)"/>
+      <text x="624" y="242" fill="var(--muted)" font-size="12">bucht, rechnet r_faktor</text>
+
+      <!-- Reihe 3 -->
+      <rect x="4" y="266" width="196" height="58" rx="8"
+            fill="var(--surface)" stroke="var(--faint)" stroke-dasharray="4 3"/>
+      <text x="18" y="290" fill="var(--muted)" font-size="15">eigene crontab</text>
+      <text x="18" y="310" fill="var(--muted)" font-size="12">Zeit unbestimmt</text>
+
+      <rect x="214" y="266" width="376" height="58" rx="8"
+            fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="230" y="290" fill="currentColor" font-size="15">run_aussch.csh</text>
+      <text x="230" y="310" fill="var(--muted)" font-size="12">tmp_aussch → ASF</text>
+
+      <line x1="402" y1="382" x2="402" y2="328" stroke="var(--danger)" stroke-width="2" marker-end="url(#md)"/>
+      <text x="624" y="352" fill="var(--danger)" font-size="12">liest R-Preis zum ASF_DATUM</text>
+      <text x="624" y="368" fill="var(--danger)" font-size="12">PFLICHT für Inland</text>
+
+      <!-- Reihe 4 -->
+      <rect x="4" y="384" width="196" height="58" rx="8"
+            fill="var(--danger-wash)" stroke="var(--danger)" stroke-width="2"/>
+      <text x="18" y="408" fill="currentColor" font-size="15">Tagesjob Schritt 4</text>
+      <text x="18" y="428" fill="var(--muted)" font-size="12">danach</text>
+
+      <rect x="214" y="384" width="376" height="58" rx="8"
+            fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="230" y="408" fill="currentColor" font-size="15">run_preise_einspielen → kurs</text>
+      <text x="230" y="428" fill="var(--muted)" font-size="12">erst hier steht der Preis in kurs</text>
+    </svg>
+    <figcaption>Alle Kanten zeigen nach oben: jede Stufe braucht, was die darunter erzeugt. Die
+      Ausführung läuft aber von oben nach unten — Schritt 1 vor Schritt 4. Am Ausschüttungstag selbst
+      ist die Bedingung damit nicht erfüllbar.</figcaption>
+  </figure>
+  <p>Drei Belege, die das hart machen:</p>
+  <ul>
+    <li><strong><code>run_aussch.csh</code> ist kein Tagesjob-Schritt.</strong> Im Kopf steht „wird
+      von crontab gestartet". Zwischen ihr und dem Tagesjob gibt es <strong>keine erzwungene
+      Reihenfolge</strong> — nur zwei Cron-Zeiten.</li>
+    <li><strong>Für inländische Fonds ist der Riegel absolut.</strong>
+      <code>asfkennzahl.cpp:880-916</code> liest den <code>R</code>-Kurs zum <code>ASF_DATUM</code>;
+      fehlt er, heißt es wörtlich „Inlaendische Fonds --&gt; es muss ein Preis vorhanden sein" und
+      „--&gt; Die Ausschuettung kann nicht eingespielt werden." (<code>return -1</code>). Für
+      <em>ausländische</em> Fonds gibt es einen Fallback (Vortagskurs minus Ausschüttungsbetrag),
+      für inländische nicht.</li>
+    <li><strong>Der Code <code>X</code> existiert genau als Notausgang.</strong>
+      <code>CONFIG.INI/FiktiverErrechneterWert</code> (Default <code>1</code>) erlaubt, einen
+      indikativen, fiktiven errechneten Wert zur Aktivierung zu verwenden
+      (<code>PREISE.CPP:820-821</code>) — und <code>X</code> wird in <strong>keinem</strong>
+      Ausgabefile ausgeliefert.</li>
+  </ul>
+  <p class="note danger">Praktische Folge im Altsystem: eine Ausschüttung landet im Preisfile nur,
+     wenn sie <strong>an einem früheren Tag</strong> gebucht wurde — im Voraus geliefert — oder wenn
+     <code>run_aussch.csh</code> zufällig zwischen dem Einspielschritt von gestern und der
+     Filegenerierung von heute lief. Am Ausschüttungstag selbst ist es ohne <code>X</code> nicht
+     möglich.</p>
+  <p class="note warn"><strong>Befund am Rand.</strong> <code>ReadAusschuettung</code> filtert weder
+     <code>aussch_status</code> noch <code>waehrung</code> und hat kein <code>order by</code> — es
+     wird die erste Zeile genommen. Da <code>aussch_status</code> Teil des Primärschlüssels ist,
+     können <code>'A'</code>, <code>'V'</code> und <code>'D'</code> nebeneinander liegen. Eine
+     <strong>vorläufige oder gelöschte Ausschüttung</strong> kann also ins Preisfile geraten.
+     <code>makeAusOhnePreis</code> schließt <code>'V'</code> dagegen ausdrücklich aus. Queries
+     Q9–Q11 klären, ob das produktiv vorkommt.</p>
+</section>
+
+<section id="ordnung" data-nav="Ordnung im Neuen">
+  <h2>Die Ordnung im neuen System</h2>
+  <p class="lede">Antwort auf „brauchen wir doch einen Batch?" — nein. Aber wir brauchen eine
+     <em>ausgedrückte</em> Vorrangregel zwischen zwei Domänen, und die Lieferkette macht sie
+     erstmals einhaltbar.</p>
+  <p>Der Grund ist einfach: der Preis steht in <code>kurs</code>, sobald die Lieferung durch ist —
+     Minuten statt „Tagesjob Schritt 4". Damit ist die Vorbedingung der Ausschüttungs-Einspielung
+     <strong>am selben Tag früh</strong> erfüllt, und aus dem Zirkel wird eine Kette:</p>
+  <div class="boxflow down">
+    <div class="bx accent">Preislieferung → <code>IN_KURS</code><small>Minuten nach Eingang</small></div>
+    <div class="arrow accent">&darr;<small>Vorbedingung erfüllt</small></div>
+    <div class="bx">Ausschüttungs-Einspielung<small>rechnet r_faktor, bucht ASF</small></div>
+    <div class="arrow">&darr;</div>
+    <div class="bx accent">Cutoff 1 → Sammelreport<small>liest ASF, Ausschüttung ist im Preisfile</small></div>
+  </div>
+  <h3>Drei Wege, das auszudrücken</h3>
+  <div class="grid">
+    <div class="card accent"><h3>O1 · Ausschüttungs-Tagesjob vor Cutoff 1</h3>
+      <p>Die Ordnung ist eine Terminvereinbarung, wie heute — aber mit einer Vorbedingung, die jetzt
+         tatsächlich erfüllt ist. Billigste Variante, und die wahrscheinliche: die Ausschüttungen
+         laufen voraussichtlich weiter als Teil eines Tagesjobs.</p></div>
+    <div class="card"><h3>O2 · Ausschüttungen ebenfalls pro Lieferung</h3>
+      <p>Die Ordnung löst sich von selbst: was heute nicht rechenbar war, holt der gemeinsame
+         Kennzahlen-Sweep. Setzt voraus, dass die Ausschüttungs-Domäne genauso umgebaut wird.</p></div>
+    <div class="card accent"><h3>O3 · Sammelreport prüft die Vorbedingung</h3>
+      <p>Der Lauf stellt fest, ob für die heutigen <code>ASF_DATUM</code> die Buchung vorliegt, und
+         <strong>meldet</strong>, wenn nicht — statt still ein unvollständiges File zu verschicken.
+         Heute schickt Legacy es einfach ohne Ausschüttungsangaben.</p></div>
+  </div>
+  <p><strong>Empfehlung: O1 plus O3.</strong> O3 ist unabhängig von O1/O2 richtig, weil es die
+     einzige Stelle ist, die den Fehler überhaupt sichtbar macht. Und es hat einen natürlichen
+     Platz: der Fehlmeldungs-Job prüft ohnehin Soll gegen Ist — „für diese ISIN ist heute eine
+     Ausschüttung gebucht, aber kein Preis geliefert" ist dieselbe Art von Befund und deckt
+     gleichzeitig Markus Punkt 8 ab.</p>
+  <h3>Neuer offener Punkt K: wem gehört <code>ASF.r_faktor</code>?</h3>
+  <p>Beide Domänen schreiben ihn — die Ausschüttungs-Einspielung beim Buchen
+     (<code>asfkennzahl.cpp:921,1156</code>), die Preis-Einspielung bei einer Korrektur
+     (<code>PreiseNachrechnung</code> → <code>cAusSpl.ReCalcReinvestFaktor</code>,
+     <code>preisekennzahl.cpp:3072</code>). Die Abgrenzung sagt „Ausschüttungen: eigene Domäne", und
+     gleichzeitig schreibt unsere Kennzahlen-Stufe in deren Tabelle.</p>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Option</th><th>Folge</th></tr></thead>
+    <tbody>
+      <tr><td><strong>K1</strong> — gehört der Ausschüttungs-Domäne</td>
+          <td>Sie rechnet ihn selbst und braucht eine Preis-Abfrage über die Domänengrenze. Unsere
+              Kette schreibt ASF nicht mehr; bei einer Preiskorrektur müssen wir benachrichtigen.</td></tr>
+      <tr><td><strong>K2</strong> — gehört der Kennzahlen-Domäne</td>
+          <td>Dann liegt er in der falschen Tabelle. Sauberer Schnitt, aber eine
+              Datenmodell-Änderung mit Verbrauchern außerhalb (Ausschüttungs-Files, CASA,
+              OeNB-Auswertungen).</td></tr>
+      <tr><td><strong>K3</strong> — bewusst geteilt</td>
+          <td>Wie heute. Braucht eine explizite Regel, wer bei gleichzeitiger Änderung gewinnt — und
+              der Sweep muss ihn mit abdecken.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note danger">Vor der Entscheidung nicht implementieren: die Kennzahlen-Stufe berührt
+     <code>ASF.r_faktor</code> sonst, ohne dass geklärt ist, ob sie darf. <strong>K ist der einzige
+     offene Punkt, der einen Implementierungsschnitt blockiert.</strong></p>
+</section>
+
+<section id="delta" data-nav="Was sich geändert hat">
+  <h2>Änderungsprotokoll</h2>
+  <h3>Runde 2 — Nachfragen zum Jobschnitt</h3>
+  <p>Die einschneidendste Runde: der Jobschnitt selbst hat sich geändert.</p>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Was</th><th>vorher</th><th>jetzt</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Jobschnitt</strong></td>
+          <td>sechs gleichrangige Jobs in einer Kette</td>
+          <td>eine <strong>Lieferkette mit Stufen</strong> + vier terminierte Jobs</td></tr>
+      <tr><td><strong>Statusmodell</strong></td>
+          <td>ein Enum, <code>READY_FOR_BATCH</code> → <code>PUBLISHED</code> → <code>SYNCED</code></td>
+          <td>zwei unabhängige Achsen</td></tr>
+      <tr><td><code>PUBLISHED</code></td><td>ein Status</td>
+          <td><span class="tag">gestrichen</span> zwei Veröffentlichungen, zwei Adressaten</td></tr>
+      <tr><td><strong>Entscheidung 8</strong></td>
+          <td>Sync liest die materialisierte Tagesmenge nach den Läufen</td>
+          <td>Sync ist eine <strong>Stufe</strong>; übrig bleibt das <strong>Publikationsprotokoll</strong></td></tr>
+      <tr><td><strong>Entscheidung 11</strong></td>
+          <td>Vollständigkeits-Trigger <em>und</em> Fehlmeldung</td>
+          <td>nur die Fehlmeldung. Kein Trigger, nichts gated die Läufe</td></tr>
+      <tr><td>Offener Punkt A</td><td>„wann läuft der Sync?"</td>
+          <td><span class="tag ok">geschlossen</span> pro Lieferung, sofort</td></tr>
+      <tr><td>Offener Punkt C</td><td>drei Optionen offen</td>
+          <td><span class="tag ok">C1 faktisch gesetzt</span> der Sweep muss selbstheilend sein</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <h3>Runde 1 — Input von Markus</h3>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Was</th><th>Alt (31.8.)</th><th>Neu</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Entscheidung 6</strong></td>
+          <td>Lauf 2 liefert ein vollständiges Ersatz-File</td>
+          <td>Lauf 2 liefert ein <strong>Delta</strong></td></tr>
+      <tr><td><strong>Entscheidung 10</strong></td>
+          <td>Kennzahlen haben eine Obergrenze „vor dem nächsten Plausi-Lauf"</td>
+          <td><strong>keine</strong> Obergrenze — die Behauptung war falsch</td></tr>
+      <tr><td>Offener Punkt D</td><td>Wahl zwischen <code>I3</code> und Auslassung</td>
+          <td><span class="tag ok">entschieden</span> explizites <code>I3</code></td></tr>
+      <tr><td>Offener Punkt F</td><td>Rückfallposition „ein Lauf" war offen</td>
+          <td>zwei Auslieferungen sind gesetzt</td></tr>
+      <tr><td><strong>Neu 11–15</strong></td><td>—</td>
+          <td>Fehlmeldung, Lieferketten-Transparenz, beendete Fonds,
+              <code>makeAbweichung</code> entfällt, Ausschüttung ohne Preis</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="i4" data-nav="Es gibt kein I4">
+  <h2>Der Befund, der das Delta möglich macht: es gibt kein <code>I4</code></h2>
+  <p class="lede">Das Argument der Vorversion gegen ein Delta war, die Identifier bräuchten einen
+     neuen Bezugspunkt, sonst stehe <code>I2</code>, wo <code>I4</code> hingehört. Im inländischen
+     <code>preis.csv</code> gibt es kein <code>I4</code>.</p>
+  <div class="boxflow">
+    <div class="bx">Preis-Streams ohne <code>SetFlag()</code><small>M_FP_DLD.CPP:243-257</small></div>
+    <div class="arrow">&rarr;<small>Default</small></div>
+    <div class="bx"><code>nFlag = 0</code><small>c_streams.cpp:37</small></div>
+    <div class="arrow accent">&rarr;<small>wählt</small></div>
+    <div class="bx accent">Standardvariante<small>nur <code>2</code> und <code>3</code></small></div>
+  </div>
+  <p><code>GetOutAktionscode</code> (<code>m_fp_rec.CPP:5649-5698</code>) hat zwei Zweige. Die
+     Korrekturkennzeichen-Variante mit <code>0</code>/<code>2</code>/<code>3</code>/<code>4</code>
+     gilt nur bei <code>nFlag == 1 | 3 | 4</code> und wird ausschließlich von den
+     <strong>ausländischen</strong> KESt/QuSt-Files benutzt. Für Fondspreise greift die
+     Standardvariante: <code>szAktion[0] == 'D'</code> → <code>3</code>, sonst → <code>2</code>, mit
+     dem Kommentar <code>nAktion = 2; // Insert / Update</code>.</p>
+  <ol>
+    <li><code>I2</code> ist ein <strong>Upsert</strong> auf
+      <code>(ISIN, Preisdatum, Währung, Code)</code>. Der Bezieher braucht die Unterscheidung
+      Insert/Update nicht.</li>
+    <li>Der Rückgabewert <code>0</code> („bereits vorhanden") ist im Fondspreis-Pfad
+      <strong>unerreichbar</strong>. Ein Korrekturzähler wird nicht geführt
+      (<code>lCount3 = -1</code>), weshalb die Korrekturspalte im Footer immer entfällt.</li>
+    <li>Ein Delta-File braucht <strong>keinen</strong> Bezugspunkt für Insert-gegen-Update, weil es
+      diese Unterscheidung nicht gibt. Einen Bezugspunkt braucht es nur für <em>einen</em> Fall: die
+      Rücknahme.</li>
+  </ol>
+  <p class="note ok">Legacy hat den Delta-Mechanismus sogar schon: <code>szEintragezeit</code>
+     schränkt die Selektion auf <code>eintragezeit &gt; '&lt;zeitpunkt&gt;'</code> ein und „erlaubt so
+     eine inkrementelle Erstellung; im Fondspreis-Pfad wird er nicht gesetzt"
+     (<code>m_fp_rec.CPP:2579-2584</code>).</p>
+</section>
+<section id="tmp" data-nav="Keine tmp-Tabellen">
+  <h2>Kein Nachbau der tmp-Tabellen</h2>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Leistung von <code>tmp_if_kurs</code></th><th>Wohin sie wandert</th></tr></thead>
+    <tbody>
+      <tr><td>Akkumulator, „letzte Lieferung gewinnt"</td>
+          <td>Auflösung im Sammelreport-Lauf; für <code>kurs</code> ergibt sie sich aus der
+              seriellen Anwendung von selbst</td></tr>
+      <tr><td>Datenquelle für Plausi, Files und Einspielung</td><td>Landezone</td></tr>
+      <tr><td>Puffer für Spätlieferungen (<code>RemoveTmpKurse</code>, QMS 644)</td>
+          <td><span class="tag">entfällt</span> eine spät eingelangte Lieferung bleibt auf
+              <code>sammelreport_lauf IS NULL</code></td></tr>
+      <tr><td>Cross-File-Abgleich beim Ingest (<code>Check4DeleteInTmp</code>)</td>
+          <td>verschoben in den Sammelreport-Lauf</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Der Nebeneffekt ist der eigentliche Gewinn: die erste Stufe läuft <strong>parallel über alle
+     Lieferungen</strong>. Legacy musste den ganzen Ingest serialisieren — PID-File, alphabetisch je
+     Lieferant. Bei uns bleibt nur die schreibende Stufe seriell.</p>
+</section>
+
+<section id="landezone" data-nav="Die Landezone">
+  <h2>Die Landezone: gelieferte Zeilen pro Job</h2>
   <dl>
-    <dt><code>AbstractJobWorkQueueHandler</code> — <code>service/job/</code></dt>
-    <dd>Nimmt den <code>completedStatus</code> im Konstruktor. Der Ingest-Job kann damit nach
-        <code>READY_FOR_BATCH</code> abschließen, ohne den Basis-Handler zu umgehen.</dd>
-
-    <dt><code>StmCalcJobStatus.WAITING_FOR_START_OF_DAY</code></dt>
-    <dd>Präzedenz für einen Parkstatus — bisher unbenutzt und nirgends referenziert.</dd>
-
-    <dt><code>(keyDate, laufnummer)</code> als Job-UK</dt>
-    <dd>Muster für mehrere Läufe pro Tag, in <code>EstbDailyReportJob</code>,
-        <code>FristenpruefungJob</code> und <code>MeldefondsListenJob</code>. STM fährt schon drei.</dd>
-
-    <dt><code>ScheduledTask</code> mit Werktagsprüfung und manuellem Trigger</dt>
-    <dd>Cron, Feiertage und die „Geplante Aufgaben"-Seite — vorgeführt in
-        <code>IsinAnforderungslistenBatchJobScheduleService</code>.</dd>
-
-    <dt><code>OrchestrationJobHelper</code> und serielle Verkettung</dt>
-    <dd>Reihenfolge-Auflagen zwischen Jobs ausdrücken, wie „STM Lauf 1" es mit seinen
-        Teilschritten tut. Genau das, was der Sync nach dem letzten Batchlauf braucht.</dd>
-
-    <dt>Ergebnisfiles am Job als Filestore-URI</dt>
-    <dd>Das Return-ZIP hängt am Job, wie <code>StmCalcJob.resultBundleFile</code>.</dd>
+    <dt><code>job_id</code>, <code>zeilen_nr</code></dt>
+    <dd>PK. <code>job_id</code> ersetzt <code>liefer_id</code> <em>und</em>
+      <code>eintragezeit</code> — beides steht am Job. <code>zeilen_nr</code> bindet an
+      <code>data.log</code>/<code>error.log</code> zurück und hält die Reihenfolge in der Datei.</dd>
+    <dt><code>isin</code>, <code>preisdatum</code>, <code>waehrung</code>,
+      <code>meldekategorie</code>, <code>aktion</code></dt>
+    <dd>Der Preisschlüssel plus <code>N</code>/<code>D</code>/<code>I</code>. Die Meldekategorie
+      steht nach Alias-Auflösung (<code>tax_code.alias</code>) als Zielcode da;
+      <code>waehrung</code> ist die Währung der <em>Lieferung</em>, nicht die Fondswährung.</dd>
+    <dt><code>wert</code></dt>
+    <dd>Normalisiert: Komma → Punkt, Blanks entfernt, bei <code>ignore_null = 'J'</code> leer →
+      <code>0</code>.</dd>
+    <dt><code>fondsbezeichnung</code></dt>
+    <dd>Wie geliefert. Fallback, wenn <code>INV</code> keine hat.</dd>
+    <dt><code>lmt_prozentkennzeichen</code>, <code>lmt_stichtag</code></dt>
+    <dd>Zwei Spalten, die die LMT-Persistenz praktisch kostenlos machen — offener Punkt G.</dd>
   </dl>
+  <div class="grid">
+    <div class="card accent"><h3>Kein Unique-Key auf dem Preisschlüssel</h3>
+      <p>Duplikate über den Tag sind der Normalfall. „Letzte gewinnt" ist eine Regel im Lauf, keine
+         Constraint in der DB.</p></div>
+    <div class="card accent"><h3>Append-only</h3>
+      <p>Trägt mehr, als beim Entwurf absehbar war: Lieferketten-Transparenz und Soll/Ist-Prüfung
+         brauchen die <em>Historie</em> der Lieferungen, nicht ihr Ergebnis.</p></div>
+    <div class="card accent"><h3>Gehört genau einem Job</h3>
+      <p>Kein lieferantenübergreifender veränderlicher Zustand.</p></div>
+  </div>
+  <p class="note">Nicht übernommen: <code>num_ausschuettung</code>/<code>dat_zahltag</code> — die
+     Ausschüttungsangaben im Preisfile kommen aus den Stammdaten — und <code>intervall</code>, das
+     produktiv seit 2017 ersatzlos geleert wird.</p>
 </section>
 
-<section>
-  <h2>Satzart-Identifier <code>I2</code> / <code>I3</code> / <code>I4</code></h2>
-  <p>Die erste Spalte jeder Zeile im <strong>ausgehenden</strong> <code>preis*.csv</code> ist ein zweistelliger Identifier (<code>m_fp_rec.CPP</code>, Ist-Analyse 4.3).</p>
+<section id="aufloesung" data-nav="Auflösung">
+  <h2>Auflösung — nur für den Sammelreport, nicht für <code>kurs</code></h2>
+  <p class="lede">Der Unterschied ist der Grund, warum die Sync-Stufe pro Lieferung laufen kann.</p>
+  <p>Ein File darf keine zwei widersprüchlichen Zeilen zum selben Schlüssel enthalten, und sein
+     Footer zählt. <code>kurs</code> ist dagegen eine Tabelle: <strong>sequenzielle Upserts in
+     Ankunftsreihenfolge konvergieren auf denselben Zustand wie „letzte gewinnt"</strong>. Auch die
+     D/N-Fälle: <code>D</code> auf eine vorhandene Zeile löscht sie, <code>D</code> auf eine fehlende
+     ist ein No-op, <code>N</code> nach <code>D</code> fügt wieder ein. Die Auflösung ist damit ein
+     <strong>Datei</strong>-Anliegen.</p>
+  <h3>Die D/N-Regeln des Altsystems, präzise</h3>
   <div class="scrollx">
   <table>
-    <thead><tr><th>Identifier</th><th>Bedeutung</th></tr></thead>
+    <thead><tr><th>Konstellation</th><th>Ergebnis</th></tr></thead>
     <tbody>
-      <tr><td><code>I1</code></td><td>Header — Kursdatum, Erstelldatum, Erstellzeit</td></tr>
-      <tr><td><code>I2</code></td><td>Preis, <strong>Insert</strong></td></tr>
-      <tr><td><code>I3</code></td><td>Preis, <strong>Delete</strong></td></tr>
-      <tr><td><code>I4</code></td><td>Preis, <strong>Update / Korrektur</strong></td></tr>
-      <tr><td><code>I9</code></td><td>Footer — Anzahl Deletes, Inserts, Korrekturen</td></tr>
-      <tr><td><code>S1</code>/<code>S2</code>/<code>S3</code></td><td>Solvabilität, Ziffer = Stufe</td></tr>
-      <tr><td><code>D1</code>/<code>D2</code>/<code>D3</code></td><td>Solvabilität, Delete</td></tr>
+      <tr><td><code>D</code> trifft auf ein früheres <code>N</code> mit gleichem Schlüssel</td>
+          <td>das <code>N</code> fällt weg</td></tr>
+      <tr><td><strong>danach</strong>, und nur dann: Schlüssel weder persistiert noch in einem
+              früheren Lauf berichtet</td>
+          <td>das <code>D</code> fällt ebenfalls weg (<code>INFO_IGNORE_DEL</code>)</td></tr>
+      <tr><td><strong>danach</strong>: Schlüssel persistiert oder in einem früheren Lauf berichtet</td>
+          <td><span class="tag accent">→ I3</span> das <code>D</code> bleibt</td></tr>
+      <tr><td><code>D</code> <strong>ohne</strong> vorheriges <code>N</code> desselben Tages</td>
+          <td><span class="tag accent">→ I3</span> läuft ungeprüft durch</td></tr>
+      <tr><td><code>N</code> trifft auf ein früheres <code>D</code></td><td>das <code>D</code> fällt weg</td></tr>
+      <tr><td>in einer Datei: einem <code>D</code> folgt weiter unten ein Nicht-<code>D</code></td>
+          <td>das <code>D</code> fällt weg</td></tr>
     </tbody>
   </table>
   </div>
-  <p><code>GetOutAktionscode</code> (<code>m_fp_rec.CPP:5986-5993</code>) bildet auf <code>2</code> = Insert, <code>3</code> = Delete, <code>4</code> = Update ab; <code>0</code> bedeutet „nicht ausgeben, Satz bereits vorhanden".</p>
-  <p>Ein <code>I3</code> sagt dem Bezieher: <strong>wirf diesen Preis weg.</strong> Es ist das ausgehende Gegenstück zur eingehenden Aktion <code>D</code>. Achtung auf die Asymmetrie — <strong>eingehend</strong> steht die Aktion als Buchstabe in Spalte 6 des Lieferformats (<code>N</code>/<code>D</code>/<code>I</code>), <strong>ausgehend</strong> ist sie in den Identifier der Spalte 1 eingebacken.</p>
-  <p class="note">Ob ein <code>I3</code> das Haus verlässt, ist der Kern der D/N-Auflösung und der offenen Punkte D und E.</p>
+  <p class="note warn">Die zweite Zeile ist die eigentliche Legacy-Regel, und sie ist
+     <strong>enger</strong>, als ich sie zuerst beschrieben habe: der <code>kurs</code>-Lookup
+     (<code>M_INSERT.CPP:4229-4271</code>) passiert nur in dem Zweig, in dem ein <code>D</code> gerade
+     ein <code>N</code> desselben Tages storniert hat. Fachlich: „geliefert und noch am selben Tag
+     zurückgezogen, bevor etwas rausging" ist ein No-op, und beides fällt weg.</p>
+  <p>Neu ist, woran „schon berichtet" gemessen wird: nicht mehr an <code>kurs</code> — das ist jetzt
+     untertags aktuell und damit kein Maß für „hat der Bezieher es gesehen" — sondern am
+     Publikationsprotokoll.</p>
 </section>
 
-<section>
-  <h2>LMT — die Kategorien <code>L1</code> / <code>L2</code> / <code>L3</code></h2>
-  <p>Neu mit Lieferformat <strong>V3.0</strong> (2026, <code>202604-LMT-Preismeldung_ISINs_2026.pdf</code>); die Vorgängerversion V2.0 von 2025 kennt sie nicht.</p>
-  <div class="scrollx">
-  <table>
-    <thead><tr><th>Code</th><th>Bedeutung</th><th>Wertebefüllung (Spalte 5)</th></tr></thead>
-    <tbody>
-      <tr><td><code>L1</code></td><td>Rücknahmebeschränkung</td><td>Quote — Prozentzahl wenn Spalte 9 = <code>J</code>, sonst Geldwert</td></tr>
-      <tr><td><code>L2</code></td><td>Verlängerung der Rückgabefrist</td><td>Anzahl Tage; bei <code>0</code> trägt Spalte 10 den Stichtag</td></tr>
-      <tr><td><code>L3</code></td><td>Rückgabegebühr</td><td>Gebühr, Prozent oder Geldwert je Spalte 9</td></tr>
-    </tbody>
-  </table>
-  </div>
-  <p>Dazu die zwei LMT-Felder des Lieferformats: <code>LMT_PROZENTKENNZEICHEN</code> (Spalte 9, <code>J</code>/<code>N</code>) und <code>LMT_STICHTAG</code> (Spalte 10, nur bei <code>L2</code>). Die Aktion <code>I</code> (Inaktivierung) existiert <strong>ausschließlich</strong> für <code>L2</code> und kam ebenfalls erst mit V3.0.</p>
-  <p>Die Abkürzung ist weder im Repo noch in der Ist-Analyse ausgeschrieben. Branchenüblich steht LMT für <strong>Liquidity Management Tools</strong> — die Instrumente, die Fonds nach der EU-AIFMD/UCITS-Novelle wählen und melden müssen; Rücknahmebeschränkung, Verlängerung der Rückgabefrist und Rückgabegebühr sind drei aus dem Standardkatalog, und <code>PreisAktion.java:10</code> nennt <code>L2</code> selbst „the LMT tool".</p>
-  <p class="note warn">Aus unseren Quellen belegt ist die Auflösung <strong>nicht</strong> — für ein Dokument nach außen bei der Fachabteilung bestätigen lassen.</p>
-</section>
-
-<section>
-  <h2>Leitgedanke: kein Nachbau der tmp-Tabellen</h2>
-  <p>Das Altsystem trägt den Tag in vier Tabellen, von denen drei reine Zwischenstufen sind. Im neuen Konzept liegt der Tag in den Jobs — und die einzige Tabelle, die fachlich überlebt, wandert vom Eingang an den Ausgang.</p>
+<section id="laeufe" data-nav="Lauf 1 und Lauf 2">
+  <h2>Lauf 1 hält den Zwischenstand, Lauf 2 das Delta</h2>
+  <p class="lede">Ein „Sammelreport" ist alles bis zu einem Stichzeitpunkt Gesammelte — die Preise
+     <em>und</em> die Plausi. Es gibt dafür einen eigenen Bezieherkreis, nicht identisch mit den
+     Lieferanten.</p>
   <div class="beforeafter">
     <div>
-      <h4>Altsystem</h4>
+      <h4>Lauf 1 · Cutoff 1</h4>
       <div class="boxstack">
-        <div class="bx">tmp_if_kurs<small>Sammlung, wird geleert</small></div>
-        <div class="bx">tmp_if_cop<small>Kopie vor dem Leeren</small></div>
-        <div class="bx">tmp_if_last<small>Eingang &rarr; kurs</small></div>
-        <div class="bx">liefer_bugs / liefer_zeit<small>Lieferprotokoll</small></div>
+        <div class="bx">alle Lieferungen bis Cutoff 1</div>
+        <div class="bx accent"><code>tmp_if_last</code>-Fallback<small>Fonds ohne heutigen Preis bekommen den letzten bekannten</small></div>
+        <div class="bx">Preisfile: Zwischenstand, vollständig</div>
       </div>
     </div>
     <div>
-      <h4>Konzept</h4>
+      <h4>Lauf 2 · Cutoff 2</h4>
       <div class="boxstack">
-        <div class="bx accent">Zeilen am Job<small>append-only, ein Besitzer</small></div>
-        <div class="bx ghost">entfällt<small>der Job ist die Kopie</small></div>
-        <div class="bx accent">tmp_if_last<small>Projektion, Ausgang</small></div>
-        <div class="bx ghost">entfällt<small>schon heute im Job</small></div>
+        <div class="bx">nur Lieferungen zwischen den Cutoffs</div>
+        <div class="bx ghost">kein Fallback<small>sonst erscheint jeder Fonds ein zweites Mal</small></div>
+        <div class="bx accent">Preisfile: Delta</div>
       </div>
     </div>
   </div>
-  <p><code>liefer_bugs</code> und <code>liefer_zeit</code> existieren in IFAS13 nirgends — kein Java, kein Flyway. Das Lieferprotokoll lebt für STM bereits im Job. Das Konzept setzt das fort, statt etwas Neues einzuführen.</p>
-</section>
-
-<section>
-  <h2>Was <code>tmp_if_kurs</code> leistet, und wo es hinwandert</h2>
+  <h3>Warum das Delta trägt</h3>
+  <ul>
+    <li>Es gibt kein <code>I4</code>, und <code>I2</code> ist ein Upsert.</li>
+    <li>Ein Bezugspunkt wird nur für <strong>einen</strong> Fall gebraucht: ein <code>D</code> in
+      Lauf 2 auf einen in Lauf 1 berichteten Preis. Dafür gibt es das Publikationsprotokoll.</li>
+    <li>Der Fehlerfall bleibt gutartig: wer das Lauf-2-File verpasst, hat den
+      <strong>vollständigen</strong> Zwischenstand von Lauf 1 — veraltet, aber in sich stimmig.</li>
+    <li>Der Vertrag wird <strong>einfacher</strong>. Das Ersatz-File hätte die Zusage gebraucht,
+      „alles für das Kursdatum im Header zu verwerfen und die Datei neu anzuwenden". Das Delta
+      braucht nur „Files in Reihenfolge anwenden".</li>
+    <li>Lauf 2 ist klein (die Nachzügler) statt rund 4200 Zeilen plus Fallback.</li>
+  </ul>
+  <h3>Dass Lauf 2 ohne Fallback nichts verliert, folgt aus einem Invariant</h3>
   <div class="scrollx">
   <table>
-    <thead><tr><th>Leistung im Altsystem</th><th>im Konzept</th></tr></thead>
+    <thead><tr><th>Fall</th><th>Lauf 1</th><th>Lauf 2</th><th>beim Bezieher</th></tr></thead>
     <tbody>
-      <tr><td>Akkumulator, „letzte Lieferung gewinnt" pro Preisschlüssel</td><td>Auflösung im Batchlauf, über die Zeilen aller Jobs des Tages</td></tr>
-      <tr><td>Datenquelle für Plausi / Files / Einspielung</td><td>dieselben Zeilen, drei Verbraucher</td></tr>
-      <tr><td>Puffer für Spätlieferungen (<code>RemoveTmpKurse</code> mit Stichzeitpunkt, QMS 644)</td><td><span class="tag ok">entfällt</span> ein spät eingelangter Job bleibt auf <code>READY_FOR_BATCH</code> liegen</td></tr>
-      <tr><td>Cross-File-Abgleich <strong>beim Ingest</strong> (<code>Check4DeleteInTmp</code>)</td><td><span class="tag accent">verschoben</span> in den Batchlauf</td></tr>
+      <tr><td>X liefert den ganzen Tag nicht</td><td>Fallback (alter Schlüssel, alter Wert)</td>
+          <td>nichts</td><td>hat den Fallback aus Lauf 1</td></tr>
+      <tr><td>X liefert vor Cutoff 1</td><td>echter Preis, <strong>kein</strong> Fallback (Anti-Join)</td>
+          <td>nichts</td><td>korrekt</td></tr>
+      <tr><td>X liefert zwischen den Cutoffs</td><td>Fallback</td>
+          <td>echter Preis (anderes Preisdatum)</td><td>beide Schlüssel, korrekt</td></tr>
+      <tr><td>späte Korrektur für ein älteres Datum, X hat heute keinen Preis</td><td>Fallback</td>
+          <td>die Korrektur ist eine <strong>Lieferung</strong>, also im Delta</td>
+          <td>korrekt, nur nicht als Fallback</td></tr>
     </tbody>
   </table>
   </div>
-  <p>Nebeneffekt der Verschiebung: die Ingest-Jobs laufen parallel, ohne sich zu koppeln. Legacy musste dafür serialisieren — PID-File, Lieferanten der Reihe nach, Dateien alphabetisch.</p>
+  <p class="note ok"><strong>Der Invariant:</strong> der Fallback-Wert kann sich nur durch eine
+     Lieferung ändern, und jede Lieferung ist im Delta. Ein zweiter Fallback-Durchlauf würde also
+     entweder dasselbe wiederholen oder etwas ausgeben, das das Delta schon enthält. Die Ausnahme
+     betrifft nicht den Fallback, sondern seine <em>Rücknahme</em> — siehe die Protokoll-Auflage in
+     <em>Sync &amp; Protokoll</em>. Und falls der Fallback einem anderen Zweck dient als angenommen,
+     fällt der Invariant: offener Punkt N.</p>
+  <p class="note warn"><strong>Kein Vollständigkeits-Trigger.</strong> Ein früherer Entwurf wollte
+     Lauf 1 vorziehen, sobald alles Erwartete da ist. Verworfen: der Lauf darf in jedem Fall starten,
+     und die Soll-Menge gehört ausschließlich in den Fehlmeldungs-Job. Der Ingest kennt keine
+     Vollständigkeit.</p>
 </section>
 
-<section>
-  <h2>Die Zielarchitektur</h2>
-  <figure>
-    <svg viewBox="0 0 666 280" role="img" xmlns="http://www.w3.org/2000/svg">
-      <title>Landezone mit drei Verbrauchern: Batchlauf, Sync-Job und Projektion</title>
-      <rect x="4" y="11" width="170" height="258" rx="8"
-            fill="var(--accent-wash)" stroke="var(--accent)" stroke-width="2"/>
-      <text x="89" y="133" text-anchor="middle" fill="currentColor" font-size="15">Preismeldung-Jobs</text>
-      <text x="89" y="153" text-anchor="middle" fill="var(--muted)" font-size="12">Zeilen, append-only</text>
-
-      <line x1="178" y1="46" x2="244" y2="46" stroke="var(--muted)" stroke-width="2"/>
-      <text x="211" y="38" text-anchor="middle" fill="var(--muted)" font-size="12">löst auf</text>
-      <line x1="178" y1="140" x2="244" y2="140" stroke="var(--muted)" stroke-width="2"/>
-      <text x="211" y="132" text-anchor="middle" fill="var(--muted)" font-size="12">filtert</text>
-      <line x1="178" y1="234" x2="244" y2="234" stroke="var(--muted)" stroke-width="2"/>
-      <text x="211" y="226" text-anchor="middle" fill="var(--muted)" font-size="12">gruppiert</text>
-
-      <rect x="248" y="11" width="170" height="70" rx="8"
-            fill="var(--surface)" stroke="var(--line-strong)"/>
-      <text x="333" y="41" text-anchor="middle" fill="currentColor" font-size="15">Batchlauf 1 / 2</text>
-      <text x="333" y="61" text-anchor="middle" fill="var(--muted)" font-size="12">keyDate, laufnummer</text>
-
-      <rect x="248" y="105" width="170" height="70" rx="8"
-            fill="var(--surface)" stroke="var(--line-strong)"/>
-      <text x="333" y="135" text-anchor="middle" fill="currentColor" font-size="15">Sync-Job</text>
-      <text x="333" y="155" text-anchor="middle" fill="var(--muted)" font-size="12">nach dem letzten Lauf</text>
-
-      <rect x="248" y="199" width="170" height="70" rx="8"
-            fill="var(--surface)" stroke="var(--line-strong)"/>
-      <text x="333" y="229" text-anchor="middle" fill="currentColor" font-size="15">Projektion</text>
-      <text x="333" y="249" text-anchor="middle" fill="var(--muted)" font-size="12">je ISIN jüngster Preis</text>
-
-      <line x1="422" y1="46" x2="488" y2="46" stroke="var(--muted)" stroke-width="2"/>
-      <text x="455" y="38" text-anchor="middle" fill="var(--muted)" font-size="12">erzeugt</text>
-      <line x1="422" y1="140" x2="488" y2="140" stroke="var(--muted)" stroke-width="2"/>
-      <text x="455" y="132" text-anchor="middle" fill="var(--muted)" font-size="12">schreibt</text>
-      <line x1="422" y1="234" x2="488" y2="234" stroke="var(--muted)" stroke-width="2"/>
-      <text x="455" y="226" text-anchor="middle" fill="var(--muted)" font-size="12">ergibt</text>
-
-      <rect x="492" y="11" width="170" height="70" rx="8"
-            fill="var(--surface)" stroke="var(--line-strong)"/>
-      <text x="577" y="41" text-anchor="middle" fill="currentColor" font-size="15">Preisfiles + Plausi</text>
-      <text x="577" y="61" text-anchor="middle" fill="var(--muted)" font-size="12">MFT, T2S, NetApp</text>
-
-      <rect x="492" y="105" width="170" height="70" rx="8"
-            fill="var(--surface)" stroke="var(--line-strong)"/>
-      <text x="577" y="135" text-anchor="middle" fill="currentColor" font-size="15">kurs</text>
-      <text x="577" y="155" text-anchor="middle" fill="var(--muted)" font-size="12">+ pool_if_kurs</text>
-
-      <rect x="492" y="199" width="170" height="70" rx="8"
-            fill="var(--surface)" stroke="var(--line-strong)"/>
-      <text x="577" y="229" text-anchor="middle" fill="currentColor" font-size="15">tmp_if_last</text>
-      <text x="577" y="249" text-anchor="middle" fill="var(--muted)" font-size="12">Fallback für Lauf 1</text>
-    </svg>
-    <figcaption>Eine Quelle, drei Verbraucher. Die Auflösung — „letzte gewinnt" plus D/N-Verrechnung — liegt in einer Komponente, die Batchlauf und Sync gemeinsam aufrufen.</figcaption>
-  </figure>
-</section>
-
-<section>
-  <h2>Die Landezone: gelieferte Zeilen am Job</h2>
-  <p>Im Kern <code>tmp_if_kurs</code> minus alles, was der Job schon weiß.</p>
-  <div class="scrollx">
-  <table>
-    <thead><tr><th>Spalte</th><th>Inhalt</th><th>Anmerkung</th></tr></thead>
-    <tbody>
-      <tr><td><code>job_id</code></td><td>FK auf den Preismeldung-Job</td><td>ersetzt <code>liefer_id</code> <strong>und</strong> <code>eintragezeit</code> — beides steht am Job</td></tr>
-      <tr><td><code>zeilen_nr</code></td><td>Zeile im Lieferfile</td><td>Rückbindung an <code>data.log</code>/<code>error.log</code>, Reihenfolge innerhalb der Datei</td></tr>
-      <tr><td><code>isin</code></td><td></td><td></td></tr>
-      <tr><td><code>preisdatum</code></td><td>Berechnungsdatum, Spalte 1 des Lieferformats</td><td></td></tr>
-      <tr><td><code>waehrung</code></td><td>Währung der Lieferung</td><td>nicht die Fondswährung</td></tr>
-      <tr><td><code>meldekategorie</code></td><td><code>R</code>/<code>E</code>/<code>Z</code>/<code>S</code>/<code>S2</code>/<code>S3</code>/<code>X</code>/<code>L1</code>/<code>L2</code>/<code>L3</code></td><td>nach Alias-Auflösung (<code>tax_code.alias</code>), also der Zielcode</td></tr>
-      <tr><td><code>aktion</code></td><td><code>N</code>/<code>D</code>/<code>I</code></td><td></td></tr>
-      <tr><td><code>wert</code></td><td>normalisiert</td><td>Komma&rarr;Punkt, Blanks entfernt, <code>ignore_null='J'</code> &rarr; <code>0</code></td></tr>
-      <tr><td><code>fondsbezeichnung</code></td><td>wie geliefert</td><td>Fallback, wenn <code>INV</code> keine hat</td></tr>
-      <tr><td><code>lmt_prozentkennzeichen</code>, <code>lmt_stichtag</code></td><td></td><td>siehe offener Punkt G</td></tr>
-    </tbody>
-  </table>
-  </div>
-  <p>PK <code>(job_id, zeilen_nr)</code>. Drei Eigenschaften machen den Unterschied zu <code>tmp_if_kurs</code>:</p>
+<section id="sync" data-nav="Sync &amp; Protokoll">
+  <h2>Die Einspielung als Stufe — und was von der Tagesmenge bleibt</h2>
+  <p class="lede">Der Sync ist kein terminierter Job mehr. Er läuft, sobald die Lieferung geprüft
+     ist.</p>
+  <p><strong>Legacy tut hier schon dasselbe.</strong>
+     <code>cPreiseKennzahlen::MakePreiseEinzel</code> (gehört zu <code>preise.e</code>) läuft über die
+     Preissätze und ruft inline <code>PreiseNachrechnung()</code> und danach
+     <code>WriteLastKurse()</code> (<code>preisekennzahl.cpp:2500,2512</code>). Die Einspielung ist
+     also schon pro Satz organisiert — nur terminiert war sie als Tagesjob-Schritt.</p>
+  <h3>Der Berechtigungsfilter</h3>
+  <p>Diese Logik gehört in die Stufe, nicht in die Tabelle:</p>
   <ul>
-    <li><strong>Kein Unique-Key auf dem Preisschlüssel.</strong> Duplikate über den Tag sind der Normalfall; „letzte gewinnt" ist eine Regel im Batch, keine Constraint in der DB.</li>
-    <li><strong>Append-only.</strong> Nichts wird nachträglich geändert oder gelöscht. Kein Leeren, kein <code>tmp_if_cop</code>.</li>
-    <li><strong>Gehört genau einem Job.</strong> Kein lieferantenübergreifender veränderlicher Zustand.</li>
+    <li>ISIN in IFAS nicht auflösbar → <code>pool_if_kurs</code>, <code>kurs</code> unberührt</li>
+    <li>Preiswährung ≠ Fondswährung → nicht nach <code>kurs</code></li>
+    <li>TEST-ISIN, C-Plan, AIF, Fonds in Liquidation → Ausschlüsse
+      (<code>InsPreise*</code>-Schalter)</li>
+    <li>vorläufiger Fonds mit <code>R</code>-Wert → Aktivierungsversuch, bei Misserfolg
+      <code>pool_if_kurs</code></li>
+    <li>Löschungen: <code>DeleteKurseReally</code>, bei <code>R</code> zusätzlich die abhängigen
+      Kennzahlen, <code>del_protokoll</code></li>
   </ul>
-  <p>Nicht übernommen: <code>num_ausschuettung</code> und <code>dat_zahltag</code> — die Ausschüttungsangaben im Preisfile kommen aus den Stammdaten, nicht aus der Lieferung. Ebenso <code>intervall</code>, das produktiv seit 2017 ersatzlos geleert wird (<code>daNoEuQust</code> ist hart auf <code>2017.01.01</code> verdrahtet).</p>
-</section>
-
-<section>
-  <h2>Was die Child Table einbringt</h2>
-  <p>Der Wunsch war, ohne zusätzliche Tabelle auszukommen. Was sie im Gegenzug liefert:</p>
-  <div class="grid" style="--cols:2">
-    <div class="card ok"><h3>Ein Wahrheitsort</h3><p>Die gelieferte Zeile existiert genau einmal, in genau einem Besitz. Kein zweites Artefakt, das von der Quelle abweichen kann.</p></div>
-    <div class="card ok"><h3>Abfragbar</h3><p>„Welcher Lieferant hat für diese ISIN heute was geliefert" ist ein <code>SELECT</code>. Als Blob im Filestore wäre es ein Download und ein Parser.</p></div>
-    <div class="card ok"><h3><code>tmp_if_last</code> wird ableitbar</h3><p>Die Projektion ist eine gruppierte Abfrage. Ohne Tabelle müsste <code>tmp_if_last</code> zwangsläufig geführter Zustand bleiben — über 65 Tage Blobs kann man nicht gruppieren.</p></div>
-    <div class="card ok"><h3>Append-only statt veränderlich</h3><p>Keine Races beim parallelen Ingest, kein Leeren, kein <code>tmp_if_cop</code>. Ein Tag ist im Nachhinein rekonstruierbar, Lieferung für Lieferung.</p></div>
-    <div class="card ok"><h3>LMT kostet zwei Spalten</h3><p>Offener Punkt 11 der Ist-Analyse verschiebt sich von „welches Datenmodell" auf „an wen weitergeben".</p></div>
-    <div class="card warn"><h3>Der Preis</h3><p>Die Nutzdaten liegen neben dem Originalfile ein zweites Mal, und „was liegt heute vor" ist kein reines <code>SELECT</code>, sondern <code>SELECT</code> plus Auflösung.</p></div>
+  <h3>Vom „materialisierten Tagesbestand" bleibt das Publikationsprotokoll</h3>
+  <p>Diese Tabelle war am 31.8. noch der <em>Preis</em> einer Option und schien dann durch das Delta
+     ohnehin nötig. Mit dem Sync als Stufe fällt ihr zweiter Zweck weg, und übrig bleibt genau
+     einer: der Bezugspunkt für die Rücknahme. Je
+     <code>(ISIN, Preisdatum, Währung, Code)</code> festhalten, in welchem Lauf er als
+     <code>I2</code> oder <code>I3</code> hinausgegangen ist. Kleiner und ehrlicher benannt — und ein
+     Feld am Job reicht nicht, weil der Bezug schlüsselgenau sein muss.</p>
+  <p>Die Ausgabefilter (<code>veroeffentlichung</code>, <code>cod_art_f</code>,
+     <code>FONDS_ZGRU</code>, Zielgruppe) werden auf das <code>I3</code> genauso angewandt wie auf das
+     <code>I2</code>. Dadurch wird ein nie berichteter Preis auch nie zurückgenommen, ohne dass der
+     Lauf das gesondert wissen muss.</p>
+  <p class="note danger"><strong>Auflage: das Protokoll wird vom File-Writer gefüttert, nicht aus der
+     Auflösung.</strong> Der <code>tmp_if_last</code>-Fallback aus Lauf 1 stammt nicht aus der
+     Tagesmenge, sondern aus der Projektion. Eine Implementierung, die das Protokoll aus dem
+     Auflösungsergebnis ableitet, übersieht Fallback-Zeilen — und dann greift der <code>I3</code>-Bezug
+     für genau diese nicht: Lauf 1 gibt den Fallback für (X, T−3) aus, einen Preis, der <em>nie in
+     <code>kurs</code></em> war; um 15:00 kommt ein <code>D</code> dafür; die Legacy-Regel prüft
+     <code>kurs</code>, findet nichts, verwirft das <code>D</code> — und der Bezieher behält einen
+     zurückgezogenen Preis.</p>
+  <h3>Zwei Kosten der Verlagerung</h3>
+  <div class="grid">
+    <div class="card warn"><h3><code>del_protokoll</code>-Rauschen</h3>
+      <p>Bei „<code>N</code> um 08:00, <code>D</code> um 09:00" schreibt Legacy nie nach
+         <code>kurs</code>; wir schreiben und löschen wieder. Endzustand identisch, aber IFASNXT
+         bekommt eine Löschung für etwas, das es nie gesehen hat. Relativiert:
+         <code>CONFIG.INI/Del_Protokoll</code> ist per Default <code>0</code> — produktiven Wert
+         prüfen.</p></div>
+    <div class="card warn"><h3>Mehrfachnachrechnung</h3>
+      <p>Drei Korrekturen an einem Fonds an einem Tag heißen dreimal
+         <code>Nachrechnung(daTag, daEndTag)</code>, und <code>daEndTag</code> ist „heute". Legacy
+         hat dasselbe Verhalten — keine Regression, aber verschwenderisch.</p></div>
   </div>
+  <p class="note">Nicht durch eine Transaktion abgedeckt: die Verteilung. MFT-Upload,
+     NetApp-Archivierung und <code>pr_ready.txt</code> liegen außerhalb; Legacy hat dasselbe Problem
+     und löst es nicht.</p>
 </section>
 
-<section>
-  <h2>Die vier Varianten der Landezone</h2>
-  <p>Verglichen auf den Achsen, die im Gespräch tatsächlich den Unterschied gemacht haben.</p>
-  <div class="scrollx">
-  <table>
-    <thead><tr><th>Variante</th><th>abfragbar</th><th>geteilter veränderlicher Zustand</th><th><code>tmp_if_last</code> als Abfrage</th><th>Nutzdaten doppelt</th></tr></thead>
-    <tbody>
-      <tr><td><strong>Zeilen pro Job</strong> <span class="tag accent">gewählt</span></td><td>ja</td><td>nein</td><td>möglich</td><td>einmal</td></tr>
-      <tr><td>Gemeinsame Sammeltabelle</td><td>ja, Tagesstand direkt</td><td><strong>ja</strong> — Races beim parallelen Ingest</td><td>möglich</td><td>einmal, aber überschrieben</td></tr>
-      <tr><td>Zeilen + aufgelöste Tagesmenge</td><td>ja, beides</td><td>nein</td><td>möglich</td><td><strong>zweimal</strong></td></tr>
-      <tr><td>Blob im Filestore</td><td><strong>nein</strong></td><td>nein</td><td><strong>unmöglich</strong></td><td>einmal</td></tr>
-    </tbody>
-  </table>
-  </div>
-  <p>Die beiden ernsthaften Kandidaten unterscheiden sich darin, wo „letzte Lieferung gewinnt" durchgesetzt wird:</p>
-  <div class="beforeafter">
-    <div>
-      <h4>Zeilen pro Job — gewählt</h4>
-      <div class="boxstack">
-        <div class="bx accent">PK (job_id, zeilen_nr)</div>
-        <div class="bx">jede Lieferzeile bleibt</div>
-        <div class="bx">last-wins = Regel im Batch</div>
-        <div class="bx">Ingest schreibt nur an</div>
-      </div>
-    </div>
-    <div>
-      <h4>Gemeinsame Sammeltabelle</h4>
-      <div class="boxstack">
-        <div class="bx">PK (isin, datum, whrg, code, aktion)</div>
-        <div class="bx ghost">überschriebene Lieferung nur im ZIP</div>
-        <div class="bx">last-wins = Constraint der DB</div>
-        <div class="bx ghost">Ingest löscht und schreibt</div>
-      </div>
-    </div>
-  </div>
-  <p class="note">Die Sammeltabelle ist die legacy-nähere Variante und macht den Parallelbetrieb-Vergleich einfacher. Sie holt aber genau die Kopplung zurück, die das Job-Modell losgeworden ist — und die Work Queue arbeitet parallel, wo Legacy serialisiert hat.</p>
-</section>
-
-<section>
-  <h2>Das Ingest-Urteil gilt</h2>
-  <p>Der Ingest führt die Eingangsprüfung genau einmal durch — ISIN und Prüfziffer, Datumsgrenzen aus <code>tax_code</code>, Wertbereich, <code>max_nk</code>, Währung, Aktionscode, LMT-Feldregeln — und erzeugt die Rückmeldung an den Lieferanten. <strong>Der Batchlauf wiederholt sie nicht.</strong></p>
-  <ul>
-    <li>Legacy verhält sich identisch: eine Zeile in <code>tmp_if_kurs</code> wird nie wieder geprüft.</li>
-    <li>Die einzigen Stammdaten, die sich untertags realistisch bewegen, sind die <strong>Anlage eines Fonds</strong> (vorher <code>ERR_ISIN06</code>, Zeile abgelehnt, der Lieferant hat einen echten Bug bekommen) und <strong><code>fonds_ende</code></strong> (vorher akzeptiert, der Preis wird publiziert). In beiden Fällen tut Legacy dasselbe. <code>tax_code</code> und <code>HWA</code> sind Konfiguration und bewegen sich nicht untertags.</li>
-    <li>Legacy hat für „Stammdaten und Lieferung passen nicht zusammen" bereits einen Platz, und der ist der Batch: <code>makeNichtVorhanden</code>, <code>makeFondsNotInINV</code>, <code>makePreisVorFondsBeginn</code>, <code>makePreisNachFondsEnde</code>, <code>makePreisNichtInFondswhrg</code> und <code>makeVorlFonds</code> prüfen zur Batchzeit gegen die dann aktuellen Stammdaten und <strong>melden</strong>, statt zurückzunehmen.</li>
-  </ul>
-  <p>Ausgabeseitige, stammdatenabhängige Entscheidungen trifft der Batch dagegen jedes Mal frisch — <code>INV.veroeffentlichung</code>, <code>cod_art_f</code> (TEST/AIF), <code>FONDS_ZGRU</code>. Das ist legacy-konform (<code>cFondsRecord::ReadStammdaten</code> in Stufe 3).</p>
-  <p class="note">Es sind zwei verschiedene Fragen, nicht dieselbe zweimal: <em>„ist diese Lieferzeile gültig?"</em> wird einmal beantwortet, <em>„darf dieser Preis heute an wen raus?"</em> jedes Mal neu.</p>
-</section>
-
-<section>
-  <h2>Die Auflösung, durchgespielt</h2>
-  <p>Der Batch bildet aus den Zeilen aller Jobs des Tages die Tagesmenge: Sortierung nach Job-Ankunftszeit, innerhalb des Jobs nach <code>zeilen_nr</code>; dann <strong>letzte Lieferung gewinnt</strong> pro <code>(ISIN, Preisdatum, Währung, Code, Aktion)</code> — datumsgenau; dann die D/N-Verrechnung.</p>
-<pre><code>job  zeile  isin          datum       whrg  code  aktion  wert
-A    1      AT0000A3GBF8  2026-05-12  EUR   R     N       12,3456
-B    1      AT0000A3GBF8  2026-05-08  EUR   R     N       11,9900
-B    2      AT0000A3GBF8  2026-05-12  EUR   R     D       12,3456</code></pre>
-  <ul>
-    <li><strong>12.05.</strong> — B ist später, das <code>D</code> streicht das <code>N</code>; dann die Frage nach <code>kurs</code>: nichts da &rarr; das <code>D</code> fällt selbst weg. Ergebnis: <em>nichts</em> für den 12.05.</li>
-    <li><strong>08.05.</strong> — nur ein <code>N</code>, Preisdatum vor dem Stichtag, <code>kurs</code> hat einen Wert &rarr; <code>I4</code>-Korrektur, 11,9900.</li>
-  </ul>
-  <p>Verschiedene Preisdatümer zum selben Fonds sind <strong>kein Konflikt, sondern zwei Fakten</strong> und müssen beide durch — der Beispielreport zählt 107 Korrekturen an einem Tag. Genau daran scheitert <code>tmp_if_last</code> als Landezone.</p>
-  <p class="note warn">Weil Batchlauf <strong>und</strong> Sync-Job diese Auflösung brauchen, liegt sie in <em>einer</em> Komponente, die beide aufrufen. Zweimal implementiert, laufen Preisfiles und <code>kurs</code> auseinander.</p>
-  <p>Die Verschiebung des Cross-File-Abgleichs vom Ingest in den Batch hat eine sichtbare Folge: die vier <code>INFO_DEL_*</code>-Meldungen stehen nicht mehr im <code>info.log</code> des Lieferanten, sondern im Batch-Protokoll. Vertretbar, weil es Infos sind, die das Urteil <code>ERROR</code>/<code>INFO</code> nicht berühren — das hängt allein an der Zeilenzahl in <code>error.log</code> —, weil die Texte OeKB-Interna beschreiben („Delete-DS wurde aus TMP-Tabelle entfernt"), und weil die Fachabteilung sie über <code>liefer_bugs</code> ohnehin ein zweites Mal im <code>fplausib.txt</code> sieht. Aufgegeben wird die Korrekturschleife innerhalb des Tages.</p>
-</section>
-
-<section>
-  <h2>Zwei Batchläufe und das Statusmodell</h2>
-  <p>Identität <code>(keyDate, laufnummer)</code> wie bei den STM-Batchjobs, beide Zeiten konfigurierbar — Diskussionsstand ~14:00 und ~16:00. Der Stempel nach Lauf 1 heißt <strong>nicht</strong> „fertig", weil Lauf 2 revidieren darf.</p>
-  <figure>
-    <svg viewBox="0 0 674 200" role="img" xmlns="http://www.w3.org/2000/svg">
-      <title>Statusmodell einer Preismeldung: READY_FOR_BATCH, PUBLISHED, SYNCED</title>
-
-      <text x="337" y="30" text-anchor="middle" fill="var(--accent)" font-size="12">nächster Batchlauf</text>
-      <text x="337" y="44" text-anchor="middle" fill="var(--accent)" font-size="12">revidiert den Tag</text>
-      <path d="M 300,100 C 300,52 374,52 374,100" fill="none"
-            stroke="var(--accent)" stroke-width="2"/>
-      <polygon points="374,100 369,90 379,90" fill="var(--accent)"/>
-
-      <rect x="4" y="100" width="150" height="70" rx="8"
-            fill="var(--surface)" stroke="var(--line-strong)"/>
-      <text x="79" y="130" text-anchor="middle" fill="currentColor" font-size="15">READY_FOR_BATCH</text>
-      <text x="79" y="150" text-anchor="middle" fill="var(--muted)" font-size="12">noch kein Lauf</text>
-      <text x="79" y="192" text-anchor="middle" fill="var(--faint)" font-size="12">entsteht beim Ingest</text>
-
-      <line x1="158" y1="135" x2="254" y2="135" stroke="var(--muted)" stroke-width="2"/>
-      <polygon points="258,135 248,130 248,140" fill="var(--muted)"/>
-      <text x="206" y="113" text-anchor="middle" fill="var(--muted)" font-size="12">Batchlauf</text>
-      <text x="206" y="127" text-anchor="middle" fill="var(--muted)" font-size="12">erzeugt Files</text>
-
-      <rect x="262" y="100" width="150" height="70" rx="8"
-            fill="var(--accent-wash)" stroke="var(--accent)" stroke-width="2"/>
-      <text x="337" y="130" text-anchor="middle" fill="currentColor" font-size="15">PUBLISHED</text>
-      <text x="337" y="150" text-anchor="middle" fill="var(--muted)" font-size="12">mindestens ein Lauf</text>
-
-      <line x1="416" y1="135" x2="512" y2="135" stroke="var(--muted)" stroke-width="2"/>
-      <polygon points="516,135 506,130 506,140" fill="var(--muted)"/>
-      <text x="464" y="113" text-anchor="middle" fill="var(--muted)" font-size="12">Sync nach kurs</text>
-      <text x="464" y="127" text-anchor="middle" fill="var(--muted)" font-size="12">letzter Lauf</text>
-
-      <rect x="520" y="100" width="150" height="70" rx="8"
-            fill="var(--surface)" stroke="var(--line-strong)"/>
-      <text x="595" y="130" text-anchor="middle" fill="currentColor" font-size="15">SYNCED</text>
-      <text x="595" y="150" text-anchor="middle" fill="var(--muted)" font-size="12">in kurs, geschlossen</text>
-      <text x="595" y="192" text-anchor="middle" fill="var(--faint)" font-size="12">Job ist fertig</text>
-    </svg>
-    <figcaption>Die Rückführung auf <code>PUBLISHED</code> ist der Kern: der Stempel nach Lauf 1 ist kein Endzustand. Deshalb liest der Batch über <code>READY_FOR_BATCH</code> <em>und</em> <code>PUBLISHED</code>.</figcaption>
-  </figure>
-  <ul>
-    <li>Der Batch liest <strong><code>READY_FOR_BATCH</code> ∪ <code>PUBLISHED</code></strong> und stempelt alles neu. Läse er nur <code>READY_FOR_BATCH</code>, würde Lauf 2 ein Delta erzeugen — im Widerspruch zum Ersatz-File.</li>
-    <li>Der Batch muss wissen, <strong>was der vorige Lauf ausgeliefert hat</strong>. Nötig für die Rücknahme eines Preises, der um 14:00 als <code>I2</code> rausging und um 15:30 per <code>D</code> zurückgezogen wird: der Preis ist nicht in <code>kurs</code>, die Legacy-Regel würde das <code>D</code> verwerfen, und der Bezieher behielte ihn.</li>
-    <li>Der Status beschreibt den <strong>Job</strong>, nicht seine Zeilen. Eine Lieferung kann <code>PUBLISHED</code> sein, während einzelne ihrer Zeilen in der Auflösung verloren haben.</li>
-  </ul>
-  <p class="note ok">Damit entfällt das heutige manuelle Stoppen des Batchs bei gemeldeter Verspätung — nicht wegen des zweiten Laufs, sondern wegen der Jobs: eine um 15:30 eingelangte Lieferung bleibt einfach liegen. Fällt Lauf 2 aus, ist sie morgen dran statt verloren.</p>
-</section>
-
-<section>
-  <h2>Die Reihenfolge im Tag</h2>
-  <div class="boxflow">
-    <div class="bx">Ingest<small>laufend, parallel</small></div>
-    <div class="arrow">&rarr;</div>
-    <div class="bx">Batchlauf 1<small>Plausi + Files</small></div>
-    <div class="arrow">&rarr;</div>
-    <div class="bx">Batchlauf 2<small>Ersatz-File</small></div>
-    <div class="arrow accent">&rarr;<small>erst danach</small></div>
-    <div class="bx accent">Sync &rarr; kurs</div>
-    <div class="arrow">&rarr;</div>
-    <div class="bx">Kennzahlen<small>eigenständig</small></div>
-  </div>
-  <p><strong>Harte Reihenfolge-Auflage:</strong> der Sync läuft nach dem letzten Batchlauf des Tages. Weil Batch und Sync sich dieselbe Menge teilen, würde ein Sync zwischen den Läufen die Jobs schließen und Lauf 2 lautlos zu einem Delta degradieren — das Ergebnis von Lauf 2 hinge davon ab, ob ein anderer Job zufällig vorher lief. Die Auflage muss explizit verkettet werden, Muster „STM Lauf 1", nicht über Cron-Zeiten gehofft.</p>
-  <p class="note danger">Nicht durch eine Transaktion abgedeckt: die Verteilung. MFT-Upload, NetApp-Archivierung und <code>pr_ready.txt</code> liegen außerhalb. Legacy hat dasselbe Problem und löst es nicht — <code>create_preise.csh</code> erzeugt bei einem Archivierungsfehler eine Mail mit Neustartanleitung und bricht nicht ab.</p>
-</section>
-
-<section>
-  <h2>Lauf 2 liefert ein vollständiges Ersatz-File</h2>
-  <p>Nicht ein Delta. Der ganze Tag noch einmal, inklusive des <code>tmp_if_last</code>-Fallbacks für Fonds ohne heutigen Preis.</p>
-  <p>Begründung: die Identifier <code>I2</code>/<code>I3</code>/<code>I4</code> bleiben gegen den persistierten Stand gerechnet, wie heute. Bei einem Delta bräuchten sie einen neuen Bezugspunkt — „was haben wir heute schon ausgeliefert" —, sonst steht <code>I2</code>, wo <code>I4</code> hingehört. Und der Fehlerfall ist gutartiger:</p>
-  <div class="grid" style="--cols:2">
-    <div class="card warn"><h3>Delta verpasst</h3><p>Der Bezieher hat <strong>falsche</strong> Daten und weiß es nicht — im 14:00-File steht nichts davon, dass noch etwas kommt.</p></div>
-    <div class="card ok"><h3>Ersatz-File verpasst</h3><p>Der Bezieher hat <strong>veraltete, aber in sich stimmige</strong> Daten.</p></div>
-  </div>
-  <p class="note warn">Konsequenz für den Bezieher: „letztes File des Tages gewinnt" braucht eine präzise Lesart — <em>alles für das Kursdatum im Header verwerfen und die Datei neu anwenden</em>. Eine Auslassung ist in einem Operationsformat sonst <strong>keine</strong> Rücknahme. Siehe offener Punkt D.</p>
-</section>
-
-<section>
+<section id="last" data-nav="tmp_if_last">
   <h2><code>tmp_if_last</code> ist eine Projektion, kein Eingang</h2>
-  <p>Die einzige tmp-Tabelle, die fachlich überlebt — aber nicht auf dem Weg nach <code>kurs</code>. Definition: je <code>(ISIN, Währung, Code)</code> die Zeile mit dem höchsten <code>preisdatum</code>, ohne Löschsätze, ohne die Ausschlüsse des Sync, innerhalb von <code>Tage_TmpIfLast</code> (65) Tagen; beendete Fonds nach <code>Tage_TmpIfLast_Beendete</code> (35) Tagen entfernt. Einziger Verbraucher: der Fallback in Lauf 1 der Filegenerierung.</p>
-  <div class="beforeafter">
-    <div>
-      <h4>Als Landezone — bricht</h4>
-      <div class="boxstack">
-        <div class="bx ghost">09:10 Preis 12.05. landet</div>
-        <div class="bx ghost">11:20 Korrektur 08.05. verdrängt ihn</div>
-        <div class="bx ghost">12.05. erreicht kurs nie</div>
-      </div>
-    </div>
-    <div>
-      <h4>Als Projektion — trägt</h4>
-      <div class="boxstack">
-        <div class="bx">beide Zeilen stehen in der Landezone</div>
-        <div class="bx">beide gehen nach kurs</div>
-        <div class="bx accent">Projektion zeigt den 12.05.</div>
-      </div>
-    </div>
-  </div>
-  <p>Der Grund ist strukturell: der Delete-vor-Insert-Schlüssel in <code>WriteLastKurse</code> (<code>preisekennzahl.cpp:1226</code>) enthält <strong>kein</strong> <code>dat_kurs</code>. Es gibt genau einen Platz je (ISIN, Währung, Code) — kein Filter auf der Leseseite holt eine überschriebene Zeile zurück. Zusätzlich setzt <code>WriteLastKurse</code> <code>cod_ex</code> hart auf <code>'N'</code>: Löschsätze existieren dort nicht und wären auf diesem Weg strukturell unsichtbar. Das Datum in den Schlüssel aufzunehmen löst es nicht, sondern macht daraus die Sammeltabelle — die Lauf-1-Abfrage joint nur über <code>num_okb</code> und würde mehrere abgestandene Preise je Fonds ausgeben.</p>
-  <p>Gespeichert wird der <strong>gelieferte</strong> Wert (<code>cPrTyp[i].dPreis</code>); es gibt keine Spalte für ein Rechenergebnis, aus der Nachrechnung fließt nichts zurück. <code>tmp_if_last</code> ist damit eine reine Funktion der Lieferungen — und <strong>nicht</strong> aus <code>kurs</code> ableitbar, weil es Werte trägt, die <code>kurs</code> nie sieht: unbekannte ISIN, Währungsabweichung.</p>
-</section>
-
-<section>
-  <h2>Einspielung nach <code>kurs</code></h2>
-  <p>Der Sync-Job liest dieselben Zeilen, wendet dieselbe Auflösung an und legt seinen <strong>Berechtigungsfilter</strong> darüber. Diese Logik gehört in den Sync, nicht in die Tabelle:</p>
-  <ul>
-    <li>ISIN in IFAS nicht auflösbar &rarr; <code>pool_if_kurs</code>, <code>kurs</code> unberührt</li>
-    <li>Preiswährung ≠ Fondswährung &rarr; nicht nach <code>kurs</code></li>
-    <li>TEST-ISIN, C-Plan, AIF, Fonds in Liquidation &rarr; Ausschlüsse über die <code>InsPreise*</code>-Schalter</li>
-    <li>vorläufiger Fonds mit <code>R</code>-Wert &rarr; Aktivierungsversuch, bei Misserfolg <code>pool_if_kurs</code></li>
-    <li>Löschungen &rarr; <code>DeleteKurseReally</code> in <code>kurs</code>, bei <code>R</code> zusätzlich die abhängigen Kennzahlen und <code>del_protokoll</code></li>
-  </ul>
-  <p class="note">Ein <code>D</code>-Satz löscht <strong>in erster Linie aus <code>kurs</code></strong> — nicht aus einer Tageszwischenmenge. Der Normalfall ist die Korrektur eines Preises aus einem früheren Lauf, und deshalb kann „es kann nur gelöscht werden, was im aktuellen Batch liegt" nicht gelten.</p>
-</section>
-
-<section>
-  <h2>Kennzahlen als eigenständiger Job</h2>
-  <p>Berichtigte Kurse, Reinvestitionsfaktoren, Performance, Volatilität und Risikokennzahlen wandern ebenfalls nach IFAS13, als eigener, unabhängig terminierbarer Job.</p>
-  <ul>
-    <li><strong>Keine Abhängigkeit zu den Preisfiles.</strong> Das Preisfile schreibt den gelieferten Preis; <code>kurs</code> wird bei der Filegenerierung nur nach <em>Existenz</em> gefragt, für <code>I2</code>/<code>I3</code>/<code>I4</code>. Die Reihenfolge im Legacy-Tagesjob ist Ablauf, nicht Abhängigkeit.</li>
-    <li><strong>Basis ist <code>kurs</code>, nicht <code>tmp_if_last</code>.</strong> Kennzahlen sind Zeitreihen; <code>tmp_if_last</code> hat keine Historie, ist auf die ISIN geschlüsselt (<code>kurs</code> auf <code>num_wfs_ku</code>) und hat keine Ergebnisspalte.</li>
-    <li><strong>Legacy trennt hier schon fachlich:</strong> <code>CalcCPlan</code>/<code>InsPreiseCPlan</code> = <code>0</code>/<code>1</code>, ebenso für AIF und Fonds in Liquidation. Preise werden eingespielt, Kennzahlen nicht gerechnet — zwei Geltungsbereiche, zwei Schalter.</li>
-  </ul>
-  <p class="note warn"><strong>Obergrenze für „später":</strong> vor dem nächsten Plausi-Lauf. <code>makeAbweichung</code> vergleicht den <em>berichtigten</em> Kurs (<code>pdPreis_ber</code>), damit Ausschüttungen und Splits keine Scheintreffer erzeugen. Hinkt die Berechnung nach, degradiert dieser Abschnitt des Reports.</p>
-  <p class="note danger"><strong>Historientreue:</strong> <code>StetigeVolaAb</code> = <code>2007.01.01</code> und <code>PerfYtdFbY1Neu</code> = <code>2007.01.01</code> sind datumsgesteuerte <strong>Formelwechsel</strong>. Eine Nachrechnung ist nicht „ab Datum X vorwärts rechnen", sondern „die Historie ab X mit den Regeln nachrechnen, die zu jedem Zeitpunkt gegolten haben" — dieselbe Klasse von Anforderung wie bei der STM-Recalc-Historientreue.</p>
-</section>
-
-<section>
-  <h2>Die acht offenen Punkte im Überblick</h2>
+  <p>Je <code>(ISIN, Währung, Code)</code> die Zeile mit dem höchsten <code>preisdatum</code>, ohne
+     Löschsätze und ohne drei Fondsklassen.</p>
+  <h3>Genau ein Leser — belegt</h3>
   <div class="scrollx">
   <table>
-    <thead><tr><th></th><th>Frage</th><th>entscheidet</th><th>Status</th></tr></thead>
+    <thead><tr><th><code>nQuellTab</code></th><th>Quelle</th><th>Aufrufer</th></tr></thead>
     <tbody>
-      <tr><td><strong>A</strong></td><td>Braucht jemand <code>kurs</code> untertags aktuell?</td><td>Fachabteilung</td><td><span class="tag accent">TODO User</span></td></tr>
-      <tr><td><strong>B</strong></td><td><code>tmp_if_last</code> — geführte Tabelle oder Abfrage?</td><td>intern</td><td><span class="tag">offen</span></td></tr>
-      <tr><td><strong>C</strong></td><td>Kennzahlen — Invalidierung oder Auftragsübergabe?</td><td>intern</td><td><span class="tag">offen</span></td></tr>
-      <tr><td><strong>D</strong></td><td>Rücknahme explizit oder implizit?</td><td>Bezieher-Vertrag</td><td><span class="tag">offen</span></td></tr>
-      <tr><td><strong>E</strong></td><td>Ausschüttungs-Veto bei <code>R</code>-Löschungen</td><td>Fachabteilung</td><td><span class="tag">offen</span></td></tr>
-      <tr><td><strong>F</strong></td><td>Dateinamen und Ready-File für zwei Auslieferungen</td><td>Fachabteilung</td><td><span class="tag">offen</span></td></tr>
-      <tr><td><strong>G</strong></td><td>LMT persistieren und weitergeben?</td><td>Fachabteilung</td><td><span class="tag">offen</span></td></tr>
-      <tr><td><strong>H</strong></td><td>Produktionsdaten beschaffen</td><td>Betrieb / DB</td><td><span class="tag warn">blockiert Ingest</span></td></tr>
+      <tr><td><code>0</code></td><td><code>pszTempTabelle[nInOrAusland]</code> = <code>tmp_if_kurs</code> für Inland</td>
+          <td><code>DoFiles()</code> — der normale Lauf</td></tr>
+      <tr><td><code>1</code></td><td><strong><code>tmp_if_last</code></strong>, Anti-Join, 65-Tage-Filter</td>
+          <td><code>DoFiles(1)</code> — der Fallback</td></tr>
+      <tr><td><code>3</code></td><td><code>pszTempTabelle[2]</code> — Array hat zwei Elemente</td>
+          <td>nirgends aufgerufen</td></tr>
     </tbody>
   </table>
   </div>
+  <p><code>M_FP_DLD.CPP:127</code> ruft genau <code>DoFiles(1)</code> und <code>DoFiles()</code>. Die
+     Lauf-1-Selektion ist damit der <strong>einzige</strong> Leser — nicht die Plausi (die liest für
+     Inland <code>tmp_if_kurs</code>), nicht die Kennzahlen, nicht die Einspielung.</p>
+  <p class="note"><strong>65 ist ein Lesefilter, 35 die einzige Löschregel.</strong> Korrektur einer
+     früheren Beschreibung: gelöscht wird nur 35 Tage nach Fondsende und bei leerer ISIN, an
+     <em>zwei</em> Stellen (<code>CleanUpTmpIfLast</code> und ein zweiter Pfad in der Einspielung).
+     Ein lebender Fonds, der aufhört zu liefern, behält seine Zeile für immer — sie wird nach 65 Tagen
+     nur nicht mehr gelesen. Produktiv: <strong>28.264 Zeilen / 3,1 MB</strong>.</p>
+  <p>Die Ausschlüsse liegen im <em>Aufrufer</em>: drei <code>continue</code> in
+     <code>RunTmpPreise</code> (<code>c_preise.cpp:113-132</code>) für C-Plan, AIF und Fonds in
+     Liquidation. <code>WriteLastKurse</code> selbst hat keine — und liegt <strong>außerhalb</strong>
+     von <code>if (nRet == 1)</code>, hängt also nicht am Erfolg des <code>kurs</code>-Writes. Genau
+     deshalb trägt <code>tmp_if_last</code> Werte, die <code>kurs</code> nie sieht.</p>
+  <p>Belegt aus <code>WriteLastKurse</code> (<code>preisekennzahl.cpp:1226</code>): gespeichert wird
+     der <em>gelieferte</em> Wert, es gibt keine Spalte für ein Rechenergebnis, aus der Nachrechnung
+     fließt nichts zurück. <code>tmp_if_last</code> ist eine reine Funktion der Lieferungen — und
+     <strong>nicht</strong> aus <code>kurs</code> ableitbar, weil es Werte trägt, die
+     <code>kurs</code> nie sieht: unbekannte ISIN, Währungsabweichung.</p>
+  <h3>Warum es die Landezone nicht sein kann</h3>
+  <p>Der Delete-vor-Insert-Schlüssel enthält <strong>kein</strong> <code>preisdatum</code>. Es gibt
+     genau einen Platz je (ISIN, Währung, Code); eine spätere Korrektur für ein <em>früheres</em>
+     Datum verdrängt den jüngeren Preis, und kein Filter auf der Leseseite holt ihn zurück.
+     Zusätzlich setzt <code>WriteLastKurse</code> <code>cod_ex</code> hart auf <code>'N'</code> —
+     Löschsätze wären strukturell unsichtbar.</p>
+  <p class="note">Nebenläufigkeit: der Guard aus <em>Zwei Server, ein Pool</em> muss auch hier
+     greifen, und zwar lexikografisch über <code>(preisdatum, angekommen_am)</code> — Legacys „nur
+     wenn Preisdatum neuer" würde eine Korrektur zum <em>gleichen</em> Preisdatum verwerfen.</p>
+  <h3>Wozu der Fallback da ist, steht nirgends</h3>
+  <p>Der Mechanismus ist dokumentiert, der <strong>Zweck nicht</strong>. Weil <code>I2</code> ein
+     Upsert ist, ist eine Fallback-Zeile beim Bezieher ein No-op — gleicher Schlüssel, gleicher Wert.
+     Zwei plausible Zwecke, keiner belegt: <strong>Robustheit</strong> (wer ein File verpasst hat,
+     holt den letzten Preis nach) oder <strong>eine Zeile je Fonds je Tag</strong> (ein
+     Abnehmersystem erwartet das). Offener Punkt N — und die Antwort entscheidet, ob Lauf 2 den
+     Fallback doch braucht.</p>
 </section>
 
-<section>
-  <h2>A — braucht jemand <code>kurs</code> untertags aktuell?</h2>
-  <p>Entscheidet, ob die Reihenfolge-Auflage „Sync nach dem letzten Batchlauf" tragbar ist — und damit, ob eine zweite Tabelle dazukommt.</p>
-  <div class="beforeafter">
-    <div>
-      <h4>A1 — nein, niemand</h4>
-      <div class="boxstack">
-        <div class="bx accent">Zeilen am Job</div>
-        <div class="bx">Batchlauf 1 + 2 lesen sie</div>
-        <div class="bx">Sync liest sie danach</div>
-        <div class="bx ok">eine Tabelle, ein Wahrheitsort</div>
-      </div>
-    </div>
-    <div>
-      <h4>A2 — ja, jemand braucht es</h4>
-      <div class="boxstack">
-        <div class="bx accent">Zeilen am Job</div>
-        <div class="bx">Batchlauf friert sein Ergebnis ein</div>
-        <div class="bx accent">preis_tageswerte je Lauf</div>
-        <div class="bx">Sync liest nur diese — frei terminierbar</div>
-      </div>
-    </div>
-  </div>
-  <p><strong>A1:</strong> Landezone bleibt wie beschrieben, nichts weiter zu tun.</p>
-  <p><strong>A2:</strong> Batch und Sync dürfen sich die Menge nicht teilen. Preis: Nutzdaten zweimal, zwei Schreibschritte, zwei Artefakte konsistent zu halten. Gewinn: der Sync ist frei terminierbar, „was hat Lauf 1 ausgeliefert" steht als Tabelle da, und der Scoping-Fehler — Sync schließt Jobs, die Lauf 2 noch braucht — ist strukturell unmöglich.</p>
-</section>
-
-<section>
-  <h2>B — <code>tmp_if_last</code> geführt oder abgefragt?</h2>
-  <div class="beforeafter">
-    <div>
-      <h4>B1 — geführte Tabelle</h4>
-      <div class="boxstack">
-        <div class="bx">Batchlauf schreibt fort</div>
-        <div class="bx">tmp_if_last als Tabelle</div>
-        <div class="bx">Aufräumen: 65 / 35 Tage</div>
-        <div class="bx ghost">kann veralten</div>
-      </div>
-    </div>
-    <div>
-      <h4>B2 — Abfrage zur Laufzeit</h4>
-      <div class="boxstack">
-        <div class="bx ghost">nichts zu schreiben</div>
-        <div class="bx accent">GROUP BY über die Landezone</div>
-        <div class="bx ok">nichts aufzuräumen</div>
-        <div class="bx ok">kann nicht veralten</div>
-      </div>
-    </div>
-  </div>
-  <p><strong>B1</strong> liest wie heute direkt, muss aber am Ende jedes Batchlaufs fortgeschrieben werden — mit Aufräumregeln für die 65 Tage und die beendeten Fonds nach 35 Tagen. Expliziter, sichtbarer Zustand, der veralten kann.</p>
-  <p><strong>B2</strong> hat keinen Zustand. Über 65 Tage sind es bei ~4200 Preisen pro Tag rund 270.000 Zeilen — für eine gruppierte Abfrage unkritisch. Damit bliebe <strong>keine</strong> der Legacy-tmp-Tabellen übrig.</p>
-  <p class="note">B2 setzt voraus, dass die Landezone eine Tabelle ist. Durch die Wahl „Zeilen pro Job" gegeben — mit einem Blob im Filestore wäre B1 erzwungen.</p>
-</section>
-
-<section>
-  <h2>C — Kennzahlen: Invalidierung oder Auftragsübergabe?</h2>
-  <p>Der Auslöser ist in Legacy flüchtig: <code>daLastDatum</code> — je Fonds das früheste betroffene Preisdatum — wird in <code>MakeTmpPreise</code> im Speicher gemerkt und sofort verbraucht. Die drei Fälle verhalten sich unterschiedlich:</p>
+<section id="kennzahlen" data-nav="Kennzahlen &amp; EZB">
+  <h2>Kennzahlen: Stufe plus Sweep</h2>
+  <p class="lede">Markus Punkt 6 — der Tagesjob wartet auf EZB-Referenzkurse — löst sich fast von
+     selbst, weil die Abhängigkeit viel enger ist als gedacht.</p>
+  <h3>Legacy rechnet schon pro Preissatz nach — aber nur Korrekturen</h3>
+  <p><code>MakePreiseEinzel</code> ruft <code>PreiseNachrechnung()</code> inline pro Satz. Mit einem
+     Riegel:</p>
+<pre><code>if (cPrTyp.daPreisDatum &gt;= daStichtag)
+    return 0;   // Keine Nachrechnung wenn nicht eine Korrektur</code></pre>
+  <p>Nur <strong>Korrekturen</strong> werden sofort nachgerechnet; die Preise für den Stichtag selbst
+     bleiben <code>run_calc</code> (Tagesjob-Schritt 7) überlassen — und genau der wartet auf die
+     EZB.</p>
+  <h3>Die EZB-Abhängigkeit betrifft nur Fremdwährungsfonds</h3>
+  <p>Der Referenzkurs wird ausschließlich für die <strong>währungsbereinigte</strong> Variante von
+     Performance und Volatilität gebraucht:</p>
   <div class="scrollx">
   <table>
-    <thead><tr><th>Fall</th><th>Zustand in <code>kurs</code> danach</th><th>selbst erkennbar?</th></tr></thead>
+    <thead><tr><th>Fundstelle</th><th>Wächter</th></tr></thead>
     <tbody>
-      <tr><td>neuer Preis</td><td>Preis da, Kennzahl fehlt</td><td><span class="tag ok">ja — Lücke</span></td></tr>
-      <tr><td>gelöschter <code>R</code></td><td>Preis weg, Kennzahlen von <code>DeleteKennzahlen</code> mitgelöscht</td><td><span class="tag ok">ja — Lücke</span></td></tr>
-      <tr><td><strong>korrigierter Preis</strong></td><td>Preis neu, Kennzahl da, aber <strong>falsch</strong></td><td><span class="tag danger">nein</span></td></tr>
+      <tr><td><code>fondskennzahl.cpp:2208</code> vor <code>CalcCurrency</code></td>
+          <td><code>if (strcmp(szWaehrung, "EUR") != 0)</code></td></tr>
+      <tr><td><code>fondskennzahl.cpp:3386</code></td>
+          <td><code>if (strcmp(szWaehrung, "EUR") != 0)</code></td></tr>
+      <tr><td><code>Kurse2EUR4AbsVol</code>, <code>:4843</code></td>
+          <td><code>if (strcmp(szWaehrung, "EUR") == 0) return 0;</code></td></tr>
     </tbody>
   </table>
   </div>
-  <div class="grid" style="--cols:3">
-    <div class="card accent"><h3>C1 — Invalidierung</h3><p>Der Sync räumt bei <em>jeder</em> Änderung die abhängigen Kennzahlen weg. Alle drei Fälle werden dieselbe Lücke; der Job sucht Preise ohne Kennzahl und rechnet sie, wann immer er läuft — beliebig terminierbar, wiederholbar, selbstheilend.<br><br><strong>Preis:</strong> Kennzahlen sind zwischenzeitlich <em>abwesend</em> statt veraltet.</p></div>
-    <div class="card"><h3>C2 — Auftragsübergabe</h3><p>Der Sync hinterlässt eine Arbeitsliste je Fonds mit dem frühesten betroffenen Datum. Kennzahlen bleiben veraltet statt abwesend.<br><br><strong>Preis:</strong> ein zusätzliches Artefakt und ein Aufräummechanismus für nicht abgearbeitete Aufträge.</p></div>
-    <div class="card warn"><h3>C3 — aus <code>kurs.guelt</code></h3><p><code>guelt</code> ist ein Zeitstempel je Zeile; „welche Fonds ab wann" ist eine Abfrage. Deckt Korrekturen und Neuwerte ab, <strong>nicht</strong> Löschungen — eine gelöschte Zeile hinterlässt nichts.<br><br>Taugt als <em>Reparaturpfad</em>, nicht als vollständiger Auslöser.</p></div>
-  </div>
-  <p>Für <code>makeAbweichung</code> ist eine abwesende Kennzahl vermutlich besser als eine falsche — Sätze ohne Vergleichswert überspringt der Check ohnehin. Für andere Verbraucher von Kennzahlen ist zu prüfen, ob eine Lücke tolerierbar ist.</p>
-</section>
-
-<section>
-  <h2>D — Rücknahme explizit oder implizit?</h2>
-  <p>Der Fall: ein Preis geht um 14:00 als <code>I2</code> raus und wird um 15:30 per <code>D</code> zurückgezogen. Der Sync ist noch nicht gelaufen, <code>kurs</code> weiß nichts von dem Preis.</p>
+  <p>Für einen EUR-Fonds ist der Referenzkurs <strong>nirgends</strong> im Spiel. Die Stufe kann für
+     die weit überwiegende Menge sofort fertig rechnen; für Fremdwährungsfonds ohne Referenzkurs
+     bleibt sie unvollständig, und der Sweep holt es nach.</p>
+  <p>Zur Einordnung: die Warteschleife im Legacy-Tagesjob sitzt zwischen Schritt 6 und 7, blockiert
+     also nur die Kennzahlen. Sie läuft <strong>ohne Timeout</strong> im 2-Minuten-Takt gegen
+     <code>refkursVorhanden.e</code>, mit der einmaligen manuellen Notbremse
+     <code>CalcOhneReferenzkurs</code>.</p>
   <div class="boxflow">
-    <div class="bx">09:10<small>Preis 12.05. geliefert</small></div>
+    <div class="bx">Schritte 1–6<small>Preisfiles, Verteilung, Einspielung, Stammdaten</small></div>
+    <div class="arrow danger">&rarr;<small>Warteschleife, ohne Timeout</small></div>
+    <div class="bx danger">refkursVorhanden.e</div>
     <div class="arrow">&rarr;</div>
-    <div class="bx">14:00<small>geht als I2 raus</small></div>
-    <div class="arrow">&rarr;</div>
-    <div class="bx">15:30<small>D für 12.05.</small></div>
-    <div class="arrow accent">&rarr;</div>
-    <div class="bx accent">16:00<small>Ersatz-File — und dann?</small></div>
+    <div class="bx">Schritte 7–9<small>Kennzahlen, Vendor, Plausi -P2</small></div>
   </div>
-  <div class="beforeafter">
-    <div>
-      <h4>D1 — explizites <code>I3</code></h4>
-      <div class="boxstack">
-        <div class="bx accent">Ersatz-File enthält I3</div>
-        <div class="bx ok">wirkt bei jeder Anwendungsart</div>
-        <div class="bx">Abweichung vom Altsystem</div>
-      </div>
-    </div>
-    <div>
-      <h4>D2 — Auslassung genügt</h4>
-      <div class="boxstack">
-        <div class="bx">Ersatz-File lässt den Preis weg</div>
-        <div class="bx ghost">nur wirksam, wenn der Bezieher ersetzt</div>
-        <div class="bx ok">keine Codeänderung</div>
-      </div>
-    </div>
+  <h3>Die Korrektur an Entscheidung 10</h3>
+  <p class="note danger">Am 31.8. stand im Konzept, die Kennzahlen hätten eine Obergrenze „vor dem
+     nächsten Plausi-Lauf". Falsch: <code>pdPreis_ber</code> wird in
+     <code>cPreisPlausi::BerichtigePreise()</code> (<code>m_fplausi.cpp:193-208</code>) lokal aus dem
+     <em>gelieferten</em> Preis gerechnet. Und die Filegenerierung liest <code>kurs</code>
+     <strong>überhaupt nicht</strong> — in <code>m_fp_rec.CPP</code> und <code>M_FP_DLD.CPP</code>
+     gibt es keinen einzigen <code>kurs..kurs</code>-Zugriff. Beide behaupteten Abhängigkeiten
+     existieren nicht.</p>
+  <p><strong>Historientreue bleibt:</strong> <code>StetigeVolaAb</code> und
+     <code>PerfYtdFbY1Neu</code> (beide <code>2007.01.01</code>) sind datumsgesteuerte
+     <em>Formelwechsel</em>. Eine Nachrechnung ist „die Historie mit den Regeln nachrechnen, die zu
+     jedem Zeitpunkt gegolten haben" — dieselbe Klasse von Anforderung wie bei der
+     STM-Recalc-Historientreue.</p>
+</section>
+<section id="fehlmeldung" data-nav="Fehlmeldung">
+  <h2>Fehlmeldung: erwartete gegen tatsächliche Lieferung</h2>
+  <p class="lede">Ein Tagesjob zu einem definierten Zeitpunkt. Alles, was bis dahin nicht geliefert
+     wurde, gilt als fehlend.</p>
+  <p><strong>Soll</strong> — die für den Stichtag erwarteten Lieferungen. <strong>Ist</strong> — die
+     Landezone. <strong>Ergebnis</strong> — die Differenz als Liste
+     <code>(Lieferant, ISIN, Code)</code>, versendet als Mail je Lieferant („Preis für Isins XYZ
+     fehlt") bzw. als Sammelmail an die Fachabteilung.</p>
+  <h3>Die Datenbasis ist nicht <em>eine</em> Tabelle</h3>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Quelle</th><th>Rolle</th><th>Beleg</th></tr></thead>
+    <tbody>
+      <tr><td><code>ifas..INV.preismeldung</code> → FK <code>ifas..preismeldung</code></td>
+          <td>Meldeverpflichtung je Fonds</td>
+          <td><code>INV.cr:165</code>, <code>cc_INV.cr:325</code></td></tr>
+      <tr><td><code>ifas..INV.KAG</code></td><td>Fonds → KAG</td><td>—</td></tr>
+      <tr><td><code>kurs..KAG_lieferanten (KAG, liefer_id)</code></td><td>KAG → Lieferant</td>
+          <td><code>KAG_lieferanten.cr</code>, PK <code>(KAG, liefer_id)</code> — also n:m</td></tr>
+      <tr><td><code>kurs..lieferanten.liefer_typ = 'F'</code></td>
+          <td>grenzt auf <strong>Fondspreis</strong>-Lieferanten ein</td>
+          <td><code>m_lieferanten.cpp</code> schließt <code>liefer_typ &lt;&gt; 'F'</code> aus der
+              Steuerdatei-Bezieherliste aus; <code>upd_lieferanten_fpp.cr</code> setzt
+              <code>'F'</code> für alle <code>fp_*</code></td></tr>
+    </tbody>
+  </table>
   </div>
-  <p><strong>D1</strong> gibt den Löschsatz aus, obwohl die Legacy-Regel („nicht in <code>kurs</code>" &rarr; verwerfen) ihn verwerfen würde. Funktioniert unabhängig davon, wie der Bezieher das File anwendet — bewusste Abweichung, im Parallelbetrieb als bekannte Abweichung zu führen.</p>
-  <p><strong>D2</strong> setzt voraus, dass jeder Bezieher „alles für das Kursdatum im Header verwerfen und neu anwenden" umsetzt. Keine Codeänderung, aber eine Zusage, die von außen kommen muss.</p>
-  <p class="note">In beiden Fällen muss der Lauf wissen, was der vorige ausgeliefert hat. Die Batch-Stempel an den Jobs sind also keine Folge dieser Wahl, sondern eine Voraussetzung in beiden Welten.</p>
+  <p>Die Fondsselektion steht fertig in <code>m_plausi4tag_preise.cpp:DoCheck()</code>:
+     <code>INV.status = 'A'</code>, <code>cod_art_f in ('FOND','TECH','C-PL')</code>, am Stichtag
+     lebend, <code>KAG &lt; 10000</code>, und <code>INV.preismeldung = 'TGL'</code>.</p>
+  <p class="note danger"><strong>Die Zuordnung wurde nie erzwungen.</strong>
+     <code>cProgParameter::nCheckKag</code> ist per Default <code>0</code>
+     (<code>c_param.cpp:39</code>), und <code>make_einzel.awk</code> ruft <code>preis_ins.e</code>
+     explizit mit <strong><code>-K0</code></strong> auf — für <code>-R0</code> und <code>-R1</code>.
+     <code>ERR_ISIN05</code> („User %s ist nicht berechtigt für ISIN (%s) zu liefern",
+     <code>c_param.cpp:408</code>) kann damit nie feuern. <code>KAG_lieferanten</code> ist gepflegte
+     Absicht, keine Garantie — und eine Mail an „den" Lieferanten stützt sich auf eine Zuordnung,
+     die das System nie geprüft hat.</p>
+  <p class="note warn"><strong>Kein historischer Nachweis in der DB.</strong>
+     <code>kurs..kurs</code> führt keine <code>liefer_id</code> — nur <code>tmp_if_kurs</code>, und
+     die wird täglich geleert. Wer wann für welche ISIN geliefert hat, steht nur in den
+     NetApp-Archiven der Eingangsfiles. Eine Datenanalyse dazu läuft
+     (<code>fondspreise-lieferant-isin-analyse.sql</code>, 11 Sybase-Queries).</p>
+  <h3>Was heute schon existiert und die drei Lücken</h3>
+  <p>Tagesjob-Schritt 9 (<code>preis_dld.e -P2</code>) ist bereits ein Fehlmeldungs-Report — die
+     einzige Stelle im Altsystem, die eine Soll-Lieferung für inländische Fondspreise auswertet.</p>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th></th><th>heute</th><th>gewünscht</th></tr></thead>
+    <tbody>
+      <tr><td>Datenquelle</td>
+          <td><code>kurs..kurs</code> mit <code>cod_fliesscode = 'R'</code> — erst <em>nach</em> der
+              Einspielung</td>
+          <td><span class="tag accent">neu</span> die Landezone</td></tr>
+      <tr><td>Zeitfenster</td>
+          <td>letzter Preis ist 3 bis 11 Börsetage alt</td>
+          <td><span class="tag accent">neu</span> „heute fehlt"</td></tr>
+      <tr><td>Empfänger</td><td>Fachabteilung</td>
+          <td><span class="tag accent">neu</span> Fachabteilung und/oder Lieferant</td></tr>
+    </tbody>
+  </table>
+  </div>
 </section>
 
-<section>
-  <h2>E — Ausschüttungs-Veto bei <code>R</code>-Löschungen</h2>
-  <p>Heute: liegt zum Preisdatum eine Ausschüttung vor, wird die Löschung verweigert und es passiert <em>nichts</em> — keine Löschung, keine Kennzahlenbereinigung, nur eine Zeile im Programm-Logfile. Kein Delivery-Bug, kein <code>liefer_bugs</code>-Eintrag, keine Rückmeldung an den Lieferanten. Der <code>I3</code> ist zu diesem Zeitpunkt beim Bezieher schon draußen. Im Quelltext steht an der Stelle, an der die Behandlung stünde, wörtlich <code>// ????</code>.</p>
+<section id="weitere" data-nav="Vier weitere Punkte">
+  <h2>Vier weitere Anforderungen aus dem Input</h2>
   <div class="grid" style="--cols:2">
-    <div class="card danger"><h3>E1 — wie heute</h3><p>Die Divergenz bleibt: der Preis ist beim Bezieher weg und in <code>kurs</code> vorhanden. Mit entkoppeltem Sync wird das Fenster größer statt kleiner.</p></div>
-    <div class="card ok"><h3>E2 — Batch erkennt es vorab</h3><p>Der Batch prüft die Ausschüttung schon bei der Auflösung und gibt den <code>I3</code> gar nicht aus; der Lieferant bekommt eine Rückmeldung, dass die Löschung nicht möglich ist. Kein Auseinanderlaufen — Abweichung vom Altsystem.</p></div>
+    <div class="card accent">
+      <h3>12 · Transparenz der Lieferkette</h3>
+      <p>Der Report soll die <em>Folge</em> je Preisschlüssel zeigen („New, Delete, New..."), nicht
+         nur das aufgelöste Ergebnis. Die Landezone liefert das ohne Zusatzaufwand. Ein neuer
+         Abschnitt listet je Schlüssel mit mehr als einer Lieferung die Kette in
+         Ankunftsreihenfolge, mit Lieferant, Zeit und Aktion, und markiert den Gewinner.
+         Nebeneffekt: die <code>INFO_DEL_*</code>-Meldungen werden hier wieder sichtbar.</p>
+    </div>
+    <div class="card ok">
+      <h3>13 · Preis für einen beendeten Fonds</h3>
+      <p><strong>Kein Verhaltenswechsel</strong> — <code>M_INSERT.CPP:2935-2958</code> lehnt nur ab,
+         wenn <code>Preisdatum &gt; fonds_ende</code> (<code>ERR_DATE04</code>). Zwei Details: die
+         Prüfung greift <em>nur</em> für Code <code>R</code>, obwohl der Kommentar daneben
+         <code>Q</code> und <code>T</code> mitbehauptet; und der Spiegelfall — <code>R</code> vor
+         <code>fonds_beginn</code> — erzeugt nur <code>INFO_DATE02</code> nach
+         <code>oekbinfo.log</code>. Wird ein Testfall.</p>
+    </div>
+    <div class="card">
+      <h3>14 · Die Kursabweichung entfällt</h3>
+      <p>Gemeint ist <code>makeAbweichung</code>, Abschnitt 15 des Plausi-Reports
+         (<code>m_fplausi.cpp:2377-2520</code>). Mit dem Abschnitt entfallen
+         <code>cPreisChecker</code> und die Datenbeschaffung der Toleranzen
+         <code>preise_check</code>/<code>preise_check_faktor</code>. <strong>Nicht</strong> betroffen:
+         Abschnitt 17 <code>makeCorrelationERZ</code> — ein Vergleich <em>innerhalb</em> eines Tages
+         zwischen Codes. Mit Markus bestätigen.</p>
+    </div>
+    <div class="card warn">
+      <h3>15 · Ausschüttung ohne vorhandenen Preis</h3>
+      <p>Zwei Teile. Der Sammelreport-Teil existiert als Plausi-Abschnitte 18–20
+         (<code>makeAusOhnePreis</code> und Geschwister) und wird portiert. Die Sofort-Meldung zur
+         <em>Ingest</em>-Zeit ist offener Punkt H — und der neue Jobschnitt macht sie leichter, weil
+         <code>kurs</code> nur noch Minuten nachhinkt statt einen Tag.</p>
+    </div>
   </div>
 </section>
 
-<section>
-  <h2>F — Dateinamen und Ready-File</h2>
-  <p><code>preis.csv</code>, <code>solva.csv</code> und das eine <code>pr_ready.txt</code> als Vollständigkeitssignal sind fix. Zwei Auslieferungen pro Tag brauchen Nummerierung — Legacy hat dafür <code>-N&lt;nr&gt;</code> mit laufender Nummer aus dem <code>event_log</code>, für Fondspreise ungenutzt. Nur der T2S-Strom kann es schon heute, weil er <code>preis.csv</code> als <code>&lt;YYYY-MM-DD_HH-MM&gt;_preis.csv</code> ablegt.</p>
-  <p>Die kundenseitige Formatbeschreibung — <code>2025_Funddata_Provision.xlsx</code>, Version 2.0, gültig ab 17.11.2025 — kennt <strong>eine</strong> Lieferung pro Tag. Das ist eine Änderung nach außen, nicht bloß intern.</p>
-  <div class="grid" style="--cols:3">
-    <div class="card"><h3>Nummerierte Zweitfiles</h3><p>Eigenes Ready-File je Lauf. Sauber, aber Vertragsänderung.</p></div>
-    <div class="card"><h3>Gleiche Namen, überschreiben</h3><p>Setzt D2 voraus — der Bezieher muss ersetzen, nicht anwenden.</p></div>
-    <div class="card ok"><h3>Rückfallposition</h3><p><strong>Ein</strong> Lauf, später terminiert. Kein Zweitlauf, keine Vertragsänderung, die <code>I2</code>/<code>I4</code>-Frage entsteht nie. Preis: alle bekommen die Preise später.</p></div>
+<section id="offen" data-nav="Offene Punkte">
+  <h2>Offene Entscheidungen A–J</h2>
+  <p class="lede">Keiner davon blockiert den Zuschnitt der ersten Implementierungsschritte.</p>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th></th><th>Frage</th><th>Stand</th><th>bei wem</th></tr></thead>
+    <tbody>
+      <tr><td><strong>A</strong></td><td>Wann läuft der Sync?</td>
+          <td><span class="tag ok">geschlossen</span> pro Lieferung, sofort. Serialisiert werden
+              muss die Stufe nicht — der monotone Guard erledigt es</td><td>—</td></tr>
+      <tr><td><strong>B</strong></td><td><code>tmp_if_last</code>: Tabelle oder Abfrage?</td>
+          <td><span class="tag ok">entschieden</span> <strong>B3</strong> — geführte Tabelle plus
+              Rebuild aus der Landezone. Ausschlaggebend: der <strong>Parallelbetrieb</strong>. Bei
+              B2 gibt es nichts zu diffen, und die retroaktive Abfrage würde die Legacy-Tabelle
+              systematisch verfehlen</td><td>—</td></tr>
+      <tr><td><strong>C</strong></td><td>Kennzahlen: Invalidierung oder Auftragsübergabe?</td>
+          <td><span class="tag ok">C1 faktisch gesetzt</span> der Sweep braucht ein Kriterium, und
+              „Preise ohne Kennzahl" ist es. Rest: welche anderen Verbraucher mit abwesenden statt
+              veralteten Kennzahlen leben können</td><td>intern</td></tr>
+      <tr><td><strong>D</strong></td><td>Rücknahme eines berichteten Preises</td>
+          <td><span class="tag ok">entschieden</span> explizites <code>I3</code> gegen das
+              Publikationsprotokoll. Bewusste Abweichung vom Altsystem</td><td>—</td></tr>
+      <tr><td><strong>E</strong></td><td>Ausschüttungs-Veto bei <code>R</code>-Löschungen</td>
+          <td>offen — aber <strong>verbessert</strong>: das Veto feuert jetzt in der Sync-Stufe,
+              Minuten nach der Lieferung statt am Tagesende. Eine Rückmeldung ist damit überhaupt
+              erst möglich</td><td>Fachabteilung</td></tr>
+      <tr><td><strong>F</strong></td><td>Dateinamen und Ready-File für zwei Auslieferungen</td>
+          <td>Überschreiben gleicher Namen ist mit einem Delta nicht vereinbar → nummerierte Files,
+              je ein Ready-File</td><td>Fachabteilung</td></tr>
+      <tr><td><strong>G</strong></td><td>LMT persistieren und weitergeben?</td>
+          <td>offen. Mit der Landezone kostet die Persistenz zwei Spalten; die Frage ist: an wen, in
+              welchem Format?</td><td>Fachabteilung</td></tr>
+      <tr><td><strong>H</strong></td><td>Ausschüttung ohne Preis auch zur Ingest-Zeit?</td>
+          <td>Wer bekommt die Meldung? Fehler oder Info? Gegen <code>kurs</code> (jetzt attraktiv)
+              oder gegen die Landezone (neue Domänen-Abhängigkeit)?</td>
+          <td>Markus / Fachabteilung</td></tr>
+      <tr><td><strong>I</strong></td><td>Sweep bei fehlendem Referenzkurs</td>
+          <td>Empfehlung <strong>I1</strong> (rechnen, was rechenbar ist) als Voreinstellung, I2
+              (Vortagskurs, <code>Referenzkurs_Tage</code>) als konfigurierbare Alternative —
+              betrifft nur Fremdwährungsfonds</td><td>intern + Fachabteilung</td></tr>
+      <tr><td><strong>K</strong></td><td>Wem gehört <code>ASF.r_faktor</code>?</td>
+          <td>Beide Domänen schreiben ihn. K1 (Ausschüttungs-Domäne), K2 (Kennzahlen-Domäne, mit
+              Datenmodell-Änderung) oder K3 (geteilt, mit Vorrangregel). <strong>Der einzige Punkt,
+              der einen Implementierungsschnitt blockiert</strong></td>
+          <td>Markus</td></tr>
+      <tr><td><strong>L</strong></td><td>Vorrang Preis- gegen Ausschüttungs-Einspielung</td>
+          <td>O1 (Ausschüttungs-Tagesjob vor Cutoff 1), O2 (auch pro Lieferung) oder O3
+              (Sammelreport prüft und meldet). Empfehlung <strong>O1 + O3</strong></td>
+          <td>Markus / Fachabteilung</td></tr>
+      <tr><td><strong>N</strong></td><td>Wozu dient der <code>tmp_if_last</code>-Fallback?</td>
+          <td><span class="tag accent">neu</span> N1 (Robustheit — dann braucht Lauf 2 ihn nicht)
+              oder N2 (eine Zeile je Fonds je Tag — dann müsste <em>jedes</em> File vollständig sein,
+              und Entscheidung 6 wäre wieder offen). <strong>Vor der Filegenerierung klären</strong></td>
+          <td>Fachabteilung / Bezieher</td></tr>
+      <tr><td><strong>M</strong></td><td>Darf <code>kurs</code> eine Spalte bekommen?</td>
+          <td><span class="tag accent">neu</span> M1 (eigene Tabelle <code>preis_herkunft</code>,
+              Vorauswahl — im Parallelbetrieb unbedenklich) oder M2 (Spalte in <code>kurs</code>,
+              einfacher, aber das Altsystem pflegt sie nicht mit)</td><td>intern</td></tr>
+      <tr><td><strong>J</strong></td><td>Fehlmeldung: Zuordnung und Empfänger</td>
+          <td>Datenanalyse läuft. Ist <code>INV.preismeldung</code> die gemeinte Tabelle? Nur
+              <code>R</code> oder alle Codes? Ein Lieferant je ISIN — und was mit Fonds ohne jeden
+              <code>liefer_typ='F'</code>-Lieferanten?</td><td>Markus / Fachabteilung</td></tr>
+    </tbody>
+  </table>
   </div>
 </section>
 
-<section>
-  <h2>G — LMT persistieren und weitergeben?</h2>
-  <p>Offener Punkt 11 der Ist-Analyse. Das Altsystem validiert <code>L1</code>/<code>L2</code>/<code>L3</code> vollständig — Prozentkennzeichen <code>J</code>/<code>N</code> über <code>ERR_LMTPROZENT1</code>, Stichtag nur bei <code>L2</code> und nur bei 0 Tagen über <code>ERR_LMTRUECKL2</code> und <code>ERR_LMTRUECKL2_0</code>, Aktion <code>I</code> nur bei <code>L2</code> über <code>CheckAktionL2</code> — und speichert nichts:</p>
-<pre><code>// M_INSERT.CPP:2049-2056
-if (strcmp(cPrCodes.GetGruppe(cPrRecords[i].szCode), "LMT") == 0)
-{
-    // LMT Daten sollen derzeit nicht gespeichert werden</code></pre>
-  <p>Keine LMT-Spalten in <code>tmp_if_kurs</code>, keine in <code>kurs</code>, in keinem Ausgabeformat. Die LMT-Felder des Lieferformats sind heute reine Eingangsvalidierung — Daten, die die KAGs liefern und die im Nichts landen.</p>
-  <p>IFAS13 prüft in <code>CsvPreismeldungValidations</code> bereits <strong>mehr</strong> als das Altsystem: bei <code>L1</code>/<code>L3</code> keine <code>0</code>-Meldungen, die Inaktivierung <code>I</code> muss immer <code>0</code> melden, und <code>L2</code> mit 0 Tagen verlangt — außer bei Inaktivierung — einen Stichtag.</p>
-  <p class="note">Mit der Landezone kostet die Persistenz zwei Spalten. Die Frage verschiebt sich damit auf: <strong>an wen weitergeben, in welchem Format?</strong> Heute existiert kein Ausgabestrom, der LMT transportiert; ein neuer wäre eine Änderung am Bezieher-Vertrag.</p>
-</section>
-
-<section>
-  <h2>H — was noch zu beschaffen ist</h2>
+<section id="daten" data-nav="Datenbeschaffung">
+  <h2>Datenbeschaffung</h2>
+  <p>Die produktiven Werte definieren das Prüfverhalten und liegen nur in der Produktionsdatenbank.
+     Ohne die <code>tax_code</code>-Zeilen gibt es keine Ingest-Implementierung, ohne die
+     <code>preismeldung</code>-Werte keine Soll-Menge.</p>
   <ul class="todo">
-    <li><strong>Produktive <code>tax_code</code>-Zeilen exportieren.</strong> <code>L1</code>/<code>L2</code>/<code>L3</code> fehlen in allen eingecheckten <code>insert_tax_code*.cr</code>; <code>S2</code>, <code>S3</code> und <code>X</code> stehen nur in <code>v_preiscode</code>. Die real gültigen Grenzwerte, <code>max_nk</code>, <code>future</code>, <code>isinwaehrung</code>, <code>ignore_null</code> und Datumsgrenzen definieren das gesamte Prüfverhalten und liegen nur in der Produktionsdatenbank.</li>
-    <li><strong>Toleranzen der Kursabweichung:</strong> <code>ifas..preise_check</code> mit <code>WFS_WKN = -1</code> und <code>preise_check_faktor</code>.</li>
-    <li><strong>Produktive INI-Werte</strong>, insbesondere <code>AllowOldPreisFormat</code> — davon hängt ab, ob das alte Format 1 überhaupt bedient werden muss — und <code>AllowTxtExt4PreisFile</code>.</li>
-    <li><strong><code>MFT_*.INI</code></strong> — Zielverzeichnisse und Accounts sind nicht im Repo.</li>
-    <li><strong>Vollständiger <code>fplausib.txt</code></strong> mit Treffern in allen Abschnitten, um die Meldungstexte wörtlich übernehmen zu können.</li>
-    <li><strong>Aktuelle <code>preis.dtd</code></strong>, wie sie tatsächlich ausgeliefert wird.</li>
-    <li><strong><code>datum_min</code>-Vergleichsrichtung</strong> — <code>M_INSERT.CPP:2020,2906</code> vergleichen mit <code>&gt; daDatumMin</code>, entgegen der Feldbeschreibung.</li>
-    <li><strong><code>makeGleicherKurs</code></strong> — „mindestens 5 mal hintereinander derselbe Preis" ist im Confluence beschrieben, existiert im Code nicht. Fachlich gewünscht?</li>
+    <li>Produktive <code>tax_code</code>-Zeilen. <code>L1</code>/<code>L2</code>/<code>L3</code>
+      fehlen in allen eingecheckten <code>insert_tax_code*.cr</code>; <code>S2</code>,
+      <code>S3</code>, <code>X</code> nur in <code>v_preiscode</code>.</li>
+    <li>Produktive <code>ifas..preismeldung</code>-Zeilen und die Verteilung von
+      <code>INV.preismeldung</code> (Query Q5).</li>
+    <li><code>kurs..KAG_lieferanten</code> mit <code>liefer_typ='F'</code> (Q0–Q4) — beantwortet J.</li>
+    <li><code>CONFIG.INI</code>: <code>Referenzkurs_Tage</code>,
+      <code>CalcOhneReferenzkurs</code>, <code>Del_Protokoll</code>, <code>Nachrechnung</code>.
+      <code>PREIS_DLD.INI</code>: <code>Preis_MinTage4Meldung</code>,
+      <code>Preis_MaxTage4Meldung</code>.</li>
+    <li><code>AllowOldPreisFormat</code> und <code>AllowTxtExt4PreisFile</code> — davon hängt ab, ob
+      das alte Format 1 bedient werden muss.</li>
+    <li><code>MFT_*.INI</code> — Zielverzeichnisse und Accounts sind nicht im Repo.</li>
+    <li>Vollständiger <code>fplausib.txt</code> mit Treffern in allen Abschnitten.</li>
+    <li>Aktuelle <code>preis.dtd</code>, wie sie tatsächlich ausgeliefert wird.</li>
+    <li><code>datum_min</code>-Vergleichsrichtung mit der Fachabteilung klären.</li>
+    <li class="done"><s>Toleranzen <code>preise_check</code> / <code>preise_check_faktor</code></s> —
+      entfällt mit Punkt 14.</li>
   </ul>
-  <p class="note warn">Die <code>tax_code</code>-Zeilen sind Voraussetzung für jede Ingest-Implementierung, nicht ein Detail am Rand.</p>
 </section>
 
-<section>
-  <h2>Abgrenzung</h2>
-  <div class="beforeafter">
-    <div>
-      <h4>Enthalten</h4>
-      <div class="boxstack">
-        <div class="bx">Ingest + Landezone</div>
-        <div class="bx">Plausibilität</div>
-        <div class="bx">Filegenerierung + Verteilung</div>
-        <div class="bx">Sync nach kurs, pool_if_kurs</div>
-        <div class="bx">tmp_if_last als Projektion</div>
-        <div class="bx">Kennzahlen — nur die Naht</div>
-      </div>
-    </div>
-    <div>
-      <h4>Nicht enthalten</h4>
-      <div class="boxstack">
-        <div class="bx ghost">Formeln der Nachrechnung</div>
-        <div class="bx ghost">Ausländische Fonds (-R1)</div>
-        <div class="bx ghost">STM und Ausschüttungen</div>
-        <div class="bx ghost">Meldefonds-Listen, Fristen, Mahnungen</div>
-        <div class="bx ghost">Stammdatenfiles Börse / Vendoren / WDBO</div>
-      </div>
-    </div>
+<section id="abgrenzung" data-nav="Abgrenzung">
+  <h2>Der Legacy-Tagesjob als Landkarte</h2>
+  <p class="lede">Markus Punkt 5 fordert, dass der Tagesjob vollautomatisch läuft. Der Tagesjob ist
+     neunteilig; dieses Konzept deckt vier seiner Teile ab.</p>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>#</th><th>Script → Programm</th><th>Inhalt</th><th>in diesem Konzept</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><code>create_preise.csh</code> → <code>-fPREISE</code></td>
+          <td>Preisfiles erstellen und verteilen</td>
+          <td><span class="tag ok">ja</span> Sammelreport-Läufe</td></tr>
+      <tr><td>2</td><td><code>create_boe_st.csh</code> → <code>-B2</code></td>
+          <td>Stammdatenfile Börse und Vendoren</td><td>nein — eigener Job nötig</td></tr>
+      <tr><td>3</td><td><code>create_notify_wdbo.csh</code></td>
+          <td>Benachrichtigung an WDBO</td><td>nein — eigener Job nötig</td></tr>
+      <tr><td>4</td><td><code>run_preise_einspielen</code> → <code>preise.e -p0</code></td>
+          <td>Preise nach <code>kurs</code> einspielen</td>
+          <td><span class="tag ok">ja</span> als <strong>Stufe</strong> der Lieferkette</td></tr>
+      <tr><td>5</td><td><code>run_asf_vorl</code></td>
+          <td>vorläufige Ausschüttungen und Splits</td><td>nein — Ausschüttungs-Domäne</td></tr>
+      <tr><td>6</td><td><code>run_vendor_stamm.csh</code></td>
+          <td>Vendorauswertung STAMMDATEN</td><td>nein — eigener Job nötig</td></tr>
+      <tr><td>—</td><td><code>refkursVorhanden.e</code></td>
+          <td>Warteschleife auf die EZB-Referenzkurse</td>
+          <td><span class="tag accent">entfällt</span> Punkt I</td></tr>
+      <tr><td>7</td><td><code>run_calc -r2 -r3 [-r4 -U]</code></td><td>Kennzahlenberechnung</td>
+          <td><span class="tag ok">ja</span> als Stufe <strong>und</strong> Sweep</td></tr>
+      <tr><td>8</td><td><code>run_vendor_kennz.csh</code></td>
+          <td>Vendorauswertung KENNZAHLEN</td><td>nein — eigener Job nötig</td></tr>
+      <tr><td>9</td><td><code>create_plausi_taegliche_preise.csh</code> → <code>-P2</code></td>
+          <td>Fehlmeldungs-Report</td>
+          <td><span class="tag ok">ja</span>, erweitert</td></tr>
+    </tbody>
+  </table>
   </div>
-  <p>Für die Formeln der Kennzahlen-, Performance- und Volatilitätsnachrechnung (<code>preisekennzahl.cpp</code>, <code>fondskennzahl.cpp</code>, <code>c_calc.cpp</code>) fehlt noch eine eigene Ist-Analyse. Entscheidung 10 legt nur die Naht fest, nicht den Inhalt.</p>
+  <p class="note">Der große Plausi-Report <code>fplausib.txt</code> ist <strong>nicht</strong> Teil
+     des Tagesjobs — er kommt aus dem separaten Script <code>create_plausibel</code>
+     (<code>preis_dld.e -P -a</code>). Und das Checkpoint-Verfahren
+     (<code>cp_tagesjob_01</code>…<code>09</code>) ist genau das, was das Job-/Work-Queue-System
+     ersetzt: kein Feature, das portiert werden muss, sondern ein Symptom.</p>
+  <h3>Nicht enthalten</h3>
+  <p>Die Formeln der Kennzahlen-, Performance- und Volatilitätsnachrechnung — dafür fehlt eine eigene
+     Ist-Analyse. Ausländische Fonds samt <code>liefer_status</code> und den Mahnungen. STM und
+     Ausschüttungen (berührt nur über H). Meldefonds-Listen, Fristenprüfung. Stammdatenfiles Börse,
+     Vendoren, WDBO.</p>
 </section>
 
-<section>
+<section id="vorgehen" data-nav="Vorgehen">
   <h2>Vorgehen</h2>
   <ul class="todo">
-    <li><strong>Offene Punkte A–G klären.</strong> A liegt beim User, D/E/F/G brauchen die Fachabteilung, B und C sind intern entscheidbar. Vor A steht die Landezone fest, aber nicht, ob eine zweite Tabelle für die aufgelöste Tagesmenge dazukommt — das betrifft den Zuschnitt der ersten Schritte.</li>
-    <li><strong>Datenbeschaffung H anstoßen</strong>, mit den <code>tax_code</code>-Zeilen zuerst.</li>
-    <li><strong>Konzept in <code>docs/Fondspreise/fondspreise-soll-konzept.md</code> ablegen</strong>, neben der Ist-Analyse, sobald A–C entschieden sind. Der Plan ist der Arbeitsstand, das Dokument im Repo das Ergebnis.</li>
-    <li><strong>Implementierung in Schnitten:</strong> Ingest + Landezone &rarr; Auflösung &rarr; Plausi-Report &rarr; Filegenerierung &rarr; Verteilung und Archivierung &rarr; Sync nach <code>kurs</code> &rarr; <code>tmp_if_last</code>-Projektion &rarr; Zweitlauf. Die Auflösung ist der Angelpunkt — von Batch und Sync geteilt, deshalb früh und isoliert getestet.</li>
-    <li><strong><code>docs/Technische Konzepte/ifas13-jobs.md</code> aktualisieren</strong> — der Eintrag „Fondspreise, out of scope" stimmt dann nicht mehr.</li>
+    <li>Query-Ergebnisse zu J auswerten. Entscheidet die Adressierung der Fehlmeldung.</li>
+    <li>Datenbeschaffung anstoßen — <code>tax_code</code> und <code>preismeldung</code> zuerst.</li>
+    <li>Offene Punkte klären. A geschlossen, C und D entschieden; B und I intern; E, F, G, H, J
+      brauchen die Fachabteilung.</li>
+    <li>Konzept nach <code>docs/Fondspreise/fondspreise-soll-konzept.md</code>, sobald B und I
+      entschieden sind.</li>
+    <li><code>docs/Technische Konzepte/ifas13-jobs.md</code> aktualisieren — „Fondspreise — out of
+      scope" stimmt dann nicht mehr.</li>
+    <li class="done">Korrekturen in die Ist-Analyse einarbeiten (elf Änderungen, 1322 → 1451
+      Zeilen).</li>
   </ul>
+  <h3>Implementierung in Schnitten</h3>
+  <p>Der Zuschnitt folgt jetzt den Jobs, nicht den Legacy-Stufen.</p>
+  <div class="boxflow">
+    <div class="bx accent">Stufe 1<small>Ingest, Landezone, Rückmeldung</small></div>
+    <div class="arrow accent">&rarr;</div>
+    <div class="bx accent">Stufe 2<small>Sync, seriell, + tmp_if_last</small></div>
+    <div class="arrow">&rarr;</div>
+    <div class="bx">Auflösung<small>Komponente, isoliert getestet</small></div>
+  </div>
+  <div class="boxflow">
+    <div class="bx">Lauf 1<small>Plausi, Files, Protokoll</small></div>
+    <div class="arrow">&rarr;</div>
+    <div class="bx">Lauf 2 als Delta</div>
+    <div class="arrow">&rarr;</div>
+    <div class="bx">Stufe 3 + Sweep<small>Kennzahlen</small></div>
+    <div class="arrow">&rarr;</div>
+    <div class="bx">Fehlmeldung</div>
+    <div class="arrow">&rarr;</div>
+    <div class="bx">Transparenz</div>
+  </div>
 </section>
 
-<section>
+<section id="verifikation" data-nav="Verifikation">
   <h2>Verifikation</h2>
-  <p>Noch kein Code — prüfbar ist bisher nur die Konsistenz des Konzepts.</p>
+  <p>Noch kein Code — prüfbar ist die Konsistenz des Konzepts.</p>
   <ul>
-    <li>Jede Aussage über das Altsystem gegen die Ist-Analyse und, wo dort nicht belegt, gegen <code>file:line</code> im Legacy-Repo. Die Quellen sind ISO-8859-1, also <code>grep -a</code> beziehungsweise <code>iconv</code>.</li>
-    <li>Die Anforderungen an die Landezone gegen alle vier Verbraucher durchspielen — Batch, Plausi, Sync, Projektion. Jeder muss aus den Zeilen am Job vollständig bedient werden können.</li>
-    <li>Das Statusmodell gegen die Fehlerfälle durchspielen: Lauf 2 fällt aus; Sync fällt aus; eine Lieferung trifft nach Lauf 2 ein; Lauf 1 wird wiederholt.</li>
-    <li>Die D/N-Auflösung an den drei Fällen aus der Diskussion: zwei Lieferungen zum gleichen Preisdatum (last wins), zwei Lieferungen zu verschiedenen Preisdatümern (beide gültig), <code>D</code> in Lauf 2 auf einen in Lauf 1 ausgelieferten Preis.</li>
+    <li>Jede Aussage über das Altsystem gegen die Ist-Analyse und, wo dort nicht belegt, gegen
+      <code>file:line</code> im Legacy-Repo (ISO-8859-1 → <code>grep -a</code>).</li>
+    <li>Die Landezone gegen ihre Verbraucher durchspielen: Auflösung, Plausi,
+      Transparenz-Abschnitt, <code>tmp_if_last</code>, Fehlmeldung.</li>
+    <li><strong>Das zweiachsige Statusmodell gegen die Fehlerfälle:</strong> Sync-Stufe hängt,
+      während Lauf 1 die Lieferung schon berichtet hat; Kennzahlen-Stufe scheitert am fehlenden
+      Referenzkurs; Lauf 2 fällt aus; Lieferung trifft nach Lauf 2 ein; Lauf 1 wird wiederholt.</li>
+    <li><strong>Den monotonen Guard:</strong> zwei Lieferungen mit demselben Preisschlüssel, auf
+      zwei Servern gleichzeitig verarbeitet — der Endzustand in <code>kurs</code> muss der der
+      späteren Ankunft sein, und zwar <strong>in beiden Bearbeitungsreihenfolgen</strong>.</li>
+    <li><strong>Deadlockfreiheit:</strong> zwei Lieferungen mit überlappenden, unterschiedlich
+      sortierten Schlüsselmengen gleichzeitig — keine Verklemmung.</li>
+    <li>Die D/N-Auflösung, inklusive „<code>D</code> ohne vorheriges <code>N</code>" (läuft durch)
+      und „<code>N</code> und <code>D</code> am selben Tag, dazwischen Lauf 1" (→ <code>I3</code>).</li>
+    <li>Die Delta-Semantik: Fallback in Lauf 1 und echter Preis in Lauf 2 (zwei Schlüssel); zweimal
+      <code>I2</code> auf denselben Schlüssel (Upsert); Ausgabefilter unterdrückt <code>I2</code> in
+      Lauf 1 und damit auch das <code>I3</code> in Lauf 2.</li>
+    <li>Punkt 13 als Testfall: <code>preisdatum &lt; fonds_ende</code> akzeptiert,
+      <code>&gt; fonds_ende</code> mit <code>ERR_DATE04</code> abgelehnt, beides nur für
+      <code>R</code>.</li>
   </ul>
 </section>
 
-<section>
+<section id="korrekturen" data-nav="Ist-Analyse">
   <h2>Korrekturen an der Ist-Analyse</h2>
-  <p>Während der Diskussion in <code>docs/Fondspreise/fondspreise-legacy-analyse.md</code> behoben:</p>
+  <p>Elf Änderungen sind eingearbeitet (1322 → 1451 Zeilen): <code>I4</code> gibt es im
+     Fondspreis-Pfad nicht (4.3); <code>pdPreis_ber</code> ist lokal gerechnet (3.4); neuer Abschnitt
+     1.1 „Der Tagesjob im Ganzen"; neuer Abschnitt 9.1 „Was <code>-P2</code> tatsächlich prüft";
+     <code>ERR_DATE04</code> nur für <code>R</code> (2.6); <code>liefer_intervall</code> für Inland
+     toter Zustand (6.2); zwei neue offene Punkte (10).</p>
+  <h3>Noch einzuarbeiten — Recherche zum Jobschnitt</h3>
   <dl>
-    <dt>2.9 — <code>oekbinfo.log</code></dt>
-    <dd>Enthielt fälschlich <code>INFO_DEL_NEW</code>. Im Fondspreis-Pfad landen dort nur <code>INFO_DATE02</code> und <code>INFO_CURRENCY02</code> (<code>cLieferBugs::WriteOekbInfo</code>, <code>M_INSERT.CPP:2979,3409</code>).</dd>
-    <dt>2.7 — wohin die <code>INFO_DEL_*</code> gehen</dt>
-    <dd>Ergänzt: alle vier gehen über <code>WriteInfo</code>/<code>WriteInfo2Rows</code> nach <code>info.log</code> (<code>c_insert.cpp:3111,3216</code>), also in das ZIP beim Lieferanten, und als <code>bug_info='I'</code> nach <code>liefer_bugs</code>.</dd>
-    <dt>5.2 Schritt 7 — der Löschpfad</dt>
-    <dd>Ergänzt: Löschung über <code>DeleteKurseReally</code> in <code>kurs..kurs</code>; beide Zweige stehen unter dem Vorbehalt Preiswährung = Fondswährung, bei Abweichung passiert stillschweigend nichts; das Ausschüttungs-Veto ohne jede Rückmeldung, mit <code>// ????</code> im Quelltext.</dd>
-    <dt>5.2 Schritt 8 — <code>tmp_if_last</code></dt>
-    <dd>„Aktualisiert in jedem Fall" war falsch: die Ausschlüsse kehren vorher zurück, geschrieben wird nur je Preis-Typ mit Wert, <code>cod_ex</code> ist hart <code>'N'</code>, der Delete-Schlüssel enthält kein <code>dat_kurs</code>, und gespeichert wird der gelieferte Wert.</dd>
+    <dt>5.3 schärfen: die Nachrechnung läuft inline pro Preissatz</dt>
+    <dd><code>MakePreiseEinzel</code> ruft <code>PreiseNachrechnung()</code> und
+      <code>WriteLastKurse()</code> direkt in der Schleife
+      (<code>preisekennzahl.cpp:2500,2512</code>), mit dem Riegel
+      <code>if (cPrTyp.daPreisDatum &gt;= daStichtag) return 0;</code> (<code>:3049</code>).</dd>
+    <dt>Neu: die EZB-Referenzkurse betreffen nur Fremdwährungsfonds</dt>
+    <dd><code>fondskennzahl.cpp:2208</code>, <code>:3386</code>, <code>:4843</code>. Gehört zu
+      Abschnitt 1.1, wo die Warteschleife beschrieben ist.</dd>
+    <dt>2.6 Zeile 11: die Berechtigungsprüfung ist produktiv abgeschaltet</dt>
+    <dd><code>nCheckKag</code> per Default <code>0</code>, <code>make_einzel.awk</code> ruft mit
+      <code>-K0</code> auf. <code>ERR_ISIN05</code> kann nie feuern.</dd>
+    <dt>6.2: <code>liefer_typ = 'F'</code> ist der Fondspreis-Lieferant</dt>
+    <dd>Belegt über <code>m_lieferanten.cpp</code> und <code>upd_lieferanten_fpp.cr</code>.</dd>
+    <dt>6.1: <code>kurs..kurs</code> führt keine <code>liefer_id</code></dt>
+    <dd>Kein historischer Nachweis in der DB, wer welche ISIN geliefert hat.</dd>
+    <dt>4.3: <code>Check4DeleteInTmp</code> präzisieren</dt>
+    <dd>Der <code>kurs</code>-Lookup (<code>M_INSERT.CPP:4229-4271</code>) passiert nur in dem
+      Zweig, in dem ein <code>D</code> gerade ein <code>N</code> desselben Tages storniert hat.</dd>
   </dl>
+  <p class="note"><code>fondspreise-legacy-analyse.deck.html</code> ist gegenüber der korrigierten
+     Ist-Analyse veraltet und zeigt weiterhin <code>I4</code>.</p>
 </section>
 
 </main>
 
+<script src="_deck/mermaid.min.js"></script>
 <script>
 (function () {
   var sections = Array.prototype.slice.call(document.querySelectorAll('main > section'));
