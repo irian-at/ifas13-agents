@@ -30,3 +30,4 @@
 - [STM delivery-chain test harness](project_stm-delivery-chain-test-harness.md) — chains need processLieferung; recalc never persists and calculateBundle rejects confirm/delete files.
 - [Temporal type storage per DBMS](project_temporal-type-storage-per-dbms.md) — all 3 java.time types agree on the Instant, but offset types store UTC on Sybase/Postgres and Vienna on H2.
 - [Sybase testcontainer credentials](project_sybase-testcontainer-credentials.md) — repo-root .env now present; .idea's skip-sybase16-tests silently drops Sybase invocations; jTDS product name is exactly "ASE".
+- [Import/Export n:n Lieferanten](project_importexport-nn-lieferanten.md) — nur die HDP/KAG-Seite wird geschrieben; ein HDP-Eintrag ohne `lieferanten` löscht die Join-Zeilen, und Sybase hat dort keine FKs.
