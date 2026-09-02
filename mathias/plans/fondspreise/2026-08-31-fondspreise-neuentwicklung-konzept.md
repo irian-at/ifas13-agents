@@ -1522,6 +1522,9 @@ DB-Stand und die Projektion, nach den Schnitten 4/5 die Ausgabefiles.
 
 ## Vorgehen
 
+Der **lebende Stand** dieser Schritte wird im [Tracker](tracker.md) geführt (gleicher Ordner) —
+dieses Kapitel definiert die Schritte, hakt sie aber nicht ab.
+
 1. **Query-Ergebnisse zu J auswerten** (`fondspreise-lieferant-isin-analyse.sql`). Entscheidet die
    Adressierung der Fehlmeldung.
 2. **Datenbeschaffung anstoßen** — `tax_code` und `preismeldung` zuerst.
