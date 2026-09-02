@@ -12,7 +12,7 @@ Verweise. Zu diesem File gibt es bewusst **kein Deck** — es darf täglich chur
 | **E** | Ausschüttungs-Veto bei `R`-Löschungen: wie heute (still) oder Rückmeldung aus der Sync-Stufe? | Fachabteilung | — (mit 15./H bündeln) | offen |
 | **F** | Dateinamen + Ready-File für zwei Auslieferungen; Bezieher-Zusage „Files in Reihenfolge anwenden" (gehört zu D) | Fachabteilung / Bezieher | Schnitt 5 (Auslieferung des Deltas) | offen |
 | **G** | LMT persistieren und weitergeben — an wen, in welchem Format? | Fachabteilung | — | offen |
-| **H** | Ausschüttung ohne Preis auch zur Ingest-Zeit melden? Empfänger, Fehler/Info, gegen `kurs` oder Landezone? | Markus / Fachabteilung | — | offen |
+| **H** | Ausschüttung ohne Preis auch zur Eingangszeit melden? Empfänger, Fehler/Info, gegen `kurs` oder Inbox? | Markus / Fachabteilung | — | offen |
 | **I** | Sweep bei fehlendem Referenzkurs: Voreinstellung I1 bestätigen (I2 konfigurierbar) | Fachabteilung | — (Voreinstellung blockiert nicht) | offen |
 | **J** | Fehlmeldung: Zuordnung Lieferant↔ISIN, Empfänger, Zeitpunkt. **Befund 2026-09-02 (TEST-Abzug):** die F-Typisierung ist tot (alle 29 `fp_*`-Konten inaktiv). F3 = 0: über die **aktiven** Lieferanten hat zwar jeder meldepflichtige Fonds einen Adressaten — aber F4 zeigt, dass `KAG_lieferanten` STM-Steuerberater und Preis-Lieferanten **mischt** (alle Typ `A`; nur `db_spard` heißt „AT-Fonds Preise"). Wer je KAG der *Preis*-Lieferant ist, steht nirgends maschinenlesbar; und selbst `db_spard` hat als Rückmeldeadresse intern abi@oekb.at (F5). Zu klären: Preis-Lieferant je KAG identifizieren (Datenpflege? aus der Lieferhistorie?) und echte Adressdaten beschaffen | Markus / Fachabteilung | Schnitt 7 | Datenlage vollständig — Frage verschärft |
 | **K** | Wem gehört `ASF.r_faktor`? (K1/K2/K3) | Markus | Schnitt 6 | offen |
@@ -82,7 +82,7 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
 
 | # | Schnitt | blockiert durch | Detail-Plan | Status |
 |---|---|---|---|---|
-| 1 | Lieferkette Stufe 1 — Ingest, Landezone, Rückmeldung | `tax_code`-Datenbeschaffung | — | offen |
+| 1 | Lieferkette Stufe 1 — Eingang, Inbox, Rückmeldung | ~~`tax_code`~~ (erhoben, V1) | [2026-09-02-fondspreise-schnitt1-eingang-inbox-rueckmeldung.md](2026-09-02-fondspreise-schnitt1-eingang-inbox-rueckmeldung.md) | **umgesetzt** (Commit ausstehend; Byte-Verifikation des Rückmelde-Formats wartet auf echte Antwort-ZIPs) |
 | 2 | Stufe 2 — Sync, Guard (Klammer-Transaktion), `letzte_preise` inkl. Seed + Rebuild | — | — | offen |
 | 3 | `WirksamePreismeldungen` als Komponente, isoliert getestet | — | — | offen |
 | 4 | Sammelreport Lauf 1 — Plausi, Files, Publikationsprotokoll, Verteilung | — | — | offen |
@@ -90,9 +90,17 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
 | 6 | Stufe 3 + Kennzahlen-Sweep | K, Kennzahlen-Ist-Analyse | — | offen |
 | 7 | Fehlmeldungs-Job | J | — | offen |
 | 8 | Lieferketten-Transparenz im Report | — | — | offen |
-| quer | `PreisMeldungDiffJob` (Parallelbetrieb) — ersetzt den BadInput-Stub, wächst mit 1/2/4/5 | Schnitt 1 | — | offen |
+| quer | `PreisMeldungDiffJob` (Parallelbetrieb) — ersetzt den BadInput-Stub, wächst mit 1/2/4/5 | — | mit Schnitt 1 | **Ebene 1 umgesetzt** (Rückmeldungs-Diff mit Normalisierung + bekannten Abweichungen; DB-Stand/Files folgen mit Schnitt 2/4/5) |
 
 ## 4. Weitere Schritte
+
+- [ ] **Echte Preis-Antwort-ZIPs anfordern** (Fachabteilung/Betrieb): idealerweise die
+      Altsystem-Antworten zu den 4 Beispielfiles vom 12.05.2026 (`docs/Fondspreise/beispiele/`,
+      passend zu `fplausib.txt`) — nötig für die Byte-Verifikation des Rückmeldungs-Diffs
+      (Schnitt 1, blockiert nicht die Implementierung)
+- [ ] Property-Name im Konzept nachziehen: effektiv `database-context.fondspreise.db-key`
+      (Punkt statt Bindestrich, folgt aus dem `ContextConfig`-Binding) — bei der nächsten
+      Konzept-Runde
 
 - [ ] Kennzahlen-Ist-Analyse erstellen (`preisekennzahl.cpp`, `fondskennzahl.cpp`, `c_calc.cpp`) —
       fehlt laut Abgrenzung, Voraussetzung für Schnitt 6
@@ -109,6 +117,18 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
   D entschieden (explizites `I3`)
 - 2026-09-02 — M entschieden (Sybase schema-gesperrt, Business-Tabellen nach Postgres/`kurs`);
   Runden 7+8 eingearbeitet, Konzept-Deck aktuell
+- 2026-09-02 — **Begriffe umbenannt** (Konzept-Runde 9): „Ingest" → **Eingang**
+  (`PreismeldungEingang*`, Package `.eingang`), „Landezone" → **Inbox** (nur Prosa; Entity
+  `PreismeldungZeile`/Tabelle `preismeldung_zeilen` bleiben). Code, Konzept, Deck, Tracker und
+  Doku nachgezogen; alle Tests weiter grün
+- 2026-09-02 — **Schnitt 1 implementiert** (Detail-Plan im Ordner): neues Modul
+  `ifas-persistence-fondspreise` (Inbox `kurs.preismeldung_zeilen`, `TaxCode` read-only,
+  Flyway V061–V063), Kontext `database-context.fondspreise.db-key`, Meldungsmodell mit
+  Legacy-Codes/-Texten, Eingangs-Prüfkette B0–B20, Rückmeldungs-Writer (Legacy-ZIP-Format),
+  `PreisMeldungDiffJob` mit Rückmeldungs-Diff. 95 Domain-Unit-Tests + 2 E2E-Integrationstests
+  grün (inkl. Selbstvergleich → 0 Abweichungen); `BundleFileType.DATA_LOG_FILE` neu in
+  ifas-domain-stm. Offen aus dem Plan: echte Antwort-ZIPs für die Byte-Verifikation, UI-Seiten,
+  E2E mit den 4 Beispielfiles
 - 2026-09-02 — Voranalysen auf dem TEST-Abzug (Stand ~2026-08-29) **vollständig** gelaufen:
   Q0–Q5, Q9–Q13, Q12b', V1–V5', F1–F7; Ergebnisse im SQL-File. Kernbefunde: `kurs.guelt` aktuell
   gepflegt, aber 29,5 Mio Altzeilen NULL (C3 nur vorwärts); KAG-Zuordnung existiert über aktive

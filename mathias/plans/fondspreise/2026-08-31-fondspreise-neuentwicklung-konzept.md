@@ -48,13 +48,20 @@ Lieferprotokoll lebt für STM bereits im Job. Das Konzept setzt das fort.
 
 ## Änderungsprotokoll
 
+### Runde 9 — 2026-09-02, Begriffe: Eingang und Inbox
+
+| Was | vorher | jetzt |
+|---|---|---|
+| „Ingest" | Anglizismus für die erste Stufe | **Eingang** — Klassen `PreismeldungEingang` / `PreismeldungEingangService` / `PreismeldungEingangResult`, Package `.eingang`; die Prüfung heißt durchgängig **Eingangsprüfung** |
+| „Landezone" | Metapher für den Zeilen-Behälter | **(Preismeldung-)Inbox** — nur in der Prosa; Entity `PreismeldungZeile` und Tabelle `kurs.preismeldung_zeilen` bleiben (eine Zeile der Inbox) |
+
 ### Runde 8 — 2026-09-02, Business-Tabellen nicht nach `infra`
 
 Korrektur der Runde-7-Zuordnung: nach Postgres ja, aber nicht alles nach `infra`.
 
 | Was | vorher | jetzt |
 |---|---|---|
-| **Die vier Artefakte** (Landezone, Publikationsprotokoll, `preis_herkunft`, `letzte_preise`) | Katalog `infra`, `ifas-persistence-infra` | **Business-Tabellen**: Postgres, Katalog `kurs`, eigener Context-Key (`database-context.fondspreise-db-key`), Modul **`ifas-persistence-fondspreise`** — das Muster von `ifas.ausschuettung_tmp` (`ifas-persistence-stm`, `ausschuettung-tmp-db-key` → Postgres) |
+| **Die vier Artefakte** (Inbox, Publikationsprotokoll, `preis_herkunft`, `letzte_preise`) | Katalog `infra`, `ifas-persistence-infra` | **Business-Tabellen**: Postgres, Katalog `kurs`, eigener Context-Key (`database-context.fondspreise-db-key`), Modul **`ifas-persistence-fondspreise`** — das Muster von `ifas.ausschuettung_tmp` (`ifas-persistence-stm`, `ausschuettung-tmp-db-key` → Postgres) |
 | Die vier Job-Tabellen | — | bleiben `infra` / `ifas-persistence-infra` (JOINED-Vererbung von `infra.jobs`) |
 | `job_id` an den Artefakten | FK auf den Job | **logische Referenz** (UUID) — Job-System und Business-Tabellen sind verschiedene DB-Kontexte |
 | Ausblick | — | die Sybase wird im Lauf von 2027 nach Postgres migriert; Guard und `kurs` landen dann im selben DBMS, und die Klammer-Transaktion kollabiert zu einer gewöhnlichen |
@@ -72,13 +79,13 @@ Zwei technische Kernannahmen hielten dem Code nicht stand; dazu die Vorgaben zum
 | **Claims eines gescheiterten Laufs** | Fehlerfall fehlte | der Folgelauf (`repeatedFromJob`) übernimmt die geclaimten Lieferungen — sonst blieben sie unsichtbar |
 | **Initialbefüllung `letzte_preise`** | fehlte | Seed aus `kurs..tmp_if_last`, sonst 65 Tage blinder Fallback und roter B3-Diff |
 | **Schnitt-Blocker** | „nur K blockiert einen Schnitt" | `tax_code` → Schnitt 1; **N** und **F** → Schnitt 5; **K** + fehlende Kennzahlen-Ist-Analyse → Schnitt 6; **J** → Schnitt 7 |
-| Kleineres | — | `PreismeldungJobStatus` (Binde-s-Tippfehler); O3 = Plausi 18–20 im Sammelreport plus Fehlmeldungs-Mail; Rückmeldungs-Guard als bedingtes Update (at-most-once); Landezone-Retention ≥ 65-Tage-Fenster; Solva-Sätze durch dieselbe Pipeline; C1b eingearbeitet (kollidiert mit der Schemasperre); `pool_if_kurs`-Semantik in die Datenbeschaffung |
+| Kleineres | — | `PreismeldungJobStatus` (Binde-s-Tippfehler); O3 = Plausi 18–20 im Sammelreport plus Fehlmeldungs-Mail; Rückmeldungs-Guard als bedingtes Update (at-most-once); Inbox-Retention ≥ 65-Tage-Fenster; Solva-Sätze durch dieselbe Pipeline; C1b eingearbeitet (kollidiert mit der Schemasperre); `pool_if_kurs`-Semantik in die Datenbeschaffung |
 
 ### Runde 6 — 2026-09-01, Namen für die Implementierung
 
 | Was | vorher | jetzt |
 |---|---|---|
-| **Begriffe** | Metaphern („Landezone") ohne Code-Entsprechung | **Glossar** unter *Begriffe*: je Begriff ein Typ- und ein Tabellenname, abgeleitet aus den im Code belegten Konventionen |
+| **Begriffe** | Metaphern („Landezone", heute „Inbox") ohne Code-Entsprechung | **Glossar** unter *Begriffe*: je Begriff ein Typ- und ein Tabellenname, abgeleitet aus den im Code belegten Konventionen |
 | „Laufnummer" | als Muster beschrieben, das nachzubauen wäre | `Job.dailyRunNumber` **existiert**, samt Unique-Index `ux_jobs_type_key_date_daily_run_number` — geerbt, nicht nachgebaut |
 | Lauf-Wiederholung | „braucht eine Regel" | `Job.repeatedFromJob` **existiert** — ein Lauf mit gesetztem FK *ist* Lauf 1b |
 | `sammelreport_lauf` | `int`, null \| 1 \| 2 | **FK** `sammelreport_job_id` → `PreisSammelreportJob`; `dailyRunNumber` daran ist die 1 oder 2 |
@@ -192,7 +199,7 @@ Quellen belegt ist das nicht — für ein Dokument nach außen bei der Fachabtei
 
 ### Namen für die Implementierung
 
-Die Begriffe dieses Plans sind zum Teil Bilder — „Landezone" beschreibt einen Behälter, nicht eine
+Die Begriffe dieses Plans sind zum Teil Bilder — „Inbox" beschreibt einen Behälter, nicht eine
 Sache. Für den Code gilt: **Metaphern bleiben in der Prosa, Identifier benennen Dinge.**
 
 #### Konventionen, wie sie im Code tatsächlich gelten
@@ -216,7 +223,7 @@ von 2027 ohnehin nach Postgres. Daraus die Aufteilung (präzisiert in Runde 8):
 
 - **Die vier Job-Tabellen** sind Infrastruktur: Katalog `infra`, Paket `fondspreise` in
   `ifas-persistence-infra` — dort liegen sämtliche Job-Entities (JOINED-Vererbung von `infra.jobs`).
-- **Die vier Artefakte** (Landezone, Publikationsprotokoll, `preis_herkunft`, `letzte_preise`) sind
+- **Die vier Artefakte** (Inbox, Publikationsprotokoll, `preis_herkunft`, `letzte_preise`) sind
   **Business-Tabellen** und gehören **nicht** nach `infra`. Sie liegen auf Postgres im Katalog
   `kurs` (dem fachlichen Legacy-Schema — nach der Migration landen die Legacy-Tabellen im selben
   Katalog), angebunden über einen eigenen Context-Key (`database-context.fondspreise-db-key`),
@@ -235,7 +242,7 @@ Referenz** (UUID), kein DB-FK.
 |---|---|---|
 | Preismeldungs-Job, pro Lieferdatei | `PreismeldungJob` | `infra.preismeldung_jobs` |
 | dessen Status | `PreismeldungJobStatus` | — |
-| **Landezone** — eine gelieferte Zeile | `PreismeldungZeile` | `kurs.preismeldung_zeilen` (Postgres) |
+| **Inbox** — eine gelieferte Zeile | `PreismeldungZeile` | `kurs.preismeldung_zeilen` (Postgres) |
 | Preisschlüssel (ISIN, Preisdatum, Währung, Meldekategorie) | `Preisschluessel` (embeddable) | eingebettet |
 | **Sammelreport**-Lauf | `PreisSammelreportJob` | `infra.preis_sammelreport_jobs` |
 | **Publikationsprotokoll** — ein publizierter Schlüssel je Lauf | `PreisPublikation` | `kurs.preis_publikationen` (Postgres) |
@@ -301,13 +308,13 @@ Statuswerte** (siehe unten):
 
 | Stufe | tut | Nebenläufigkeit |
 |---|---|---|
-| parsen, prüfen, antworten | Eingangsprüfung (Entscheidung 2), Landezone-Zeilen schreiben, ZIP an den Lieferanten | **parallel** über alle Lieferungen |
+| parsen, prüfen, antworten | Eingangsprüfung (Entscheidung 2), Inbox-Zeilen schreiben, ZIP an den Lieferanten | **parallel** über alle Lieferungen |
 | nach `kurs` | Berechtigungsfilter, `kurs` / `pool_if_kurs`, Löschungen, `tmp_if_last` | **parallel** — der Guard ordnet je Preisschlüssel (siehe *Zwei Server, ein Pool*) |
 | Kennzahlen | die betroffenen Kennzahlen des Fonds nachrechnen | Versuch; darf unvollständig bleiben |
 
 ### 2. + 3. Sammelreport Lauf 1 und Lauf 2 — Cron, zwei Cutoffs
 
-Lesen die Landezone-Zeilen der Lieferungen mit `sammelreport_job_id IS NULL`, lösen sie auf
+Lesen die Inbox-Zeilen der Lieferungen mit `sammelreport_job_id IS NULL`, lösen sie auf
 (Entscheidung 4), erzeugen Preisfile und Plausi-Report, verteilen, und schreiben das
 Publikationsprotokoll. Nichts gated sie: sie starten zu ihrer Zeit und verarbeiten, was da ist.
 
@@ -333,7 +340,7 @@ Status überhaupt ab?*
 |---|---|---|
 | Sammelreport-Lauf | `sammelreport_job_id IS NULL` | nein |
 | Kennzahlen-Sweep | „Preise ohne Kennzahl" — **aus den Daten**, nicht aus dem Jobzustand | nein |
-| Fehlmeldungs-Job | die Landezone | nein |
+| Fehlmeldungs-Job | die Inbox | nein |
 | Betrieb / UI | „durch oder nicht" | nur terminal + Fehler |
 
 `CALCULATED` ist damit **redundant**: der Sweep ist gerade deshalb selbstheilend, weil er seine
@@ -377,7 +384,7 @@ nach ihrem Artefakt, nicht nach dem abstrakten Akt.
 
 ### Warum Stufen und nicht fünf gleichrangige Jobs
 
-Sync und Kennzahlen haben dieselbe Arbeitseinheit wie der Ingest — eine Lieferdatei — und müssen
+Sync und Kennzahlen haben dieselbe Arbeitseinheit wie der Eingang — eine Lieferdatei — und müssen
 innerhalb dieser Einheit in Reihenfolge laufen. Eigene Jobs bräuchten je eigene Identität, eigenes
 Retry und eine Rückbindung an die Lieferung: Buchhaltung ohne Gewinn. Und weil die Stufen keine
 eigenen Statuswerte tragen, kostet die Zusammenlegung auch nichts an Nachvollziehbarkeit — was eine
@@ -515,7 +522,7 @@ Die Datenseite ja, die Außenwirkung nein.
 | Stufe | Datenseite | Außenwirkung |
 |---|---|---|
 | parsen, prüfen | rein, beliebig wiederholbar | — |
-| Landezone schreiben | idempotent **nur wenn** auf `job_id` gescoped. PK ist `(job_id, zeilen_nr)`, ein naives Re-Insert knallt → `delete by job_id` + insert, oder Upsert | — |
+| Inbox schreiben | idempotent **nur wenn** auf `job_id` gescoped. PK ist `(job_id, zeilen_nr)`, ein naives Re-Insert knallt → `delete by job_id` + insert, oder Upsert | — |
 | Rückmeldung | — | **nicht idempotent** — zweite Mail beim Lieferanten. Guard: `rueckmeldung_gesendet_at` |
 | nach `kurs` | Upsert idempotent; `D` auf eine gelöschte Zeile ist No-op; `tmp_if_last` schreibt „nur wenn Preisdatum neuer" → No-op | `del_protokoll` bekommt einen zweiten Eintrag (`CONFIG.INI/Del_Protokoll` Default `0`) |
 | Kennzahlen | deterministisch, gleiche Eingaben → gleiche Werte | `ASF.r_faktor` identisch — **aber** `r_faktor_ges` muss vorwärts kaskadieren (`MakeNextReinvestFaktor`), sonst bleiben die Folge-Ausschüttungen stale |
@@ -583,7 +590,7 @@ Abhängigkeit, die es nicht auflöst.
 | Identität | `vwkn..wkn_hist` | ISIN → `num_wfs`/`num_wfs_ku`; historisiert **und** auf Währung geschlüsselt |
 | | `vwkn..wkn_desc` | `cod_art_f` (FOND/TECH/C-PL/TEST), Bezeichnungen |
 | Fondsstammdaten | `ifas..INV` | KAG, Währung, Status, `fonds_beginn`/`-ende`, `veroeffentlichung`, `FONDS_ZGRU`, `preismeldung` |
-| Konfiguration | `kurs..tax_code` | **jede** Ingest-Prüfung hängt daran |
+| Konfiguration | `kurs..tax_code` | **jede** Eingangsprüfung hängt daran |
 | | `HWA` / `waehrungen` | Währungsprüfung |
 | | `kurs..lieferanten`, `KAG_lieferanten` | Rückmeldeadressen, Berechtigung (produktiv abgeschaltet) |
 | | Kalender / Börsetage | Werktagsprüfung, Altersfenster |
@@ -721,13 +728,13 @@ ein Legacy-Verhalten nachbauen oder einen Legacy-Bug.
 | Leistung von `tmp_if_kurs` | neu |
 |---|---|
 | Akkumulator, „letzte Lieferung gewinnt" | `WirksamePreismeldungen` im Sammelreport-Lauf (Entscheidung 4); für `kurs` ergibt es sich aus der seriellen Anwendung von selbst (Entscheidung 8) |
-| Datenquelle für Plausi / Files / Einspielung | Landezone |
+| Datenquelle für Plausi / Files / Einspielung | Inbox |
 | Puffer für Spätlieferungen (`RemoveTmpKurse`, QMS 644) | entfällt — eine spät eingelangte Lieferung bleibt auf `sammelreport_job_id IS NULL` |
-| Cross-File-Abgleich beim Ingest (`Check4DeleteInTmp`) | verschoben in den Sammelreport-Lauf, siehe 4. |
+| Cross-File-Abgleich beim Eingang (`Check4DeleteInTmp`) | verschoben in den Sammelreport-Lauf, siehe 4. |
 
-### 2. Das Ingest-Urteil gilt
+### 2. Das Eingangs-Urteil gilt
 
-Der Ingest führt die Eingangsprüfung genau einmal durch (ISIN + Prüfziffer, Datumsgrenzen aus
+Der Eingang führt die Eingangsprüfung genau einmal durch (ISIN + Prüfziffer, Datumsgrenzen aus
 `tax_code`, Wertbereich, `max_nk`, Währung, Aktionscode, LMT-Feldregeln, Fondsende siehe 13.) und
 erzeugt die Rückmeldung. **Kein späterer Job wiederholt sie.**
 
@@ -743,11 +750,11 @@ Ausgabeseitige, stammdatenabhängige Entscheidungen trifft der Sammelreport dage
 — `INV.veroeffentlichung`, `cod_art_f` (TEST/AIF), `FONDS_ZGRU`. Das ist legacy-konform
 (`cFondsRecord::ReadStammdaten`). Es sind zwei verschiedene Fragen, nicht dieselbe zweimal.
 
-### 3. Landezone: die gelieferten Zeilen pro Job
+### 3. Inbox: die gelieferten Zeilen pro Job
 
 | Spalte | Inhalt | Anmerkung |
 |---|---|---|
-| `job_id` | logische Referenz (UUID) auf den Preismeldungs-Job | ersetzt `liefer_id` **und** `eintragezeit` — beides steht am Job. Kein DB-FK: der Job liegt im `infra`-Kontext, die Landezone im Business-Kontext (Runde 8) |
+| `job_id` | logische Referenz (UUID) auf den Preismeldungs-Job | ersetzt `liefer_id` **und** `eintragezeit` — beides steht am Job. Kein DB-FK: der Job liegt im `infra`-Kontext, die Inbox im Business-Kontext (Runde 8) |
 | `zeilen_nr` | Zeile im Lieferfile | Rückbindung an `data.log`/`error.log`, Reihenfolge in der Datei |
 | `isin` | | |
 | `preisdatum` | Berechnungsdatum (Spalte 1 des Lieferformats) | |
@@ -838,7 +845,7 @@ Zeitpunkt vorhanden ist wird verarbeitet, der Rest am nächsten Tag."
 
 **Kein Vollständigkeits-Trigger.** Ein früherer Entwurf wollte Lauf 1 vorziehen, sobald alles
 Erwartete da ist. Verworfen: der Lauf darf in jedem Fall starten, und die Soll-Menge gehört
-ausschließlich in den Fehlmeldungs-Job (11.). Der Ingest kennt keine Vollständigkeit.
+ausschließlich in den Fehlmeldungs-Job (11.). Der Eingang kennt keine Vollständigkeit.
 
 ### 6. Lauf 2 liefert ein Delta
 
@@ -921,7 +928,7 @@ ein No-op, `N` nach `D` fügt wieder ein. Der Endzustand ist derselbe.
 Und die Ankunftsreihenfolge muss dabei **nicht** eingehalten werden — sie wird über den monotonen
 Guard auf `preis_herkunft` erzwungen (siehe **Zwei Server, ein Pool** unter *Die Jobs*). Die Stufe
 darf damit auf beiden Servern voll parallel laufen. `preis_herkunft` ist das dritte eigene Artefakt
-neben Landezone und Publikationsprotokoll, und das kleinste: vier Schlüsselspalten plus `job_id` und
+neben Inbox und Publikationsprotokoll, und das kleinste: vier Schlüsselspalten plus `job_id` und
 `angekommen_am`.
 
 Der Berechtigungsfilter — diese Logik gehört in die Stufe, nicht in die Tabelle:
@@ -1025,7 +1032,7 @@ Und `WriteLastKurse` liegt **außerhalb** von `if (nRet == 1)`, hängt also nich
 Währungsabweichung) — und ist **nicht** aus `kurs` ableitbar. Dieselbe Einsicht trägt 11.: `kurs`
 sieht nicht alles, was geliefert wurde.
 
-#### Warum es die Landezone nicht sein kann
+#### Warum es die Inbox nicht sein kann
 
 Der Delete-vor-Insert-Schlüssel enthält **kein** `preisdatum`. Es gibt genau einen Platz je
 (ISIN, Währung, Code); eine spätere Korrektur für ein *früheres* Datum verdrängt den jüngeren Preis,
@@ -1088,7 +1095,7 @@ Punkt C.
 Weiterhin gilt:
 
 - **Keine Abhängigkeit zu den Preisfiles.** Die Selektion der Filegenerierung liest `tmp_if_last`
-  und die Landezone, beide ohne berichtigten Kurs. Und die Filegenerierung liest `kurs`
+  und die Inbox, beide ohne berichtigten Kurs. Und die Filegenerierung liest `kurs`
   **überhaupt nicht** — in `m_fp_rec.CPP` und `M_FP_DLD.CPP` gibt es keinen einzigen
   `kurs..kurs`-Zugriff. *Korrektur gegenüber der Vorversion, die behauptete, `kurs` werde „nach
   Existenz gefragt".*
@@ -1112,7 +1119,7 @@ Ein Tagesjob zu einem definierten Zeitpunkt. Alles, was bis dahin nicht geliefer
 fehlend.
 
 - **Soll** — die für den Stichtag erwarteten Lieferungen.
-- **Ist** — die Landezone.
+- **Ist** — die Inbox.
 - **Ergebnis** — die Differenz als Liste `(Lieferant, ISIN, Code)`, versendet als Mail je Lieferant
   („Preis für Isins XYZ fehlt") bzw. als Sammelmail an die Fachabteilung.
 
@@ -1145,14 +1152,14 @@ den NetApp-Archiven der Eingangsfiles.
 
 | | heute | gewünscht |
 |---|---|---|
-| Datenquelle | `kurs..kurs` mit `cod_fliesscode = 'R'` — erst *nach* der Einspielung | die Landezone |
+| Datenquelle | `kurs..kurs` mit `cod_fliesscode = 'R'` — erst *nach* der Einspielung | die Inbox |
 | Zeitfenster | letzter Preis ist 3 bis 11 Börsetage alt (`Preis_MinTage4Meldung`/`MaxTage`) | „heute fehlt" |
 | Empfänger | Fachabteilung | Fachabteilung und/oder Lieferant |
 
 ### 12. Transparenz der Lieferkette im Sammelreport (Markus Punkt 3)
 
 Der Report soll zeigen, „was alles geliefert wurde, zB (New, Delete, New...)" — die **Folge** je
-Preisschlüssel, nicht nur das aufgelöste Ergebnis. Die Landezone liefert das ohne Zusatzaufwand:
+Preisschlüssel, nicht nur das aufgelöste Ergebnis. Die Inbox liefert das ohne Zusatzaufwand:
 append-only, `job_id` + `zeilen_nr`, Ankunftszeit und Lieferant am Job.
 
 Ein neuer Abschnitt listet je `(ISIN, Preisdatum, Währung, Code)` mit mehr als einer Lieferung des
@@ -1197,8 +1204,8 @@ gemeint ist.
 Zwei Teile. **Teil 1, im Sammelreport: portieren wie im Altsystem** — die Plausi-Abschnitte 18–20
 (`makeAusOhnePreis`, `makeVorlAusOhnePreis`, `makeVorlAusIdentDemPreis`).
 
-**Teil 2, zur Ingest-Zeit: offener Punkt H.** Markus formuliert „wenn eine Ausschüttung … gemeldet
-wird", also eine Rückmeldung beim Ausschüttungs-Ingest. Anderer Auslöser, anderer Empfänger, und es
+**Teil 2, zur Eingangszeit: offener Punkt H.** Markus formuliert „wenn eine Ausschüttung … gemeldet
+wird", also eine Rückmeldung beim Ausschüttungs-Eingang. Anderer Auslöser, anderer Empfänger, und es
 greift in die Ausschüttungs-Domäne.
 
 ---
@@ -1218,9 +1225,9 @@ Serialisiert werden muss die Stufe **nicht**.
 
 | Option | Folge |
 |---|---|
-| **B1 — nur geführte Tabelle** | Lauf 1 liest eine Zeile je Schlüssel. Entscheidung zum Schreibzeitpunkt festgehalten, also kein retroaktiver Effekt. Aber: **kann still driften** — eine fehlgeschlagene Sync-Stufe hinterlässt Landezone-Zeilen ohne Eintrag, und der Fallback vergisst den Fonds unbemerkt. |
-| **B2 — nur Abfrage** | Kein Zustand, keine Drift, kein Aufräumjob. Aber: die drei Fondsklassen-Ausschlüsse müssen mit Stammdaten-Joins nachgebaut werden; die Abfrage ist **retroaktiv sensitiv** (wird ein Fonds heute AIF, verschwindet er rückwirkend für 65 Tage — Verhaltensänderung gegenüber Legacy); und die **Retention der Landezone wird tragend** (wer nach 30 Tagen archiviert, verkürzt still den Fallback). |
-| **B3 — geführt, plus Rebuild aus der Landezone** | B1 im Normalbetrieb, B2s Abfrage als Reparaturwerkzeug. Leseseite bleibt einfach, Drift ist erkennbar und behebbar, ein Konsistenz-Check „Tabelle gegen Herleitung" ist ein billiger Testfall. Der Rebuild ist retroaktiv — für ein Reparaturwerkzeug in Ordnung, muss aber dokumentiert sein. |
+| **B1 — nur geführte Tabelle** | Lauf 1 liest eine Zeile je Schlüssel. Entscheidung zum Schreibzeitpunkt festgehalten, also kein retroaktiver Effekt. Aber: **kann still driften** — eine fehlgeschlagene Sync-Stufe hinterlässt Inbox-Zeilen ohne Eintrag, und der Fallback vergisst den Fonds unbemerkt. |
+| **B2 — nur Abfrage** | Kein Zustand, keine Drift, kein Aufräumjob. Aber: die drei Fondsklassen-Ausschlüsse müssen mit Stammdaten-Joins nachgebaut werden; die Abfrage ist **retroaktiv sensitiv** (wird ein Fonds heute AIF, verschwindet er rückwirkend für 65 Tage — Verhaltensänderung gegenüber Legacy); und die **Retention der Inbox wird tragend** (wer nach 30 Tagen archiviert, verkürzt still den Fallback). |
+| **B3 — geführt, plus Rebuild aus der Inbox** | B1 im Normalbetrieb, B2s Abfrage als Reparaturwerkzeug. Leseseite bleibt einfach, Drift ist erkennbar und behebbar, ein Konsistenz-Check „Tabelle gegen Herleitung" ist ein billiger Testfall. Der Rebuild ist retroaktiv — für ein Reparaturwerkzeug in Ordnung, muss aber dokumentiert sein. |
 
 **Entschieden: B3.** Ausschlaggebend ist ein Argument, das in den früheren Runden fehlte: der
 **Parallelbetrieb**. `tmp_if_last` ist mit 28.264 Zeilen / 3,1 MB winzig und in sich abgeschlossen —
@@ -1277,7 +1284,7 @@ Rückmeldung. Im Quelltext steht `// ????`.
 | Option | Folge |
 |---|---|
 | **E1 — wie heute** | Divergenz bleibt: Preis beim Bezieher weg, in `kurs` vorhanden. |
-| **E2 — früh erkennen** | Die Sync-Stufe erkennt es zur Ingest-Zeit und der Lieferant bekommt eine Rückmeldung, dass die Löschung nicht möglich ist. |
+| **E2 — früh erkennen** | Die Sync-Stufe erkennt es zur Eingangszeit und der Lieferant bekommt eine Rückmeldung, dass die Löschung nicht möglich ist. |
 
 **Der neue Jobschnitt verbessert das:** das Veto feuert jetzt in der Sync-Stufe, also Minuten nach
 der Lieferung statt am Tagesende. Eine Rückmeldung ist damit überhaupt erst möglich. Gehört in
@@ -1311,12 +1318,12 @@ if (strcmp(cPrCodes.GetGruppe(cPrRecords[i].szCode), "LMT") == 0)
     // LMT Daten sollen derzeit nicht gespeichert werden
 ```
 
-IFAS13 prüft in `CsvPreismeldungValidations` bereits **mehr** als das Altsystem. Mit der Landezone
+IFAS13 prüft in `CsvPreismeldungValidations` bereits **mehr** als das Altsystem. Mit der Inbox
 kostet die Persistenz zwei Spalten; die Frage verschiebt sich auf **an wen weitergeben, in welchem
 Format?** Heute existiert kein Ausgabestrom, der LMT transportiert — ein neuer wäre eine Änderung am
 Bezieher-Vertrag (vgl. F).
 
-### H. Ausschüttung ohne Preis — auch zur Ingest-Zeit?
+### H. Ausschüttung ohne Preis — auch zur Eingangszeit?
 
 Aus 15., Teil 2. Zu klären mit Markus/Fachabteilung:
 
@@ -1325,7 +1332,7 @@ Aus 15., Teil 2. Zu klären mit Markus/Fachabteilung:
   Ablauf; ein `error.log`-Eintrag würde das Delivery-Urteil auf `ERROR` kippen (mehr als 5 Zeilen)
   und wäre falsch. Vermutlich `info.log`.
 - **Wogegen wird geprüft?** Gegen `kurs` — das ist jetzt untertags aktuell und damit deutlich
-  brauchbarer als vorher — oder gegen die Landezone. Letzteres wäre eine neue Abhängigkeit zwischen
+  brauchbarer als vorher — oder gegen die Inbox. Letzteres wäre eine neue Abhängigkeit zwischen
   zwei getrennten Domänen und bräuchte eine bewusst geschnittene Abfrage-Schnittstelle.
 
 Der neue Jobschnitt macht die `kurs`-Variante attraktiv: `kurs` hinkt nur noch Minuten nach, nicht
@@ -1418,7 +1425,7 @@ Entscheidung 6 wieder aufwerfen würde — deshalb vor der Filegenerierung klär
 - **Produktive `tax_code`-Zeilen.** `L1`/`L2`/`L3` fehlen in allen eingecheckten
   `insert_tax_code*.cr`; `S2`, `S3`, `X` nur in `v_preiscode`. Die real gültigen
   `untergrenze`/`obergrenze`/`max_nk`/`future`/`isinwaehrung`/`ignore_null` und Datumsgrenzen
-  definieren das gesamte Prüfverhalten. **Voraussetzung für jede Ingest-Implementierung.**
+  definieren das gesamte Prüfverhalten. **Voraussetzung für jede Eingangs-Implementierung.**
 - **Produktive `ifas..preismeldung`-Zeilen** und die Verteilung von `INV.preismeldung`
   (Query Q5). Voraussetzung für 11.
 - **`kurs..KAG_lieferanten` mit `liefer_typ='F'`** (Queries Q0–Q4) — beantwortet J.
@@ -1440,7 +1447,7 @@ Entscheidung 6 wieder aufwerfen würde — deshalb vor der Filegenerierung klär
 
 ## Abgrenzung
 
-**Enthalten:** die inländische Kette — Ingest, Plausibilität, Filegenerierung, Verteilung,
+**Enthalten:** die inländische Kette — Eingang, Plausibilität, Filegenerierung, Verteilung,
 Einspielung nach `kurs`, `tmp_if_last`, `pool_if_kurs`; die Fehlmeldung (11.); die
 Kennzahlenberechnung als Stufe plus Sweep (10. legt die Naht fest, nicht die Formeln).
 
@@ -1542,11 +1549,11 @@ dieses Kapitel definiert die Schritte, hakt sie aber nicht ab.
 
 Der Zuschnitt folgt jetzt den Jobs, nicht den Legacy-Stufen:
 
-1. **Lieferkette, Stufe 1** — Ingest, Landezone, Rückmeldung. Landezone-Schreiben auf `job_id`
+1. **Lieferkette, Stufe 1** — Eingang, Inbox, Rückmeldung. Inbox-Schreiben auf `job_id`
    gescoped, Rückmeldung über `rueckmeldung_gesendet_at` geguardet.
 2. **Lieferkette, Stufe 2** — Sync nach `kurs`, plus `preis_herkunft` mit dem monotonen Guard und
    `tmp_if_last` (B3: geführt, mit Guard über `(preisdatum, angekommen_am)`). **Nicht** serialisiert;
-   der Guard ersetzt die Serialisierung. Die Rebuild-Funktion aus der Landezone gehört dazu — sie ist
+   der Guard ersetzt die Serialisierung. Die Rebuild-Funktion aus der Inbox gehört dazu — sie ist
    gleichzeitig der Parallelbetrieb-Vergleich und der Konsistenz-Testfall.
 3. **`WirksamePreismeldungen`** als Komponente — nur für den Sammelreport. Früh und isoliert
    getestet.
@@ -1555,12 +1562,17 @@ Der Zuschnitt folgt jetzt den Jobs, nicht den Legacy-Stufen:
 6. **Lieferkette, Stufe 3 + Sweep** — Kennzahlen. Damit ist der Job `COMPLETED`, auch wenn die
    Kennzahlen unvollständig blieben. **Vorher K klären**, sonst schreibt die Stufe in
    `ASF.r_faktor`, ohne dass geklärt ist, ob sie darf.
-7. **Fehlmeldungs-Job** — hängt an der Landezone und an J, nicht an der Filegenerierung.
+7. **Fehlmeldungs-Job** — hängt an der Inbox und an J, nicht an der Filegenerierung.
 8. **Lieferketten-Transparenz** im Report (12.).
 
 Quer dazu wächst der **`PreisMeldungDiffJob`** (siehe *Parallelbetrieb*): er ersetzt den
 BadInput-Stub, sobald Schnitt 1 steht, und nimmt mit jedem weiteren Schnitt eine Diff-Ebene dazu.
 Die Initialbefüllung von `letzte_preise` (9.) gehört zu Schnitt 2.
+
+**Stand 2026-09-02: Schnitt 1 ist umgesetzt** — Diff-Job, Eingangsprüfung, Inbox und
+Rückmeldungs-Erzeugung inklusive Diff-Ebene 1. Detail-Plan:
+`2026-09-02-fondspreise-schnitt1-eingang-inbox-rueckmeldung.md` (gleicher Ordner); die
+Klassen-/Kontext-Architektur zeigt die Deck-Sektion *Schnitt-1-Architektur*.
 
 ## Verifikation
 
@@ -1568,7 +1580,7 @@ Noch kein Code — prüfbar ist die Konsistenz des Konzepts:
 
 - Jede Aussage über das Altsystem gegen die Ist-Analyse und, wo dort nicht belegt, gegen
   `file:line` im Legacy-Repo (ISO-8859-1 → `grep -a` / `iconv`).
-- Die Landezone gegen ihre Verbraucher durchspielen: `WirksamePreismeldungen`, Plausi,
+- Die Inbox gegen ihre Verbraucher durchspielen: `WirksamePreismeldungen`, Plausi,
   Transparenz-Abschnitt,
   Projektion (`tmp_if_last`), Fehlmeldung. Jeder muss aus den Zeilen pro Job bedient werden können.
 - **Das zweiachsige Statusmodell gegen die Fehlerfälle** durchspielen: Sync-Stufe hängt, während
@@ -1589,7 +1601,7 @@ Noch kein Code — prüfbar ist die Konsistenz des Konzepts:
   Zeilen wie das Altsystem.
 - **Parallelbetrieb**: derselbe Input durch Alt- und Neusystem → alle vier Diff-Ebenen leer bis auf
   die geführten bekannten Abweichungen.
-- **Idempotenz je Stufe** prüfen: denselben Job zweimal laufen lassen. Landezone unverändert (kein
+- **Idempotenz je Stufe** prüfen: denselben Job zweimal laufen lassen. Inbox unverändert (kein
   PK-Verstoß), `kurs` unverändert, `tmp_if_last` unverändert, Kennzahlen identisch — und die
   Rückmeldung geht **nicht** zweimal raus.
 - **Die Reihenfolge-Gefahr dokumentiert nachstellen** (akzeptiertes Risiko, aber der Testfall soll

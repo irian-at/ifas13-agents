@@ -671,7 +671,7 @@
       <rect x="18" y="118" width="232" height="96" rx="8"
             fill="var(--tint)" stroke="var(--line-strong)"/>
       <text x="32" y="142" fill="currentColor" font-size="15">parsen · prüfen · antworten</text>
-      <text x="32" y="161" fill="var(--muted)" font-size="12">Eingangsprüfung · Landezone · ZIP</text>
+      <text x="32" y="161" fill="var(--muted)" font-size="12">Eingangsprüfung · Inbox · ZIP</text>
       <text x="32" y="196" fill="var(--muted)" font-size="12">parallel über alle Lieferungen</text>
 
       <line x1="254" y1="166" x2="288" y2="166" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
@@ -699,7 +699,7 @@
 
       <rect x="4" y="258" width="246" height="52" rx="8"
             fill="var(--accent-wash)" stroke="var(--line-strong)"/>
-      <text x="20" y="281" fill="currentColor" font-size="15">Landezone</text>
+      <text x="20" y="281" fill="currentColor" font-size="15">Inbox</text>
       <text x="20" y="299" fill="var(--muted)" font-size="12">Zeilen pro Job · append-only</text>
 
       <rect x="280" y="258" width="246" height="52" rx="8"
@@ -716,7 +716,7 @@
       <line x1="96"  y1="338" x2="140" y2="314" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
       <line x1="304" y1="338" x2="182" y2="314" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
       <line x1="512" y1="338" x2="216" y2="314" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
-      <text x="450" y="328" text-anchor="middle" fill="var(--muted)" font-size="12">lesen die Landezone</text>
+      <text x="450" y="328" text-anchor="middle" fill="var(--muted)" font-size="12">lesen die Inbox</text>
       <line x1="720" y1="338" x2="720" y2="314" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
 
       <rect x="4" y="340" width="184" height="104" rx="8"
@@ -761,7 +761,7 @@
     </svg>
     <figcaption>Der Akzent markiert die Jobs; die Stufen im Container sind gefüllt, weil sie keine
       eigene Identität haben. Die drei Spalten stehen untereinander: jede Stufe schreibt genau die
-      Datenhaltung unter sich. Drei der vier terminierten Jobs lesen die Landezone, nur der Sweep
+      Datenhaltung unter sich. Drei der vier terminierten Jobs lesen die Inbox, nur der Sweep
       liest die Kennzahlen. Die gestrichelte Kante ist der einzige Rückgriff: Lauf 2 braucht das
       Protokoll von Lauf 1, um einen bereits berichteten Preis zurücknehmen zu können. Die Stufen
       tragen <strong>keine</strong> eigenen Statuswerte — der Job hat einen.</figcaption>
@@ -772,7 +772,7 @@
      einem Lauf — sie geht Minuten nach der Lieferung raus. Das ist die Trennung, die im Altsystem
      fehlt und die Markus mit „preisfiles sofort verarbeiten" meint.</p>
   <p>Zweitens sind <strong>Sync und Kennzahlen keine eigenen Jobs</strong>, sondern Stufen. Sie haben
-     dieselbe Arbeitseinheit wie der Ingest — eine Lieferdatei —, müssen innerhalb dieser Einheit in
+     dieselbe Arbeitseinheit wie der Eingang — eine Lieferdatei —, müssen innerhalb dieser Einheit in
      Reihenfolge laufen, und der Fortschritt ist genau das, was der Status ohnehin festhält. Eigene
      Jobs bräuchten je eigene Identität, eigenes Retry und eine Rückbindung an die Lieferung:
      Buchhaltung ohne Gewinn.</p>
@@ -783,13 +783,13 @@
   <p class="note"><strong>Alle drei Stufen laufen auf beiden Servern parallel.</strong> Auch die
      schreibende: dass zwei gleichzeitige Sync-Stufen auf denselben Preisschlüssel „letzte Lieferung
      gewinnt" nicht verletzen, erzwingt ein monotoner Guard statt einer Serialisierung — siehe
-     <em>Zwei Server, ein Pool</em>. Legacy serialisiert dafür den <em>ganzen</em> Ingest (PID-File,
+     <em>Zwei Server, ein Pool</em>. Legacy serialisiert dafür den <em>ganzen</em> Eingang (PID-File,
      alphabetisch je Lieferant).</p>
 </section>
 
 <section id="namen" data-nav="Namen im Code">
   <h2>Namen für die Implementierung</h2>
-  <p class="lede">Die Begriffe dieses Konzepts sind zum Teil Bilder — „Landezone" beschreibt einen
+  <p class="lede">Die Begriffe dieses Konzepts sind zum Teil Bilder — „Inbox" beschreibt einen
      Behälter, nicht eine Sache. Für den Code gilt: <strong>Metaphern bleiben in der Prosa,
      Identifier benennen Dinge.</strong></p>
   <h3>Konventionen, wie sie im Code tatsächlich gelten</h3>
@@ -828,7 +828,7 @@
      und Spalten, weder Alt- noch Neusystem-Sybase — und die Sybase wandert im Lauf von 2027 ohnehin
      nach Postgres. Daraus die Aufteilung (Runde 8): die <strong>vier Job-Tabellen</strong> sind
      Infrastruktur — <code>infra</code>, Paket <code>fondspreise</code> in
-     <code>ifas-persistence-infra</code>. Die <strong>vier Artefakte</strong> (Landezone,
+     <code>ifas-persistence-infra</code>. Die <strong>vier Artefakte</strong> (Inbox,
      Publikationsprotokoll, <code>preis_herkunft</code>, <code>letzte_preise</code>) sind
      <strong>Business-Tabellen</strong> und gehören <strong>nicht</strong> nach <code>infra</code>:
      Postgres, Katalog <code>kurs</code>, eigener Context-Key
@@ -846,7 +846,7 @@
       <tr><td>Preismeldungs-Job, pro Lieferdatei</td><td><code>PreismeldungJob</code></td>
           <td><code>infra.preismeldung_jobs</code></td></tr>
       <tr><td>dessen Status</td><td><code>PreismeldungJobStatus</code></td><td>—</td></tr>
-      <tr><td><strong>Landezone</strong> — eine gelieferte Zeile</td>
+      <tr><td><strong>Inbox</strong> — eine gelieferte Zeile</td>
           <td><code>PreismeldungZeile</code></td><td><code>kurs.preismeldung_zeilen</code> (Postgres)</td></tr>
       <tr><td>Preisschlüssel (ISIN, Preisdatum, Währung, Meldekategorie)</td>
           <td><code>Preisschluessel</code> (embeddable)</td><td>eingebettet</td></tr>
@@ -938,7 +938,7 @@ private OffsetDateTime rueckmeldungGesendetAt;  // Guard gegen doppelte Mails</c
       <tr><td>Kennzahlen-Sweep</td>
           <td>„Preise ohne Kennzahl" — <strong>aus den Daten</strong>, nicht aus dem Jobzustand</td>
           <td>nein</td></tr>
-      <tr><td>Fehlmeldungs-Job</td><td>die Landezone</td><td>nein</td></tr>
+      <tr><td>Fehlmeldungs-Job</td><td>die Inbox</td><td>nein</td></tr>
       <tr><td>Betrieb / UI</td><td>„durch oder nicht"</td><td>nur terminal + Fehler</td></tr>
     </tbody>
   </table>
@@ -968,7 +968,7 @@ am Job zusätzlich:        sammelreportJob        : FK → PreisSammelreportJob,
     <thead><tr><th>Stufe</th><th>Datenseite</th><th>Außenwirkung</th></tr></thead>
     <tbody>
       <tr><td>parsen, prüfen</td><td>rein, beliebig wiederholbar</td><td>—</td></tr>
-      <tr><td>Landezone schreiben</td>
+      <tr><td>Inbox schreiben</td>
           <td>idempotent <strong>nur wenn</strong> auf <code>job_id</code> gescoped — PK ist
               <code>(job_id, zeilen_nr)</code>, ein naives Re-Insert knallt</td><td>—</td></tr>
       <tr><td>Rückmeldung</td><td>—</td>
@@ -1219,7 +1219,7 @@ update preis_herkunft
           <td>KAG, Währung, Status, <code>fonds_beginn</code>/<code>-ende</code>,
               <code>veroeffentlichung</code>, <code>FONDS_ZGRU</code>, <code>preismeldung</code></td></tr>
       <tr><td>Konfiguration</td><td><code>kurs..tax_code</code></td>
-          <td><strong>jede</strong> Ingest-Prüfung hängt daran</td></tr>
+          <td><strong>jede</strong> Eingangsprüfung hängt daran</td></tr>
       <tr><td></td><td><code>HWA</code> / <code>waehrungen</code></td><td>Währungsprüfung</td></tr>
       <tr><td></td><td><code>lieferanten</code>, <code>KAG_lieferanten</code></td>
           <td>Rückmeldeadressen, Berechtigung (produktiv abgeschaltet)</td></tr>
@@ -1465,6 +1465,23 @@ flowchart TD
 
 <section id="delta" data-nav="Was sich geändert hat">
   <h2>Änderungsprotokoll</h2>
+  <h3>Runde 9 — 2026-09-02, Begriffe: Eingang und Inbox</h3>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Was</th><th>vorher</th><th>jetzt</th></tr></thead>
+    <tbody>
+      <tr><td>„Ingest"</td><td>Anglizismus für die erste Stufe</td>
+          <td><strong>Eingang</strong> — <code>PreismeldungEingang</code> /
+              <code>PreismeldungEingangService</code> / <code>PreismeldungEingangResult</code>,
+              Package <code>.eingang</code>; die Prüfung heißt durchgängig
+              <strong>Eingangsprüfung</strong></td></tr>
+      <tr><td>„Landezone"</td><td>Metapher für den Zeilen-Behälter</td>
+          <td><strong>(Preismeldung-)Inbox</strong> — nur in der Prosa; Entity
+              <code>PreismeldungZeile</code> und Tabelle <code>kurs.preismeldung_zeilen</code>
+              bleiben (eine Zeile der Inbox)</td></tr>
+    </tbody>
+  </table>
+  </div>
   <h3>Runde 8 — 2026-09-02, Business-Tabellen nicht nach <code>infra</code></h3>
   <div class="scrollx">
   <table>
@@ -1608,28 +1625,28 @@ flowchart TD
       <tr><td>Akkumulator, „letzte Lieferung gewinnt"</td>
           <td><code>WirksamePreismeldungen</code> im Sammelreport-Lauf; für <code>kurs</code>
               ergibt es sich aus der seriellen Anwendung von selbst</td></tr>
-      <tr><td>Datenquelle für Plausi, Files und Einspielung</td><td>Landezone</td></tr>
+      <tr><td>Datenquelle für Plausi, Files und Einspielung</td><td>Inbox</td></tr>
       <tr><td>Puffer für Spätlieferungen (<code>RemoveTmpKurse</code>, QMS 644)</td>
           <td><span class="tag">entfällt</span> eine spät eingelangte Lieferung bleibt auf
               <code>sammelreport_job_id IS NULL</code></td></tr>
-      <tr><td>Cross-File-Abgleich beim Ingest (<code>Check4DeleteInTmp</code>)</td>
+      <tr><td>Cross-File-Abgleich beim Eingang (<code>Check4DeleteInTmp</code>)</td>
           <td>verschoben in den Sammelreport-Lauf</td></tr>
     </tbody>
   </table>
   </div>
   <p>Der Nebeneffekt ist der eigentliche Gewinn: die erste Stufe läuft <strong>parallel über alle
-     Lieferungen</strong>. Legacy musste den ganzen Ingest serialisieren — PID-File, alphabetisch je
+     Lieferungen</strong>. Legacy musste den ganzen Eingang serialisieren — PID-File, alphabetisch je
      Lieferant. Bei uns läuft auch die schreibende Stufe parallel; die Reihenfolge je Preisschlüssel
      erzwingt der monotone Guard.</p>
 </section>
 
-<section id="landezone" data-nav="Die Landezone">
-  <h2>Die Landezone: gelieferte Zeilen pro Job</h2>
+<section id="landezone" data-nav="Die Inbox">
+  <h2>Die Inbox: gelieferte Zeilen pro Job</h2>
   <dl>
     <dt><code>job_id</code>, <code>zeilen_nr</code></dt>
     <dd>PK. <code>job_id</code> ersetzt <code>liefer_id</code> <em>und</em>
       <code>eintragezeit</code> — beides steht am Job; logische Referenz (UUID), kein DB-FK, weil
-      Job und Landezone in verschiedenen DB-Kontexten liegen (Runde 8). <code>zeilen_nr</code>
+      Job und Inbox in verschiedenen DB-Kontexten liegen (Runde 8). <code>zeilen_nr</code>
       bindet an <code>data.log</code>/<code>error.log</code> zurück und hält die Reihenfolge in der
       Datei.</dd>
     <dt><code>isin</code>, <code>preisdatum</code>, <code>waehrung</code>,
@@ -1766,7 +1783,7 @@ flowchart TD
      fällt der Invariant: offener Punkt N.</p>
   <p class="note warn"><strong>Kein Vollständigkeits-Trigger.</strong> Ein früherer Entwurf wollte
      Lauf 1 vorziehen, sobald alles Erwartete da ist. Verworfen: der Lauf darf in jedem Fall starten,
-     und die Soll-Menge gehört ausschließlich in den Fehlmeldungs-Job. Der Ingest kennt keine
+     und die Soll-Menge gehört ausschließlich in den Fehlmeldungs-Job. Der Eingang kennt keine
      Vollständigkeit.</p>
 </section>
 
@@ -1864,7 +1881,7 @@ flowchart TD
      fließt nichts zurück. <code>tmp_if_last</code> ist eine reine Funktion der Lieferungen — und
      <strong>nicht</strong> aus <code>kurs</code> ableitbar, weil es Werte trägt, die
      <code>kurs</code> nie sieht: unbekannte ISIN, Währungsabweichung.</p>
-  <h3>Warum es die Landezone nicht sein kann</h3>
+  <h3>Warum es die Inbox nicht sein kann</h3>
   <p>Der Delete-vor-Insert-Schlüssel enthält <strong>kein</strong> <code>preisdatum</code>. Es gibt
      genau einen Platz je (ISIN, Währung, Code); eine spätere Korrektur für ein <em>früheres</em>
      Datum verdrängt den jüngeren Preis, und kein Filter auf der Leseseite holt ihn zurück.
@@ -1952,7 +1969,7 @@ flowchart TD
   <p class="lede">Ein Tagesjob zu einem definierten Zeitpunkt. Alles, was bis dahin nicht geliefert
      wurde, gilt als fehlend.</p>
   <p><strong>Soll</strong> — die für den Stichtag erwarteten Lieferungen. <strong>Ist</strong> — die
-     Landezone. <strong>Ergebnis</strong> — die Differenz als Liste
+     Inbox. <strong>Ergebnis</strong> — die Differenz als Liste
      <code>(Lieferant, ISIN, Code)</code>, versendet als Mail je Lieferant („Preis für Isins XYZ
      fehlt") bzw. als Sammelmail an die Fachabteilung.</p>
   <h3>Die Datenbasis ist nicht <em>eine</em> Tabelle</h3>
@@ -2000,7 +2017,7 @@ flowchart TD
       <tr><td>Datenquelle</td>
           <td><code>kurs..kurs</code> mit <code>cod_fliesscode = 'R'</code> — erst <em>nach</em> der
               Einspielung</td>
-          <td><span class="tag accent">neu</span> die Landezone</td></tr>
+          <td><span class="tag accent">neu</span> die Inbox</td></tr>
       <tr><td>Zeitfenster</td>
           <td>letzter Preis ist 3 bis 11 Börsetage alt</td>
           <td><span class="tag accent">neu</span> „heute fehlt"</td></tr>
@@ -2017,7 +2034,7 @@ flowchart TD
     <div class="card accent">
       <h3>12 · Transparenz der Lieferkette</h3>
       <p>Der Report soll die <em>Folge</em> je Preisschlüssel zeigen („New, Delete, New..."), nicht
-         nur das aufgelöste Ergebnis. Die Landezone liefert das ohne Zusatzaufwand. Ein neuer
+         nur das aufgelöste Ergebnis. Die Inbox liefert das ohne Zusatzaufwand. Ein neuer
          Abschnitt listet je Schlüssel mit mehr als einer Lieferung die Kette in
          Ankunftsreihenfolge, mit Lieferant, Zeit und Aktion, und markiert, welche sich durchgesetzt hat.
          Nebeneffekt: die <code>INFO_DEL_*</code>-Meldungen werden hier wieder sichtbar.</p>
@@ -2044,7 +2061,7 @@ flowchart TD
       <h3>15 · Ausschüttung ohne vorhandenen Preis</h3>
       <p>Zwei Teile. Der Sammelreport-Teil existiert als Plausi-Abschnitte 18–20
          (<code>makeAusOhnePreis</code> und Geschwister) und wird portiert. Die Sofort-Meldung zur
-         <em>Ingest</em>-Zeit ist offener Punkt H — und der neue Jobschnitt macht sie leichter, weil
+         <em>Eingang</em>-Zeit ist offener Punkt H — und der neue Jobschnitt macht sie leichter, weil
          <code>kurs</code> nur noch Minuten nachhinkt statt einen Tag.</p>
     </div>
   </div>
@@ -2063,7 +2080,7 @@ flowchart TD
               muss die Stufe nicht — der monotone Guard erledigt es</td><td>—</td></tr>
       <tr><td><strong>B</strong></td><td><code>tmp_if_last</code>: Tabelle oder Abfrage?</td>
           <td><span class="tag ok">entschieden</span> <strong>B3</strong> — geführte Tabelle plus
-              Rebuild aus der Landezone. Ausschlaggebend: der <strong>Parallelbetrieb</strong>. Bei
+              Rebuild aus der Inbox. Ausschlaggebend: der <strong>Parallelbetrieb</strong>. Bei
               B2 gibt es nichts zu diffen, und die retroaktive Abfrage würde die Legacy-Tabelle
               systematisch verfehlen</td><td>—</td></tr>
       <tr><td><strong>C</strong></td><td>Kennzahlen: Invalidierung oder Auftragsübergabe?</td>
@@ -2083,11 +2100,11 @@ flowchart TD
           <td>Überschreiben gleicher Namen ist mit einem Delta nicht vereinbar → nummerierte Files,
               je ein Ready-File</td><td>Fachabteilung</td></tr>
       <tr><td><strong>G</strong></td><td>LMT persistieren und weitergeben?</td>
-          <td>offen. Mit der Landezone kostet die Persistenz zwei Spalten; die Frage ist: an wen, in
+          <td>offen. Mit der Inbox kostet die Persistenz zwei Spalten; die Frage ist: an wen, in
               welchem Format?</td><td>Fachabteilung</td></tr>
-      <tr><td><strong>H</strong></td><td>Ausschüttung ohne Preis auch zur Ingest-Zeit?</td>
+      <tr><td><strong>H</strong></td><td>Ausschüttung ohne Preis auch zur Eingangszeit?</td>
           <td>Wer bekommt die Meldung? Fehler oder Info? Gegen <code>kurs</code> (jetzt attraktiv)
-              oder gegen die Landezone (neue Domänen-Abhängigkeit)?</td>
+              oder gegen die Inbox (neue Domänen-Abhängigkeit)?</td>
           <td>Markus / Fachabteilung</td></tr>
       <tr><td><strong>I</strong></td><td>Sweep bei fehlendem Referenzkurs</td>
           <td>Empfehlung <strong>I1</strong> (rechnen, was rechenbar ist) als Voreinstellung, I2
@@ -2126,7 +2143,7 @@ flowchart TD
 <section id="daten" data-nav="Datenbeschaffung">
   <h2>Datenbeschaffung</h2>
   <p>Die produktiven Werte definieren das Prüfverhalten und liegen nur in der Produktionsdatenbank.
-     Ohne die <code>tax_code</code>-Zeilen gibt es keine Ingest-Implementierung, ohne die
+     Ohne die <code>tax_code</code>-Zeilen gibt es keine Eingangs-Implementierung, ohne die
      <code>preismeldung</code>-Werte keine Soll-Menge.</p>
   <ul class="todo">
     <li>Produktive <code>tax_code</code>-Zeilen. <code>L1</code>/<code>L2</code>/<code>L3</code>
@@ -2241,6 +2258,134 @@ flowchart TD
      den DB-Stand und die Projektion, nach den Schnitten 4/5 die Ausgabefiles.</p>
 </section>
 
+<section id="schnitt1-architektur" data-nav="Schnitt-1-Architektur">
+  <h2>Schnitt 1: die implementierte Architektur</h2>
+  <p class="lede">Stufe 1 ist umgesetzt: ein <code>PreisMeldungDiffJob</code> pro Lieferung führt
+     Eingangsprüfung, Inbox und Rückmeldung aus und difft gegen die Altsystem-Antwort — ohne jede
+     Außenwirkung.</p>
+  <figure>
+    <svg viewBox="0 0 816 690" role="img" xmlns="http://www.w3.org/2000/svg">
+      <title>Schnitt-1-Architektur: vom Upload-Dispatch über den Diff-Job in die drei Datenbank-Kontexte</title>
+
+      <!-- ===== Einstieg und Job-Kette ===== -->
+      <rect x="108" y="6" width="600" height="52" rx="8" fill="var(--tint)" stroke="var(--line-strong)"/>
+      <text x="124" y="27" fill="currentColor" font-size="15">ParallelbetriebJobSubmissionService</text>
+      <text x="124" y="46" fill="var(--muted)" font-size="12">Upload-Dispatch — hasOnlyPreisMeldungFiles() erkennt das Preismeldungs-Bundle</text>
+
+      <line x1="408" y1="58" x2="408" y2="84" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
+      <text x="420" y="76" fill="var(--muted)" font-size="12">submit(lieferant, filename, zip, stichtag)</text>
+
+      <rect x="108" y="84" width="600" height="52" rx="8" fill="var(--tint)" stroke="var(--line-strong)"/>
+      <text x="124" y="105" fill="currentColor" font-size="15">PreisMeldungDiffJobSubmissionService</text>
+      <text x="124" y="124" fill="var(--muted)" font-size="12">Input → Filestore · Setting-JSON (databaseContext, ignoreInfoDel) · Job PENDING</text>
+
+      <line x1="408" y1="136" x2="408" y2="162" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
+      <text x="420" y="154" fill="var(--muted)" font-size="12">submitToWorkQueue(PREIS_MELDUNG_DIFF)</text>
+
+      <rect x="108" y="162" width="600" height="46" rx="8" fill="var(--tint)" stroke="var(--line-strong)"/>
+      <text x="124" y="181" fill="currentColor" font-size="15">Work Queue</text>
+      <text x="124" y="199" fill="var(--muted)" font-size="12">Executor zieht PENDING-Items · Handler-Registrierung per Spring-Discovery</text>
+
+      <line x1="408" y1="208" x2="408" y2="234" stroke="var(--accent)" stroke-width="2" marker-end="url(#ma)"/>
+
+      <!-- ===== Der Handler ===== -->
+      <rect x="8" y="234" width="776" height="78" rx="8" fill="var(--tint)" stroke="var(--accent)" stroke-width="1.5"/>
+      <text x="24" y="256" fill="currentColor" font-size="15">PreisMeldungDiffJobExecutionService</text>
+      <text x="24" y="274" fill="var(--muted)" font-size="12">AbstractJobWorkQueueHandler — lädt im Job-System-Kontext, rechnet im Business-Kontext des Submits</text>
+      <text x="24" y="297" fill="var(--accent-ink)" font-size="12">① Bundle lesen&#160;&#160;&#160;② Eingangsprüfung&#160;&#160;&#160;③ Inbox schreiben&#160;&#160;&#160;④ Rückmeldung diffen&#160;&#160;&#160;⑤ Ergebnis an den Job</text>
+
+      <line x1="208" y1="312" x2="208" y2="356" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
+      <text x="120" y="340" fill="var(--muted)" font-size="12">② process()</text>
+      <line x1="608" y1="312" x2="608" y2="356" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
+      <text x="620" y="340" fill="var(--muted)" font-size="12">④ compare()</text>
+      <line x1="408" y1="312" x2="408" y2="556" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
+      <text x="414" y="345" fill="var(--muted)" font-size="12">③ Inbox</text>
+      <polyline points="784,273 800,273 800,552" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
+      <text x="702" y="340" fill="var(--muted)" font-size="12">⑤ Result</text>
+
+      <!-- ===== Service-Schicht und Domain ===== -->
+      <rect x="8" y="356" width="380" height="150" rx="8" fill="var(--tint)" stroke="var(--line-strong)"/>
+      <text x="24" y="378" fill="currentColor" font-size="14">Service-Schicht — service.preismeldung</text>
+      <text x="24" y="400" fill="var(--muted)" font-size="12">PreismeldungEingangService — orchestriert Stufe 1</text>
+      <text x="24" y="418" fill="var(--muted)" font-size="12">PreismeldungStammdatenService — Provider-Snapshot</text>
+      <text x="24" y="436" fill="var(--muted)" font-size="12">&#160;&#160;&#160;(tax_code + Aliasse · HWA · waehrungen · Fonds-Cache)</text>
+      <text x="24" y="454" fill="var(--muted)" font-size="12">PreisMeldungDiffJobQueryService — Jobs + Inbox lesen</text>
+      <text x="24" y="472" fill="var(--muted)" font-size="12">PreisMeldungDiffSetting — JSON am Job</text>
+
+      <line x1="388" y1="430" x2="428" y2="430" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
+
+      <rect x="428" y="356" width="356" height="150" rx="8" fill="var(--tint)" stroke="var(--line-strong)"/>
+      <text x="444" y="378" fill="currentColor" font-size="14">Domain — ifas-domain-fondspreise</text>
+      <text x="444" y="400" fill="var(--muted)" font-size="12">PreismeldungEingang — Prüfkette B0–B20</text>
+      <text x="444" y="418" fill="var(--muted)" font-size="12">PreismeldungRueckmeldungWriter — Legacy-ZIP</text>
+      <text x="444" y="436" fill="var(--muted)" font-size="12">PreismeldungRueckmeldungDiff — Log-Vergleich</text>
+      <text x="444" y="454" fill="var(--muted)" font-size="12">PreismeldungMsgCode · DataLogStatus — Legacy-Texte</text>
+      <text x="444" y="472" fill="var(--muted)" font-size="12">StammdatenProvider — Interface, ofStatic für Tests</text>
+
+      <line x1="140" y1="506" x2="140" y2="556" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
+      <text x="150" y="540" fill="var(--muted)" font-size="12">liest</text>
+
+      <!-- ===== Die drei DB-Kontexte ===== -->
+      <rect x="8" y="556" width="256" height="118" rx="8" fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="24" y="578" fill="currentColor" font-size="14">business (Sybase)</text>
+      <text x="24" y="600" fill="var(--muted)" font-size="12">kurs..tax_code · HWA</text>
+      <text x="24" y="618" fill="var(--muted)" font-size="12">waehrungen · INV · wkn_hist</text>
+      <text x="24" y="636" fill="var(--muted)" font-size="12">read-only — Schema gesperrt</text>
+
+      <rect x="280" y="556" width="256" height="118" rx="8" fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="296" y="578" fill="currentColor" font-size="14">fondspreise (Postgres)</text>
+      <text x="296" y="600" fill="var(--muted)" font-size="12">kurs.preismeldung_zeilen — Inbox</text>
+      <text x="296" y="618" fill="var(--muted)" font-size="12">deleteByJobId + saveAll</text>
+      <text x="296" y="636" fill="var(--muted)" font-size="12">isolierte Transaktion</text>
+
+      <rect x="552" y="556" width="256" height="118" rx="8" fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="568" y="578" fill="currentColor" font-size="14">job-system (Postgres)</text>
+      <text x="568" y="600" fill="var(--muted)" font-size="12">infra.preis_meldung_diff_jobs</text>
+      <text x="568" y="618" fill="var(--muted)" font-size="12">Filestore: Input- + Result-ZIP</text>
+      <text x="568" y="636" fill="var(--muted)" font-size="12">Zähler · Urteil · Result-URI</text>
+    </svg>
+    <figcaption>Ein Job pro Lieferung: der Handler delegiert an Service-Schicht und Domain und
+      berührt alle drei Datenbank-Kontexte — die Rückmeldung wird erzeugt und gedifft, nie
+      versendet.</figcaption>
+  </figure>
+
+  <h3>Die neuen Bausteine je Modul</h3>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Modul</th><th>Bausteine</th><th>Zweck</th></tr></thead>
+    <tbody>
+      <tr><td><code>ifas-persistence-fondspreise</code> <span class="tag accent">neu</span></td>
+          <td><code>PreismeldungZeile</code>(+Id), <code>TaxCode</code> + Repositories</td>
+          <td>Inbox (<code>kurs.preismeldung_zeilen</code>, Flyway V061) und read-only
+              <code>tax_code</code> (V062, beide Bäume)</td></tr>
+      <tr><td><code>ifas-persistence-infra</code></td>
+          <td><code>PreisMeldungDiffJob</code> + Status + Repository</td>
+          <td>Parallelbetrieb-Job (<code>infra.preis_meldung_diff_jobs</code>, V063), JOINED von
+              <code>Job</code></td></tr>
+      <tr><td><code>ifas-domain-fondspreise</code></td>
+          <td>Pakete <code>eingang</code> / <code>meldung</code> / <code>rueckmeldung</code> /
+              <code>diff</code> / <code>stammdaten</code></td>
+          <td>Prüfkette B0–B20, Legacy-Meldungsmodell (31 Codes, Texte de/en), Rückmelde-Writer
+              (ISO-8859-1 + CRLF), normalisierter Diff, Provider-Interface</td></tr>
+      <tr><td><code>service.preismeldung</code></td>
+          <td>Submission / Execution / Query / <code>PreismeldungEingangService</code> /
+              <code>PreismeldungStammdatenService</code> / Setting</td>
+          <td>Orchestrierung, Kontextwechsel, Filestore; der Eingang ist für den späteren Live-Job
+              wiederverwendbar</td></tr>
+      <tr><td>Verdrahtung</td>
+          <td><code>database-context.fondspreise.db-key</code>,
+              <code>BundleFileType.DATA_LOG_FILE</code>, <code>job.priority.preis-meldung-diff</code></td>
+          <td>neuer DB-Kontext in Properties/Helper; das Altsystem-Antwort-ZIP ist unverändert als
+              Job-Input verwendbar</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note ok">Verifiziert: 95 Domain-Unit-Tests (Prüfkette, Writer, Diff) und zwei
+     End-zu-End-Integrationstests durch die echte Work Queue — inklusive Selbstvergleich (erzeugte
+     Rückmeldung als „Altsystem-Antwort" → 0 Abweichungen). Offen: Byte-Verifikation gegen echte
+     Preis-Antwort-ZIPs.</p>
+</section>
+
 <section id="vorgehen" data-nav="Vorgehen">
   <h2>Vorgehen</h2>
   <p class="note">Der lebende Stand dieser Schritte wird im <code>tracker.md</code> neben dem
@@ -2261,7 +2406,7 @@ flowchart TD
   <h3>Implementierung in Schnitten</h3>
   <p>Der Zuschnitt folgt jetzt den Jobs, nicht den Legacy-Stufen.</p>
   <div class="boxflow">
-    <div class="bx accent">Stufe 1<small>Ingest, Landezone, Rückmeldung</small></div>
+    <div class="bx accent">Stufe 1<small>Eingang, Inbox, Rückmeldung</small></div>
     <div class="arrow accent">&rarr;</div>
     <div class="bx accent">Stufe 2<small>Sync + Guard + letzte_preise + Seed</small></div>
     <div class="arrow">&rarr;</div>
@@ -2289,7 +2434,7 @@ flowchart TD
   <ul>
     <li>Jede Aussage über das Altsystem gegen die Ist-Analyse und, wo dort nicht belegt, gegen
       <code>file:line</code> im Legacy-Repo (ISO-8859-1 → <code>grep -a</code>).</li>
-    <li>Die Landezone gegen ihre Verbraucher durchspielen: <code>WirksamePreismeldungen</code>, Plausi,
+    <li>Die Inbox gegen ihre Verbraucher durchspielen: <code>WirksamePreismeldungen</code>, Plausi,
       Transparenz-Abschnitt, <code>tmp_if_last</code>, Fehlmeldung.</li>
     <li><strong>Das zweiachsige Statusmodell gegen die Fehlerfälle:</strong> Sync-Stufe hängt,
       während Lauf 1 die Lieferung schon berichtet hat; Kennzahlen-Stufe scheitert am fehlenden
