@@ -11,6 +11,7 @@
 - [Read personal rules before committing](feedback_read-personal-rules-before-committing.md) — `mathias/rules/commit-messages.md` wins over CLAUDE.md and the harness: commit onto master, no Claude trailers, no fixture specifics.
 
 ## Project
+- [Sybase schema freeze](project_sybase-schema-freeze.md) — Keine neuen Tabellen/Spalten in Sybase (Alt wie Neu); Neues nach Postgres, Business-Tabellen NICHT nach infra (Muster ausschuettung_tmp); Sybase-Migration 2027. Parallelbetrieb = eigene Neusystem-Sybase + Diff-Job-Muster.
 - [Recalc historical fidelity](project_recalc-historical-fidelity.md) — Recalc of old SteuerMeldung versions must match legacy's behavior at that time, not current legacy; don't "clean up" version gates that mirror dated OeKBSD changes.
 - [Recalc fixture data recovery](project_recalc-fixture-data-recovery.md) — Missing meldung/ISIN in a grossfile fixture? Recover from a LATER grossfile's export-AFTER snapshot, undoing that grossfile's mutations (exclude what it created; re-source pre-T any OPE predecessor it ended — FIN ones stay null).
 - [gueltBis = active-meldung discriminator](project_gueltbis-active-meldung-discriminator.md) — Legacy keys "active" off `guelt_bis is null`, not status; check gueltBis before treating an ERR_MELDID_FEHLT deviation as missing data — present-but-ended = validation bug, not a data problem.
