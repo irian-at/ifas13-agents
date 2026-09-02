@@ -82,7 +82,7 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
 
 | # | Schnitt | blockiert durch | Detail-Plan | Status |
 |---|---|---|---|---|
-| 1 | Lieferkette Stufe 1 — Eingang, Inbox, Rückmeldung | ~~`tax_code`~~ (erhoben, V1) | [2026-09-02-fondspreise-schnitt1-eingang-inbox-rueckmeldung.md](2026-09-02-fondspreise-schnitt1-eingang-inbox-rueckmeldung.md) | **umgesetzt** (Commit ausstehend; Byte-Verifikation des Rückmelde-Formats wartet auf echte Antwort-ZIPs) |
+| 1 | Lieferkette Stufe 1 — Eingang, Inbox, Rückmeldung | ~~`tax_code`~~ (erhoben, V1) | [2026-09-02-fondspreise-schnitt1-eingang-inbox-rueckmeldung.md](2026-09-02-fondspreise-schnitt1-eingang-inbox-rueckmeldung.md) | **umgesetzt + gepusht** (ifas13 `1f3d9f393`/`0dbd47271`; Byte-Verifikation des Rückmelde-Formats wartet auf echte Antwort-ZIPs) |
 | 2 | Stufe 2 — Sync, Guard (Klammer-Transaktion), `letzte_preise` inkl. Seed + Rebuild | — | — | offen |
 | 3 | `WirksamePreismeldungen` als Komponente, isoliert getestet | — | — | offen |
 | 4 | Sammelreport Lauf 1 — Plausi, Files, Publikationsprotokoll, Verteilung | — | — | offen |
@@ -98,9 +98,6 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
       Altsystem-Antworten zu den 4 Beispielfiles vom 12.05.2026 (`docs/Fondspreise/beispiele/`,
       passend zu `fplausib.txt`) — nötig für die Byte-Verifikation des Rückmeldungs-Diffs
       (Schnitt 1, blockiert nicht die Implementierung)
-- [ ] Property-Name im Konzept nachziehen: effektiv `database-context.fondspreise.db-key`
-      (Punkt statt Bindestrich, folgt aus dem `ContextConfig`-Binding) — bei der nächsten
-      Konzept-Runde
 
 - [ ] Kennzahlen-Ist-Analyse erstellen (`preisekennzahl.cpp`, `fondskennzahl.cpp`, `c_calc.cpp`) —
       fehlt laut Abgrenzung, Voraussetzung für Schnitt 6

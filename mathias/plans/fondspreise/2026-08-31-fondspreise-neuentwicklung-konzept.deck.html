@@ -832,7 +832,7 @@
      Publikationsprotokoll, <code>preis_herkunft</code>, <code>letzte_preise</code>) sind
      <strong>Business-Tabellen</strong> und gehören <strong>nicht</strong> nach <code>infra</code>:
      Postgres, Katalog <code>kurs</code>, eigener Context-Key
-     (<code>database-context.fondspreise-db-key</code>), Modul
+     (<code>database-context.fondspreise.db-key</code>), Modul
      <code>ifas-persistence-fondspreise</code> — das Muster von <code>ifas.ausschuettung_tmp</code>.
      Business-Kontext auf Sybase gegen neue Tabellen auf Postgres heißt bis zur Migration: zwei DBMS,
      keine gemeinsame Transaktion; <code>job_id</code> an den Artefakten ist eine <strong>logische
@@ -2374,9 +2374,11 @@ flowchart TD
               wiederverwendbar</td></tr>
       <tr><td>Verdrahtung</td>
           <td><code>database-context.fondspreise.db-key</code>,
-              <code>BundleFileType.DATA_LOG_FILE</code>, <code>job.priority.preis-meldung-diff</code></td>
+              <code>BundleFileType.DATA_LOG_FILE</code>, <code>job.priority.preis-meldung-diff</code>,
+              <code>TaxCodeDto</code> (<code>TAX_CODE</code>)</td>
           <td>neuer DB-Kontext in Properties/Helper; das Altsystem-Antwort-ZIP ist unverändert als
-              Job-Input verwendbar</td></tr>
+              Job-Input verwendbar; tax_code ist im YAML-Datenexport der UI exportier- und
+              importierbar (volle 26 Spalten)</td></tr>
     </tbody>
   </table>
   </div>

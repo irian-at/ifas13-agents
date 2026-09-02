@@ -61,7 +61,7 @@ Korrektur der Runde-7-Zuordnung: nach Postgres ja, aber nicht alles nach `infra`
 
 | Was | vorher | jetzt |
 |---|---|---|
-| **Die vier Artefakte** (Inbox, Publikationsprotokoll, `preis_herkunft`, `letzte_preise`) | Katalog `infra`, `ifas-persistence-infra` | **Business-Tabellen**: Postgres, Katalog `kurs`, eigener Context-Key (`database-context.fondspreise-db-key`), Modul **`ifas-persistence-fondspreise`** — das Muster von `ifas.ausschuettung_tmp` (`ifas-persistence-stm`, `ausschuettung-tmp-db-key` → Postgres) |
+| **Die vier Artefakte** (Inbox, Publikationsprotokoll, `preis_herkunft`, `letzte_preise`) | Katalog `infra`, `ifas-persistence-infra` | **Business-Tabellen**: Postgres, Katalog `kurs`, eigener Context-Key (`database-context.fondspreise.db-key`), Modul **`ifas-persistence-fondspreise`** — das Muster von `ifas.ausschuettung_tmp` (`ifas-persistence-stm`, `ausschuettung-tmp-db-key` → Postgres) |
 | Die vier Job-Tabellen | — | bleiben `infra` / `ifas-persistence-infra` (JOINED-Vererbung von `infra.jobs`) |
 | `job_id` an den Artefakten | FK auf den Job | **logische Referenz** (UUID) — Job-System und Business-Tabellen sind verschiedene DB-Kontexte |
 | Ausblick | — | die Sybase wird im Lauf von 2027 nach Postgres migriert; Guard und `kurs` landen dann im selben DBMS, und die Klammer-Transaktion kollabiert zu einer gewöhnlichen |
@@ -226,7 +226,7 @@ von 2027 ohnehin nach Postgres. Daraus die Aufteilung (präzisiert in Runde 8):
 - **Die vier Artefakte** (Inbox, Publikationsprotokoll, `preis_herkunft`, `letzte_preise`) sind
   **Business-Tabellen** und gehören **nicht** nach `infra`. Sie liegen auf Postgres im Katalog
   `kurs` (dem fachlichen Legacy-Schema — nach der Migration landen die Legacy-Tabellen im selben
-  Katalog), angebunden über einen eigenen Context-Key (`database-context.fondspreise-db-key`),
+  Katalog), angebunden über einen eigenen Context-Key (`database-context.fondspreise.db-key`),
   Modul **`ifas-persistence-fondspreise`**, das die Struktur von `ifas-domain-fondspreise`
   spiegelt. Das ist exakt das Muster von `ifas.ausschuettung_tmp`: neue Business-Tabelle im
   Legacy-Katalog, in `ifas-persistence-stm`, geroutet über `ausschuettung-tmp-db-key` → Postgres.
