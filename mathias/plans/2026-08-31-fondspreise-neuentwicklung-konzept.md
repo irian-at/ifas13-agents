@@ -7,12 +7,14 @@ Sie beschreibt vier Stufen — Sammlung (`preis_ins.e`) → Plausibilität (`pre
 Filegenerierung (`preis_dld.e -fPREISE`) → Einspielung (`preise.e -p0`) — mit der Sammeltabelle
 `kurs..tmp_if_kurs` als Nahtstelle.
 
-Dieses Dokument hält das **Zielkonzept** fest. Drei Quellen:
+Dieses Dokument hält das **Zielkonzept** fest. Vier Quellen:
 
 1. die Diskussion vom **2026-08-31** (Grundentscheidungen 1–10),
 2. der fachliche Input von **Markus vom 2026-09-01** (9 Punkte, Entscheidungen 11–15),
 3. die Nachfragen vom **2026-09-01** zum Jobschnitt, die den Zuschnitt der Jobs und das
-   Statusmodell noch einmal geändert haben.
+   Statusmodell noch einmal geändert haben,
+4. das Review gegen die Codebase vom **2026-09-02** (Runde 7): DB-Topologie, Vorgaben zum
+   Parallelbetrieb, zwei technische Korrekturen am Guard.
 
 Zwei Leitgedanken:
 
@@ -32,10 +34,12 @@ Passend vorgefunden und wiederverwendbar:
 | Baustein | Ort | Nutzen |
 |---|---|---|
 | `AbstractJobWorkQueueHandler` mit konfigurierbarem `completedStatus` | `service/job/` | Stufenweise Statusübergänge, ohne den Basis-Handler zu umgehen |
-| `(keyDate, laufnummer)` als Job-UK | `EstbDailyReportJob`, `FristenpruefungJob`, `MeldefondsListenJob` | Muster für mehrere Läufe pro Tag (STM fährt schon 3) |
+| `Job.keyDate` + `Job.dailyRunNumber` mit Unique-Index `ux_jobs_type_key_date_daily_run_number` | `persistence/infra/job/Job.java` | mehrere Läufe pro Tag sind **geerbt**, nicht nachzubauen (STM fährt schon 3) |
 | `ScheduledTask` + `triggerIfEnabledAndStichtagIsWorkday` + manueller Trigger | `IsinAnforderungslistenBatchJobScheduleService` | Cron, Werktagsprüfung, „Geplante Aufgaben"-Seite |
 | `OrchestrationJobHelper` | `service/job/` | Verkettung, wo sie noch gebraucht wird |
 | Ergebnisfiles am Job als Filestore-URI | `StmCalcJob.resultBundleFile` | Return-ZIP am Job |
+| Diff-Job-Muster für den Parallelbetrieb | `IsinAnforderungslisteDiffJob`, `AusschuettungsMeldungDiffJobSubmissionService` | Altsystem-Results einspielen, Neusystem rechnet nach, Diff — siehe **Parallelbetrieb** |
+| `DatabaseCompareService` | `service/dbcompare/` | DB-Stand Neusystem-Sybase gegen Altsystem-Sybase |
 
 `liefer_bugs` und `liefer_zeit` existieren in IFAS13 nirgends (kein Java, kein Flyway). Das
 Lieferprotokoll lebt für STM bereits im Job. Das Konzept setzt das fort.
@@ -43,6 +47,44 @@ Lieferprotokoll lebt für STM bereits im Job. Das Konzept setzt das fort.
 ---
 
 ## Änderungsprotokoll
+
+### Runde 8 — 2026-09-02, Business-Tabellen nicht nach `infra`
+
+Korrektur der Runde-7-Zuordnung: nach Postgres ja, aber nicht alles nach `infra`.
+
+| Was | vorher | jetzt |
+|---|---|---|
+| **Die vier Artefakte** (Landezone, Publikationsprotokoll, `preis_herkunft`, `letzte_preise`) | Katalog `infra`, `ifas-persistence-infra` | **Business-Tabellen**: Postgres, Katalog `kurs`, eigener Context-Key (`database-context.fondspreise-db-key`), Modul **`ifas-persistence-fondspreise`** — das Muster von `ifas.ausschuettung_tmp` (`ifas-persistence-stm`, `ausschuettung-tmp-db-key` → Postgres) |
+| Die vier Job-Tabellen | — | bleiben `infra` / `ifas-persistence-infra` (JOINED-Vererbung von `infra.jobs`) |
+| `job_id` an den Artefakten | FK auf den Job | **logische Referenz** (UUID) — Job-System und Business-Tabellen sind verschiedene DB-Kontexte |
+| Ausblick | — | die Sybase wird im Lauf von 2027 nach Postgres migriert; Guard und `kurs` landen dann im selben DBMS, und die Klammer-Transaktion kollabiert zu einer gewöhnlichen |
+
+### Runde 7 — 2026-09-02, Review gegen die Codebase
+
+Zwei technische Kernannahmen hielten dem Code nicht stand; dazu die Vorgaben zum Parallelbetrieb.
+
+| Was | vorher | jetzt |
+|---|---|---|
+| **Guard-Transaktion** | Guard-Update und `kurs`-Write „in einer Transaktion" | geht nicht: `infra` (Postgres, Job-System-DB) und `kurs` (Sybase, Business-Kontext) sind **zwei DBMS**, kein XA. Neu: **Klammer-Transaktion** — die Postgres-TX hält die Guard-Rowlock über den Sybase-Commit; Fehlerfenster analysiert, konvergiert über den Retry |
+| **`angekommen_am`** | aus `work_queue_items.created_at`, „wird in der DB erzeugt" | falsch — `created_at` setzt die Applikation (`OffsetDateTimes.now()` in `WorkQueueService`), also Serverzeit. Neu: eigenes Feld am `PreismeldungJob`, **DB-seitig** befüllt; Wiederholungen **erben** es |
+| **Offener Punkt M** | offen, Vorauswahl M1 | **entschieden: Sybase ist schema-gesperrt** — keine neuen Tabellen/Spalten, weder Alt- noch Neusystem-Sybase; alles Neue nach Postgres. M2 dauerhaft vom Tisch |
+| **Parallelbetrieb** | nur als Argument referenziert (B3, D, M1) | eigener Abschnitt: eigene Neusystem-Sybase, Altsystem-Results rein, Neusystem rechnet nach inkl. Persistenz, vier Diff-Ebenen; Träger `PreisMeldungDiffJob` (der Stub existiert) |
+| **Claims eines gescheiterten Laufs** | Fehlerfall fehlte | der Folgelauf (`repeatedFromJob`) übernimmt die geclaimten Lieferungen — sonst blieben sie unsichtbar |
+| **Initialbefüllung `letzte_preise`** | fehlte | Seed aus `kurs..tmp_if_last`, sonst 65 Tage blinder Fallback und roter B3-Diff |
+| **Schnitt-Blocker** | „nur K blockiert einen Schnitt" | `tax_code` → Schnitt 1; **N** und **F** → Schnitt 5; **K** + fehlende Kennzahlen-Ist-Analyse → Schnitt 6; **J** → Schnitt 7 |
+| Kleineres | — | `PreismeldungJobStatus` (Binde-s-Tippfehler); O3 = Plausi 18–20 im Sammelreport plus Fehlmeldungs-Mail; Rückmeldungs-Guard als bedingtes Update (at-most-once); Landezone-Retention ≥ 65-Tage-Fenster; Solva-Sätze durch dieselbe Pipeline; C1b eingearbeitet (kollidiert mit der Schemasperre); `pool_if_kurs`-Semantik in die Datenbeschaffung |
+
+### Runde 6 — 2026-09-01, Namen für die Implementierung
+
+| Was | vorher | jetzt |
+|---|---|---|
+| **Begriffe** | Metaphern („Landezone") ohne Code-Entsprechung | **Glossar** unter *Begriffe*: je Begriff ein Typ- und ein Tabellenname, abgeleitet aus den im Code belegten Konventionen |
+| „Laufnummer" | als Muster beschrieben, das nachzubauen wäre | `Job.dailyRunNumber` **existiert**, samt Unique-Index `ux_jobs_type_key_date_daily_run_number` — geerbt, nicht nachgebaut |
+| Lauf-Wiederholung | „braucht eine Regel" | `Job.repeatedFromJob` **existiert** — ein Lauf mit gesetztem FK *ist* Lauf 1b |
+| `sammelreport_lauf` | `int`, null \| 1 \| 2 | **FK** `sammelreport_job_id` → `PreisSammelreportJob`; `dailyRunNumber` daran ist die 1 oder 2 |
+| `rueckmeldung_gesendet` | ohne Suffix | `rueckmeldung_gesendet_at`, nach der Zeitstempel-Konvention |
+| **„Auflösung"** | Prosa-Begriff, dann als `Preisaufloesung` zum Klassennamen gemacht | **gestrichen.** Im Deutschen kollidiert „Auflösung" mit der Fondsauflösung; und der Vorgang braucht keinen eigenen Namen: `WirksamePreismeldungen` (Plural-Klasse mit statischen Fabriken, Muster `SteuerMeldungBundles`) liefert `WirksamePreismeldung`. In der Prosa heißt es *welche Lieferung sich durchsetzt* |
+| „Tagesmenge" | als Name des Laufergebnisses | seit Runde 4 ungenau — Lauf 2 ist ein Delta. Im Text als solches markiert; gemeint ist die Menge **eines Laufs** |
 
 ### Runde 5 — 2026-09-01, `tmp_if_last` im Detail
 
@@ -53,7 +95,7 @@ Lieferprotokoll lebt für STM bereits im Job. Das Konzept setzt das fort.
 | **65 / 35 Tage** | beide als Aufräumregeln beschrieben | **65 ist ein Lesefilter**, 35 die einzige altersbasierte Löschregel |
 | **Ausschlüsse** | „ohne die Ausschlüsse aus 8." | genau drei Fondsklassen, als `continue` im Aufrufer (`c_preise.cpp:113-132`); `WriteLastKurse` selbst hat keine |
 | **Entscheidung 6** | „kein Fallback in Lauf 2" behauptet | mit Fallanalyse und Invariant **begründet** |
-| **Entscheidung 8** | Protokoll implizit aus der Auflösung | **Auflage:** das Publikationsprotokoll wird vom File-Writer gefüttert, sonst fehlen die Fallback-Zeilen und der `I3`-Bezug greift für sie nicht |
+| **Entscheidung 8** | Protokoll implizit aus den wirksamen Preismeldungen | **Auflage:** das Publikationsprotokoll wird vom File-Writer gefüttert, sonst fehlen die Fallback-Zeilen und der `I3`-Bezug greift für sie nicht |
 | **Neu** | — | offener Punkt **N**: wozu dient der Fallback? N2 wäre die einzige Anforderung, die Entscheidung 6 wieder aufwerfen würde |
 
 ### Runde 4 — 2026-09-01, zwei Server und die Reihenfolge
@@ -83,7 +125,7 @@ Die einschneidendste Runde: der Jobschnitt selbst hat sich geändert.
 | Was | vorher | jetzt |
 |---|---|---|
 | **Jobschnitt** | sechs gleichrangige Jobs in einer Kette | **eine Lieferkette mit Stufen + vier terminierte Jobs** — Sync und Kennzahlen sind Stufen, keine eigenen Jobs |
-| **Statusmodell** | ein Enum, `READY_FOR_BATCH` → `PUBLISHED` → `SYNCED` | **zwei unabhängige Achsen**: `RECEIVED → VALIDATED → IN_KURS → CALCULATED` plus `sammelreport_lauf` |
+| **Statusmodell** | ein Enum, `READY_FOR_BATCH` → `PUBLISHED` → `SYNCED` | **zwei unabhängige Achsen**: `RECEIVED → VALIDATED → IN_KURS → CALCULATED` plus `sammelreport_job_id` |
 | **`PUBLISHED`** | ein Status | **gestrichen** — es gibt zwei Veröffentlichungen an zwei Adressaten, „published" sagt nicht welche |
 | **Entscheidung 8** | Sync liest die materialisierte Tagesmenge nach den Läufen | Sync ist eine **Stufe der Lieferkette**; übrig bleibt das **Publikationsprotokoll** je Schlüssel |
 | **Entscheidung 11** | Vollständigkeits-Trigger *und* Fehlmeldung | nur die **Fehlmeldung**, ein Tagesjob zu einem definierten Zeitpunkt. Kein Trigger, nichts gated die Läufe |
@@ -148,6 +190,104 @@ Die Aktion `I` (Inaktivierung) existiert **ausschließlich** für `L2` und kam e
 (`PreisAktion.java:10`). LMT steht branchenüblich für **Liquidity Management Tools**; aus unseren
 Quellen belegt ist das nicht — für ein Dokument nach außen bei der Fachabteilung bestätigen lassen.
 
+### Namen für die Implementierung
+
+Die Begriffe dieses Plans sind zum Teil Bilder — „Landezone" beschreibt einen Behälter, nicht eine
+Sache. Für den Code gilt: **Metaphern bleiben in der Prosa, Identifier benennen Dinge.**
+
+#### Konventionen, wie sie im Code tatsächlich gelten
+
+| Regel | Belege |
+|---|---|
+| Typen: deutsche Domänen-Substantive, **umlautfrei transliteriert** | `AusschuettungJob`, `FristenpruefungJob`, `GeschaeftsjahreCalcJob`, `Meldekategorie` |
+| Englisch für Technisches, Mischung erlaubt | `…Job`, `…Repository`, `Csv…`, `isQuoteOrGebuehr()` |
+| **Kein Binde-s vor `Job`** | `AusschuettungJob`, nicht `AusschuettungsJob` |
+| Tabellen: `catalog = "infra"` für neue Artefakte, snake_case **Plural** | `infra.stm_calc_jobs`, `infra.isin_anforderungsliste_diff_jobs` |
+| Spalten: snake_case, Englisch technisch / Deutsch fachlich, Zeitstempel `…_at` | `input_filename`, `error_count` vs. `liefer_id`; `started_at`, `next_retry_at` |
+| Status: `<Domain>JobStatus implements JobStatus`, die fünf Standardwerte | `StmCalcJobStatus`, `BadInputJobStatus` |
+| Indizes `ux_<tabelle>_<spalten>`, FK `fk_<tabelle>_<rolle>` | `ux_jobs_type_key_date_daily_run_number`, `fk_jobs_repeated_from` |
+| Javadoc: englische Prosa, deutsche Fachbegriffe **mit** Umlauten | `Meldekategorie` |
+
+Kataloge sind `kurs`, `ifas` und `vwkn` (Legacy-Schemata) sowie **`infra`** für die Job- und
+Work-Queue-Infrastruktur. **Sybase ist schema-gesperrt** (Vorgabe 2026-09-02, offener Punkt M):
+keine neuen Tabellen und keine neuen Spalten, weder in der Altsystem- noch in der Neusystem-Sybase —
+die Schemata müssen für den Parallelbetrieb-Diff identisch bleiben, und die Sybase wandert im Lauf
+von 2027 ohnehin nach Postgres. Daraus die Aufteilung (präzisiert in Runde 8):
+
+- **Die vier Job-Tabellen** sind Infrastruktur: Katalog `infra`, Paket `fondspreise` in
+  `ifas-persistence-infra` — dort liegen sämtliche Job-Entities (JOINED-Vererbung von `infra.jobs`).
+- **Die vier Artefakte** (Landezone, Publikationsprotokoll, `preis_herkunft`, `letzte_preise`) sind
+  **Business-Tabellen** und gehören **nicht** nach `infra`. Sie liegen auf Postgres im Katalog
+  `kurs` (dem fachlichen Legacy-Schema — nach der Migration landen die Legacy-Tabellen im selben
+  Katalog), angebunden über einen eigenen Context-Key (`database-context.fondspreise-db-key`),
+  Modul **`ifas-persistence-fondspreise`**, das die Struktur von `ifas-domain-fondspreise`
+  spiegelt. Das ist exakt das Muster von `ifas.ausschuettung_tmp`: neue Business-Tabelle im
+  Legacy-Katalog, in `ifas-persistence-stm`, geroutet über `ausschuettung-tmp-db-key` → Postgres.
+
+Business-Kontext auf Sybase gegen neue Tabellen auf Postgres heißt bis zur Migration: **zwei DBMS,
+keine gemeinsame Transaktion** (Folgen siehe *Zwei Server, ein Pool*). Und weil die Artefakte und
+die Jobs in verschiedenen DB-Kontexten liegen, ist `job_id` an den Artefakten eine **logische
+Referenz** (UUID), kein DB-FK.
+
+#### Die Namen
+
+| Begriff im Plan | Typ | Tabelle |
+|---|---|---|
+| Preismeldungs-Job, pro Lieferdatei | `PreismeldungJob` | `infra.preismeldung_jobs` |
+| dessen Status | `PreismeldungJobStatus` | — |
+| **Landezone** — eine gelieferte Zeile | `PreismeldungZeile` | `kurs.preismeldung_zeilen` (Postgres) |
+| Preisschlüssel (ISIN, Preisdatum, Währung, Meldekategorie) | `Preisschluessel` (embeddable) | eingebettet |
+| **Sammelreport**-Lauf | `PreisSammelreportJob` | `infra.preis_sammelreport_jobs` |
+| **Publikationsprotokoll** — ein publizierter Schlüssel je Lauf | `PreisPublikation` | `kurs.preis_publikationen` (Postgres) |
+| die Aktion `I2`/`I3` darin | `AusgabeAktion { UPSERT, DELETE }` | — |
+| monotoner Guard | `PreisHerkunft` | `kurs.preis_herkunft` (Postgres) |
+| `tmp_if_last`-Projektion | `LetzterPreis` | `kurs.letzte_preise` (Postgres) |
+| **welche Lieferung sich durchsetzt** — die Komponente | `WirksamePreismeldungen` (statische Fabriken, wie `SteuerMeldungBundles`) | — |
+| deren Ergebniszeile | `WirksamePreismeldung` | — |
+| Fehlmeldungs-Job | `FehlendePreismeldungenJob` | `infra.fehlende_preismeldungen_jobs` |
+| Kennzahlen-Sweep | `OffeneKennzahlenJob` | `infra.offene_kennzahlen_jobs` |
+| Zielgruppe des Ausgabestroms | `Zielgruppe { ALLE, VENDOR, PUBLIKUM }` | — |
+| erwartete Lieferung (Soll) | `ErwartetePreismeldung` | Abfrage, keine Tabelle |
+
+Felder am `PreismeldungJob` über das Geerbte hinaus:
+
+```java
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "sammelreport_job_id",
+            foreignKey = @ForeignKey(name = "fk_preismeldung_jobs_sammelreport"))
+private PreisSammelreportJob sammelreportJob;   // null = noch in keinem Lauf berichtet
+
+@Column(name = "rueckmeldung_gesendet_at")
+private OffsetDateTime rueckmeldungGesendetAt;  // Guard gegen doppelte Mails
+```
+
+#### Was die Basisklasse schon liefert — und der Plan erfunden hatte
+
+`Job` (Tabelle `infra.jobs`, JOINED-Vererbung, Diskriminator `job_type`) bringt mit:
+
+| geerbt | ersetzt im Plan |
+|---|---|
+| `keyDate` + **`dailyRunNumber`**, mit Unique-Index `ux_jobs_type_key_date_daily_run_number` | die erfundene „Laufnummer" und das angebliche „Muster" aus Entscheidung 5 — es ist ein geerbtes Feld, kein Nachbau |
+| **`repeatedFromJob`** (`repeated_from_job_id`, mit FK) | bedient direkt „neu laufen lassen" aus der Reproduzierbarkeit: ein Lauf mit gesetztem `repeatedFromJob` **ist** Lauf 1b |
+| `status`, `statusMessage`, `createdAt`, `startedAt`, `finishedAt`, `protocolFile`, `createdBy`, `archived` | — |
+
+Und eine Verbesserung, die aus den Konventionen folgt: `sammelreport_lauf` wird **kein `int`**,
+sondern ein FK auf den Lauf. Die Abfrage bleibt `sammelreport_job_id IS NULL`, aber man kommt vom
+Job an seinen Lauf — und `dailyRunNumber` daran ist die 1 oder 2.
+
+#### Zwei offene Namensfragen
+
+- **`PreisHerkunft` oder `KursHerkunft`?** Die Tabelle hält die Ankunftsmarke der Lieferung, die
+  eine `kurs`-Zeile zuletzt geschrieben hat. `PreisHerkunft` passt zu `PreisPublikation`,
+  `KursHerkunft` sagt genauer, wessen Herkunft protokolliert wird. Vorauswahl `PreisHerkunft`.
+- **`OffeneKennzahlenJob`** trägt kein Domänenpräfix. Ein `Preis`-Präfix wäre zu eng: Legacy trennt
+  `preisekennzahl.cpp` (je Preis) von `fondskennzahl.cpp` (je Fonds), und der Sweep deckt beides ab.
+
+> **„Fehlmeldung" darf kein Identifier werden.** Das Wort ist im Deutschen zweideutig — „Meldung
+> über etwas Fehlendes" *und* „irrtümliche Meldung". In der Prosa bleibt es, im Code heißt es
+> `FehlendePreismeldungenJob`. `PreismeldungMahnungJob` wäre die naheliegende Alternative, kollidiert
+> aber mit den Legacy-„Mahnungen" der ausländischen Fonds (`preis_dld.e -M/-L`).
+
 ---
 
 ## Die Jobs
@@ -162,12 +302,12 @@ Statuswerte** (siehe unten):
 | Stufe | tut | Nebenläufigkeit |
 |---|---|---|
 | parsen, prüfen, antworten | Eingangsprüfung (Entscheidung 2), Landezone-Zeilen schreiben, ZIP an den Lieferanten | **parallel** über alle Lieferungen |
-| nach `kurs` | Berechtigungsfilter, `kurs` / `pool_if_kurs`, Löschungen, `tmp_if_last` | **seriell** — siehe unten |
+| nach `kurs` | Berechtigungsfilter, `kurs` / `pool_if_kurs`, Löschungen, `tmp_if_last` | **parallel** — der Guard ordnet je Preisschlüssel (siehe *Zwei Server, ein Pool*) |
 | Kennzahlen | die betroffenen Kennzahlen des Fonds nachrechnen | Versuch; darf unvollständig bleiben |
 
 ### 2. + 3. Sammelreport Lauf 1 und Lauf 2 — Cron, zwei Cutoffs
 
-Lesen die Landezone-Zeilen der Lieferungen mit `sammelreport_lauf IS NULL`, lösen sie auf
+Lesen die Landezone-Zeilen der Lieferungen mit `sammelreport_job_id IS NULL`, lösen sie auf
 (Entscheidung 4), erzeugen Preisfile und Plausi-Report, verteilen, und schreiben das
 Publikationsprotokoll. Nichts gated sie: sie starten zu ihrer Zeit und verarbeiten, was da ist.
 
@@ -191,7 +331,7 @@ Status überhaupt ab?*
 
 | Wer | fragt | braucht einen Fortschritts-Status? |
 |---|---|---|
-| Sammelreport-Lauf | `sammelreport_lauf IS NULL` | nein |
+| Sammelreport-Lauf | `sammelreport_job_id IS NULL` | nein |
 | Kennzahlen-Sweep | „Preise ohne Kennzahl" — **aus den Daten**, nicht aus dem Jobzustand | nein |
 | Fehlmeldungs-Job | die Landezone | nein |
 | Betrieb / UI | „durch oder nicht" | nur terminal + Fehler |
@@ -206,21 +346,21 @@ dieselben fünf, und `StmCalcJobStatus` fügt genau **einen** hinzu —
 Fortschrittsmarker. Das ist das Kriterium.
 
 ```
-PreismeldungsJobStatus  =  PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED
-am Job zusätzlich:         sammelreport_lauf     : null | 1 | 2
-                           rueckmeldung_gesendet : timestamp   (Guard, siehe Reproduzierbarkeit)
+PreismeldungJobStatus   =  PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED
+am Job zusätzlich:         sammelreportJob       : FK → PreisSammelreportJob, nullable
+                           rueckmeldungGesendetAt: timestamp   (Guard, siehe Reproduzierbarkeit)
 ```
 
 **Und eine Revision:** die Orthogonalität war mit dem Fall „berichtet, aber noch nicht `IN_KURS`"
 begründet. Besser: **der Sammelreport nimmt nur `COMPLETED`-Jobs mit.** Damit verschwindet dieser
 Zustand ganz, `kurs` und das ausgehende File bleiben konsistent, und der Preis ist nur Latenz — eine
-im seriellen Sync steckende Lieferung verpasst den Cutoff und geht im nächsten Lauf mit. Das ist
+im Sync steckende Lieferung verpasst den Cutoff und geht im nächsten Lauf mit. Das ist
 genau das „Nachzügler wartet"-Verhalten, das wir ohnehin akzeptieren.
 
-Die zwei Achsen bleiben damit als **Vorrang** statt echter Orthogonalität. `sammelreport_lauf` bleibt,
+Die zwei Achsen bleiben damit als **Vorrang** statt echter Orthogonalität. `sammelreport_job_id` bleibt,
 weil es von einem *anderen* Job gesetzt wird als dem, der die Lieferung besitzt, und weil es der
 Abfrageschlüssel ist. `READY_FOR_BATCH` entfällt: der Lauf fragt
-`status = COMPLETED AND sammelreport_lauf IS NULL`.
+`status = COMPLETED AND sammelreport_job_id IS NULL`.
 
 **`PUBLISHED` ist gestrichen.** Es gibt zwei Veröffentlichungen an zwei Adressaten, und „published"
 sagt nicht, welche gemeint ist:
@@ -274,8 +414,9 @@ mehrere Items gleichzeitig.
 
 #### Gewählt: monotoner Guard (Last-Write-Wins nach Ankunft)
 
-Eine eigene kleine Tabelle als Serialisierungspunkt je Preisschlüssel. Nicht in `kurs`, weil dort
-keine Spalte dafür existiert und die Tabelle im Parallelbetrieb mit dem Altsystem geteilt wird:
+Eine eigene kleine Tabelle als Serialisierungspunkt je Preisschlüssel. Nicht in der Sybase, weil
+die schema-gesperrt ist (offener Punkt M, entschieden) — `preis_herkunft` liegt wie die übrigen
+Artefakte als Business-Tabelle auf Postgres (Runde 8):
 
 ```
 preis_herkunft   PK (num_wfs_ku, dat_kurs, cod_fliesscode, waehrung)
@@ -305,25 +446,47 @@ optimistisches Sperren löst ein Reihenfolgeproblem nicht; ein Vergleich auf ein
 wachsenden fachlichen Wert** löst es.
 
 `angekommen_am` muss aus **einer** Uhr kommen, bei zwei Servern also nicht aus der Serverzeit.
-`work_queue_items.created_at` wird beim Einstellen in der DB erzeugt, ist einuhrig und schon
-vorhanden. Gleichstand deterministisch über `job_id` brechen.
+`work_queue_items.created_at` taugt dafür **nicht**: es wird applikationsseitig gesetzt
+(`WorkQueueService` verwendet `OffsetDateTimes.now()`) — die frühere Behauptung „wird in der DB
+erzeugt" war falsch. Stattdessen: ein Feld `angekommen_am` am `PreismeldungJob`, **DB-seitig
+befüllt** beim Insert (Postgres `now()`) — beide Server stellen in dieselbe DB ein, das ist die
+eine Uhr. Ein wiederholter Job (`repeatedFromJob` gesetzt) **erbt** die Ankunftszeit seines
+Originals; nur so verliert er am Prädikat, statt als „Neuester" zu gewinnen. Gleichstand
+deterministisch über `job_id` brechen.
 
-#### Die eine Einschränkung
+#### Die eine Einschränkung: die Klammer-Transaktion
 
-Guard-Update und `kurs`-Schreiben müssen in **einer Transaktion** liegen, sonst kann A den Guard
-gewinnen und sein `kurs`-Write *nach* dem von B landen. Damit gibt es eine kurze Zeilensperre auf
-`preis_herkunft` — eine DB-Rowlock über Millisekunden, **kein** Applikations-Lock. Deadlockfrei
-bleibt es durch:
+**Korrigiert am 2026-09-02 (Runde 7).** Die frühere Auflage „Guard-Update und `kurs`-Schreiben in
+einer Transaktion" ist nicht umsetzbar: `preis_herkunft` liegt in Postgres, `kurs`
+auf Sybase — **zwei DBMS**, kein XA. Die Serialisierung leistet stattdessen eine
+**Klammer**: die Postgres-Transaktion mit dem Guard-Update bleibt offen, bis der Sybase-Write
+committet ist — erst dann committet sie selbst. Die Rowlock auf der Guard-Zeile hält damit über den
+`kurs`-Write hinweg; ein nebenläufiges B für denselben Schlüssel wartet auf dieser Zeile, bis As
+Write sichtbar ist. Dieselbe Garantie wie die Ein-DB-Transaktion, nur über zwei Verbindungen.
+Deadlockfrei bleibt es unverändert durch:
 
-- **eine Transaktion pro Preisschlüssel** statt pro Datei, und
-- die Schlüssel in **deterministischer Reihenfolge** (sortiert) abarbeiten.
+- **eine Klammer pro Preisschlüssel** statt pro Datei, und
+- die Schlüssel in **deterministischer Reihenfolge** (sortiert) abarbeiten — gesperrt wird nur in
+  Postgres, die Sybase-Writes sind kurze eigenständige Transaktionen.
 
 Bei ~4200 Preisen/Tag ist der Overhead irrelevant.
 
-Wäre eine zusätzliche Spalte in `kurs` erlaubt, fiele selbst das weg — dann *ist* das bedingte
-Update der `kurs`-Write: ein Statement, atomar, keine Transaktion, keine Sperre. Siehe offener
-Punkt M. `kurs.guelt` dafür umzudeuten ist keine Option, weil C3 `guelt` als Reparatursignal
-vorsieht.
+**Das neue Fehlerfenster:** stürzt der Prozess zwischen Sybase-Commit und Postgres-Commit ab, ist
+`kurs` geschrieben, aber der Guard unmarkiert. Das konvergiert: der automatische Retry gewinnt am
+unveränderten Guard erneut und wiederholt den idempotenten Upsert. Kommt dazwischen eine neuere
+Lieferung B, gewinnt B den Guard und schreibt; der Retry von A verliert dann am Prädikat und
+überspringt — Endzustand B, korrekt. Nur ein endgültig aufgegebener `FAILED`-Job kann einen
+veralteten `kurs`-Stand hinterlassen; dafür gibt es das Reparaturwerkzeug aus B3 (Neu-Herleitung in
+Ankunftsreihenfolge). Die Gegenrichtung ist ausgeschlossen: scheitert der Sybase-Write, rollt die
+Klammer den Guard mit zurück.
+
+Eine Spalte in `kurs`, die das alles erübrigt hätte, ist **entschieden ausgeschlossen** — die
+Sybase ist schema-gesperrt (offener Punkt M). `kurs.guelt` umzudeuten war ohnehin keine Option,
+weil C3 `guelt` als Reparatursignal vorsieht.
+
+Die Klammer ist ein **Übergangszustand**: mit der Sybase-Migration nach Postgres (im Lauf von 2027)
+liegen Guard und `kurs` im selben DBMS, und die Klammer kollabiert zu einer gewöhnlichen
+Transaktion — ohne dass sich am Prädikat oder an der Schlüssel-Sortierung etwas ändert.
 
 #### `tmp_if_last` braucht dieselbe Behandlung
 
@@ -353,13 +516,19 @@ Die Datenseite ja, die Außenwirkung nein.
 |---|---|---|
 | parsen, prüfen | rein, beliebig wiederholbar | — |
 | Landezone schreiben | idempotent **nur wenn** auf `job_id` gescoped. PK ist `(job_id, zeilen_nr)`, ein naives Re-Insert knallt → `delete by job_id` + insert, oder Upsert | — |
-| Rückmeldung | — | **nicht idempotent** — zweite Mail beim Lieferanten. Guard: `rueckmeldung_gesendet` |
+| Rückmeldung | — | **nicht idempotent** — zweite Mail beim Lieferanten. Guard: `rueckmeldung_gesendet_at` |
 | nach `kurs` | Upsert idempotent; `D` auf eine gelöschte Zeile ist No-op; `tmp_if_last` schreibt „nur wenn Preisdatum neuer" → No-op | `del_protokoll` bekommt einen zweiten Eintrag (`CONFIG.INI/Del_Protokoll` Default `0`) |
 | Kennzahlen | deterministisch, gleiche Eingaben → gleiche Werte | `ASF.r_faktor` identisch — **aber** `r_faktor_ges` muss vorwärts kaskadieren (`MakeNextReinvestFaktor`), sonst bleiben die Folge-Ausschüttungen stale |
 
 Daraus die allgemeine Regel: **idempotente Datenarbeit von nicht-idempotenter Außenwirkung trennen
 und festhalten, was hinausgegangen ist.** Das Publikationsprotokoll tut das für das Preisfile;
 dasselbe braucht die Rückmeldung und die Fehlmeldung — sonst mailt jeder Retry erneut.
+
+Der Rückmeldungs-Guard braucht dabei dieselbe Form wie der monotone: ein **bedingtes Update**
+(`… set rueckmeldung_gesendet_at = now() where … and rueckmeldung_gesendet_at is null`), gesendet
+wird nur bei `rowcount = 1` — sonst mailen zwei Server im Retry-Fall doppelt. Markieren-dann-Senden
+heißt at-most-once: stürzt der Prozess zwischen Markierung und Versand ab, fehlt die Mail. Das ist
+die richtige Seite des Zweifels, weil es mit „erneut senden" eine benannte manuelle Reparatur gibt.
 
 #### Die eine echte Gefahr ist nicht Wiederholung, sondern Reihenfolge
 
@@ -397,7 +566,7 @@ stand:
 | Operation | Bedeutung | idempotent? |
 |---|---|---|
 | **erneut senden** | das im Publikationsprotokoll aufgezeichnete Ergebnis noch einmal ausliefern | ja |
-| **neu laufen lassen** | neu selektieren. Ergibt ein *anderes* File, sobald zwischenzeitlich Lieferungen kamen | nein — das ist kein Wiederholen, sondern ein neuer Lauf und muss als solcher nummeriert werden (Lauf 1b) |
+| **neu laufen lassen** | neu selektieren. Ergibt ein *anderes* File, sobald zwischenzeitlich Lieferungen kamen | nein — kein Wiederholen, sondern ein neuer `PreisSammelreportJob` mit gesetztem `repeatedFromJob` und der nächsten `dailyRunNumber` |
 
 ---
 
@@ -495,9 +664,11 @@ Drei Wege, das auszudrücken:
 
 Empfehlung: **O1 plus O3**. O3 ist unabhängig von O1/O2 richtig, weil es die einzige Stelle ist, die
 den Fehler überhaupt sichtbar macht; heute schickt Legacy das File einfach ohne Ausschüttungsangaben.
-Und O3 hat einen natürlichen Platz: der Fehlmeldungs-Job (11.) prüft ohnehin Soll gegen Ist — „für
-diese ISIN ist heute eine Ausschüttung gebucht, aber kein Preis geliefert" ist dieselbe Art von
-Befund und deckt gleichzeitig Markus Punkt 8 ab.
+O3 lebt dabei an **zwei Stellen**: je Lauf leisten es die portierten Plausi-Abschnitte 18–20 im
+Sammelreport (15., Teil 1) — die Prüfung *zur Laufzeit*, im Report des Laufs, der das File erzeugt;
+am Tagesende ergänzt der Fehlmeldungs-Job (11.) die Mail-Sicht — „für diese ISIN ist heute eine
+Ausschüttung gebucht, aber kein Preis geliefert" ist dieselbe Art von Befund und deckt gleichzeitig
+Markus Punkt 8 ab.
 
 ### Neuer offener Punkt K: wem gehört `ASF.r_faktor`?
 
@@ -549,9 +720,9 @@ ein Legacy-Verhalten nachbauen oder einen Legacy-Bug.
 
 | Leistung von `tmp_if_kurs` | neu |
 |---|---|
-| Akkumulator, „letzte Lieferung gewinnt" | Auflösung im Sammelreport-Lauf (Entscheidung 4); für `kurs` ergibt sie sich aus der seriellen Anwendung von selbst (Entscheidung 8) |
+| Akkumulator, „letzte Lieferung gewinnt" | `WirksamePreismeldungen` im Sammelreport-Lauf (Entscheidung 4); für `kurs` ergibt es sich aus der seriellen Anwendung von selbst (Entscheidung 8) |
 | Datenquelle für Plausi / Files / Einspielung | Landezone |
-| Puffer für Spätlieferungen (`RemoveTmpKurse`, QMS 644) | entfällt — eine spät eingelangte Lieferung bleibt auf `sammelreport_lauf IS NULL` |
+| Puffer für Spätlieferungen (`RemoveTmpKurse`, QMS 644) | entfällt — eine spät eingelangte Lieferung bleibt auf `sammelreport_job_id IS NULL` |
 | Cross-File-Abgleich beim Ingest (`Check4DeleteInTmp`) | verschoben in den Sammelreport-Lauf, siehe 4. |
 
 ### 2. Das Ingest-Urteil gilt
@@ -576,7 +747,7 @@ Ausgabeseitige, stammdatenabhängige Entscheidungen trifft der Sammelreport dage
 
 | Spalte | Inhalt | Anmerkung |
 |---|---|---|
-| `job_id` | FK auf den Preismeldungs-Job | ersetzt `liefer_id` **und** `eintragezeit` — beides steht am Job |
+| `job_id` | logische Referenz (UUID) auf den Preismeldungs-Job | ersetzt `liefer_id` **und** `eintragezeit` — beides steht am Job. Kein DB-FK: der Job liegt im `infra`-Kontext, die Landezone im Business-Kontext (Runde 8) |
 | `zeilen_nr` | Zeile im Lieferfile | Rückbindung an `data.log`/`error.log`, Reihenfolge in der Datei |
 | `isin` | | |
 | `preisdatum` | Berechnungsdatum (Spalte 1 des Lieferformats) | |
@@ -587,11 +758,13 @@ Ausgabeseitige, stammdatenabhängige Entscheidungen trifft der Sammelreport dage
 | `fondsbezeichnung` | wie geliefert | Fallback, wenn `INV` keine hat |
 | `lmt_prozentkennzeichen`, `lmt_stichtag` | | siehe offener Punkt G |
 
-PK `(job_id, zeilen_nr)`. Drei Eigenschaften:
+PK `(job_id, zeilen_nr)`. Vier Eigenschaften:
 
 - **Kein Unique-Key auf dem Preisschlüssel.** Duplikate über den Tag sind der Normalfall.
 - **Append-only.** Nichts wird nachträglich geändert oder gelöscht.
 - **Gehört genau einem Job.** Kein lieferantenübergreifender veränderlicher Zustand.
+- **Retention:** mindestens das 65-Tage-Lesefenster des Fallbacks plus Puffer — der B3-Rebuild, die
+  Transparenz (12.) und die Fehlmeldung (11.) hängen an der Historie. Archivierung erst danach.
 
 Append-only trägt mehr, als beim Entwurf absehbar war: die Lieferketten-Transparenz (12.) und die
 Soll/Ist-Prüfung (11.) brauchen die *Historie* der Lieferungen, nicht ihr Ergebnis.
@@ -599,7 +772,7 @@ Soll/Ist-Prüfung (11.) brauchen die *Historie* der Lieferungen, nicht ihr Ergeb
 Nicht übernommen: `num_ausschuettung`/`dat_zahltag` (die Ausschüttungsangaben im Preisfile kommen
 aus den Stammdaten) und `intervall` (produktiv seit 2017 ersatzlos geleert).
 
-### 4. Auflösung — nur für den Sammelreport, nicht für `kurs`
+### 4. Welche Lieferung sich durchsetzt — nur für den Sammelreport, nicht für `kurs`
 
 Der Sammelreport-Lauf bildet aus den Zeilen seiner Lieferungen die Menge, die in das File geht:
 
@@ -611,8 +784,8 @@ Der Sammelreport-Lauf bildet aus den Zeilen seiner Lieferungen die Menge, die in
 
 **Warum nur für das File.** Ein File darf keine zwei widersprüchlichen Zeilen zum selben Schlüssel
 enthalten, und sein Footer zählt. `kurs` ist eine Tabelle: sequenzielle Upserts in
-Ankunftsreihenfolge konvergieren auf denselben Zustand wie „letzte gewinnt". Die Auflösung ist damit
-ein **Datei**-Anliegen. Das ist der Grund, warum die Sync-Stufe ohne sie auskommt (8.).
+Ankunftsreihenfolge konvergieren auf denselben Zustand wie „letzte gewinnt". Welche Lieferung sich
+durchsetzt, ist damit ein **Datei**-Anliegen. Das ist der Grund, warum die Sync-Stufe ohne sie auskommt (8.).
 
 Die D/N-Regeln des Altsystems (`Check4DeleteInTmp`, `M_INSERT.CPP:4138-4271`) — präziser als in der
 Vorversion dieses Dokuments beschrieben:
@@ -640,9 +813,14 @@ Folge der Verschiebung in den Lauf: die vier `INFO_DEL_*`-Meldungen stehen nicht
 berühren, die Texte OeKB-Interna beschreiben, und sie über 12. sichtbar bleiben. Aufgegeben wird die
 Korrekturschleife innerhalb des Tages.
 
+Die Verrechnung, das Publikationsprotokoll und der Delta-Mechanismus gelten **einheitlich auch für
+die Solvabilitätssätze** (`S`/`S2`/`S3`, ausgehend `S1`–`S3` bzw. `D1`–`D3`); sie unterscheiden sich
+nur im Ausgabestrom (`solva.csv`, siehe F).
+
 ### 5. Zwei Sammelreport-Läufe pro Tag
 
-Identität `(keyDate, laufnummer)` wie bei den STM-Batchjobs. Beide Zeiten konfigurierbar
+Identität über die geerbten `Job.keyDate` und `Job.dailyRunNumber` — der Unique-Index
+`ux_jobs_type_key_date_daily_run_number` erzwingt sie. Beide Zeiten konfigurierbar
 (Diskussionsstand: ~14:00 und ~16:00).
 
 Ein „Sammelreport" ist *alles bis zu einem Stichzeitpunkt Gesammelte* — die Preise **und** die
@@ -654,7 +832,7 @@ sofort raus, pro Lieferung, aus der ersten Stufe der Lieferkette. Zwei Kommunika
 Adressaten, zwei Taktungen — und diese Trennung ist der eigentliche Gewinn gegenüber dem Altsystem.
 
 Damit entfällt das heutige manuelle **Stoppen des Batchs** bei einer gemeldeten Verspätung: eine um
-15:30 eingelangte Lieferung bleibt einfach auf `sammelreport_lauf IS NULL`. Fällt Lauf 2 aus, ist
+15:30 eingelangte Lieferung bleibt einfach auf `sammelreport_job_id IS NULL`. Fällt Lauf 2 aus, ist
 sie morgen dran — statt verloren. Das ist Markus Punkt 5 wörtlich: „Alles was zu einem bestimmten
 Zeitpunkt vorhanden ist wird verarbeitet, der Rest am nächsten Tag."
 
@@ -715,27 +893,28 @@ Bezieher hat beide — identisch zum Altsystem.
 
 ### 7. Statusmodell
 
-Siehe **Die Jobs**. Kurz: die fünf Standardwerte des Job-Systems plus `sammelreport_lauf` und
-`rueckmeldung_gesendet`. `PUBLISHED`, `READY_FOR_BATCH` und die vier eigenen Fortschrittswerte sind
+Siehe **Die Jobs**. Kurz: die fünf Standardwerte des Job-Systems plus `sammelreportJob` und
+`rueckmeldungGesendetAt`. `PUBLISHED`, `READY_FOR_BATCH` und die vier eigenen Fortschrittswerte sind
 gestrichen. Der Status beschreibt den **Job**, nicht seine Zeilen — eine Lieferung kann berichtet
-sein, während einzelne ihrer Zeilen in der Auflösung verloren haben.
+sein, während einzelne ihrer Zeilen sich nicht durchgesetzt haben.
 
 Fehlerfälle, die das Modell tragen muss:
 
 | Fall | Verhalten |
 |---|---|
-| Lauf 2 fällt aus | `sammelreport_lauf` bleibt null, morgen Lauf 1 |
+| Lauf 2 fällt aus | `sammelreport_job_id` bleibt null, morgen Lauf 1 |
 | Sync-Stufe hängt | der Job ist nicht `COMPLETED`, der Lauf nimmt ihn nicht mit — er geht im nächsten Lauf |
 | Kennzahlen-Stufe bleibt unvollständig | kein Fehler; der Job wird `COMPLETED`, der Sweep holt den Rest aus den Daten |
 | Lieferung trifft nach Lauf 2 ein | morgen |
-| Lauf wird wiederholt | zwei verschiedene Operationen — siehe **Reproduzierbarkeit** |
+| Lauf scheitert **nach** dem Claimen | die geclaimten Lieferungen tragen die `sammelreport_job_id` des gescheiterten Laufs und wären für `IS NULL` unsichtbar. Der Folgelauf (`repeatedFromJob` auf ihn) **übernimmt sie** zusätzlich zur `IS NULL`-Menge |
+| Lauf wird wiederholt | zwei verschiedene Operationen — siehe **Reproduzierbarkeit**. „Neu laufen lassen" ist ein neuer `PreisSammelreportJob` mit gesetztem `repeatedFromJob` |
 
 ### 8. Einspielung nach `kurs` als Stufe der Lieferkette
 
 **Geändert.** Der Sync ist kein terminierter Job mehr, sondern die zweite Stufe des
 Preismeldungs-Jobs. Er läuft, sobald die Lieferung geprüft ist.
 
-Der Grund, dass das geht: **die Sync-Stufe braucht die Auflösung nicht** (4.). Upserts in
+Der Grund, dass das geht: **die Sync-Stufe braucht `WirksamePreismeldungen` nicht** (4.). Upserts in
 Ankunftsreihenfolge sind last-wins; `D` auf eine vorhandene Zeile löscht, `D` auf eine fehlende ist
 ein No-op, `N` nach `D` fügt wieder ein. Der Endzustand ist derselbe.
 
@@ -759,7 +938,9 @@ gehört zu `preise.e`) läuft über die Preissätze und ruft inline `PreiseNachr
 `WriteLastKurse()` (`:2500,:2512`). Die Einspielung ist also schon pro Satz organisiert; nur
 terminiert war sie als Tagesjob-Schritt.
 
-**Was von der „materialisierten Tagesmenge" übrig bleibt: das Publikationsprotokoll.** Sein
+**Was von der „materialisierten Tagesmenge" übrig bleibt: das Publikationsprotokoll.** (Der Begriff
+„Tagesmenge" stammt aus Runde 1 und ist seit Runde 4 ungenau — Lauf 2 ist ein Delta, also gerade
+nicht die Menge des Tages. Gemeint ist die Menge **eines Laufs**.) Sein
 einziger Zweck ist der Bezugspunkt aus 6.: je `(ISIN, Preisdatum, Währung, Code)` festhalten,
 in welchem Lauf er als `I2` oder `I3` hinausgegangen ist. Kleiner und ehrlicher benannt als
 „Tagesmenge", und ein Feld am Job reicht dafür nicht — der Bezug muss schlüsselgenau sein.
@@ -768,9 +949,10 @@ Die Ausgabefilter (`veroeffentlichung`, `cod_art_f`, `FONDS_ZGRU`, Zielgruppe) w
 genauso angewandt wie auf das `I2`. Dadurch wird ein nie berichteter Preis auch nie zurückgenommen,
 ohne dass der Lauf das gesondert wissen muss.
 
-**Auflage: das Protokoll wird vom File-Writer gefüttert, nicht aus der Auflösung.** Der
-`tmp_if_last`-Fallback aus Lauf 1 (9.) stammt nicht aus der Tagesmenge, sondern aus der Projektion —
-eine Implementierung, die das Protokoll aus dem Auflösungsergebnis ableitet, würde Fallback-Zeilen
+**Auflage: das Protokoll wird vom File-Writer gefüttert, nicht aus `WirksamePreismeldungen`.** Der
+`tmp_if_last`-Fallback aus Lauf 1 (9.) stammt nicht aus den wirksamen Preismeldungen, sondern aus
+der Projektion —
+eine Implementierung, die das Protokoll aus den wirksamen Preismeldungen ableitet, würde Fallback-Zeilen
 übersehen. Dann greift der `I3`-Bezug aus Punkt D für genau diese Zeilen nicht:
 
 > Lauf 1 gibt den Fallback für (X, T−3) aus — einen Preis, der **nie in `kurs` gelandet** ist
@@ -855,7 +1037,16 @@ auf `'N'` — Löschsätze wären strukturell unsichtbar.
 Der Guard aus **Zwei Server, ein Pool** gilt auch hier, und zwar lexikografisch über
 `(preisdatum, angekommen_am)`: Legacys „nur wenn Preisdatum neuer" würde eine Korrektur zum
 *gleichen* Preisdatum verwerfen. Weil `tmp_if_last` unsere eigene Projektion ist, kann die Zeile
-`angekommen_am` mitführen.
+`angekommen_am` mitführen. Und weil `letzte_preise` in Postgres liegt, ist der Guard hier ein
+einzelnes bedingtes Update in der eigenen Zeile — keine Klammer-Transaktion nötig.
+
+#### Initialbefüllung
+
+Beim Start — des Parallelbetriebs wie später des Echtbetriebs — ist `letzte_preise` leer. Ohne Seed
+verfehlt der Lauf-1-Fallback 65 Tage lang fast alle Fonds, und der B3-Diff gegen die Legacy-Tabelle
+wäre von Tag 1 an rot. Deshalb ein einmaliger Migrationsschritt: Seed aus `kurs..tmp_if_last` des
+Altsystems, mit synthetischem `angekommen_am` (Seed-Zeitpunkt); ab dann führt die Kette die Tabelle
+selbst.
 
 #### Wozu der Fallback da ist, steht nirgends
 
@@ -966,7 +1157,7 @@ append-only, `job_id` + `zeilen_nr`, Ankunftszeit und Lieferant am Job.
 
 Ein neuer Abschnitt listet je `(ISIN, Preisdatum, Währung, Code)` mit mehr als einer Lieferung des
 Tages die Kette in Ankunftsreihenfolge, mit Lieferant, Zeit und Aktion, und markiert die Zeile, die
-die Auflösung gewonnen hat. Nebeneffekt: die vier `INFO_DEL_*`-Meldungen aus 4. werden hier
+sich durchgesetzt hat. Nebeneffekt: die vier `INFO_DEL_*`-Meldungen aus 4. werden hier
 sichtbar.
 
 Bei zwei Läufen zeigt Report 2 die Ketten zwischen den Cutoffs; eine Kette über den Cutoff hinweg
@@ -1055,6 +1246,14 @@ noch zu prüfen — das ist der Rest von C.
 C2 (Arbeitsliste) und C3 (Ableitung aus `kurs.guelt`) bleiben als Reparaturpfade interessant: C3
 deckt Korrekturen und Neuwerte ab, **nicht** Löschungen, taugt also für „rechne alles nach, was seit
 X berührt wurde", nicht als vollständiger Auslöser.
+
+**C1b — markieren statt löschen** (aus der Diskussion, eingearbeitet 2026-09-02): eine
+Stale-Markierung, damit die vier externen Auswertungen weiter einen Wert lesen, statt auf Abwesenheit
+zu treffen. Als Spalte `stale_since` auf den fünf Kennzahlentabellen ist das mit der
+**Sybase-Schemasperre nicht umsetzbar** (M); bliebe eine eigene Postgres-Tabelle mit den als stale
+markierten Schlüsseln — dann müssten die Auswertungen sie aber auch abfragen, was sie heute nicht
+tun. Der Rest von C („wer liest Kennzahlen zwischen Sync und Nachrechnung?") entscheidet, ob C1b
+gebraucht wird oder die Abwesenheit aus C1 akzeptabel ist.
 
 ### D. Rücknahme eines bereits berichteten Preises — **entschieden: explizites `I3`**
 
@@ -1178,21 +1377,21 @@ Datenmodell-Änderung) oder K3 (bewusst geteilt, mit expliziter Vorrangregel). Z
 
 Ebenfalls unter **Abhängigkeiten**. O1 (Ausschüttungs-Tagesjob vor Cutoff 1), O2 (Ausschüttungen
 ebenfalls pro Lieferung) oder O3 (Sammelreport prüft die Vorbedingung und meldet). Empfehlung
-**O1 + O3**; O3 gehört in den Fehlmeldungs-Job und deckt gleichzeitig Markus Punkt 8 ab.
+**O1 + O3**; O3 leisten je Lauf die Plausi-Abschnitte 18–20 im Sammelreport (15., Teil 1), am
+Tagesende der Fehlmeldungs-Job — und es deckt Markus Punkt 8 ab.
 
-### M. Darf `kurs` eine Spalte bekommen?
+### M. Darf `kurs` eine Spalte bekommen? — **entschieden: nein, Sybase ist schema-gesperrt**
 
-Aus **Zwei Server, ein Pool**. Der monotone Guard braucht einen Ankunftsmarker je Preisschlüssel.
-Liegt er in der eigenen Tabelle `preis_herkunft`, kostet er eine kurze Transaktion um Guard und
-`kurs`-Write. Läge er als Spalte in `kurs`, *wäre* das bedingte Update der `kurs`-Write — ein
-Statement, atomar, keine Transaktion, keine Sperre.
+**Entscheidung (User, 2026-09-02):** In der Sybase werden **keine neuen Tabellen und keine neuen
+Spalten** angelegt — weder im Altsystem noch in der Neusystem-Sybase; neue Tabellen kommen nach
+Postgres. Die Schemata der beiden Sybase-Instanzen müssen für den Parallelbetrieb-Diff identisch
+bleiben, und die Sybase läuft aus.
 
-| Option | Folge |
-|---|---|
-| **M1 — eigene Tabelle `preis_herkunft`** | Kein Eingriff in eine mit dem Altsystem geteilte Tabelle. Preis: eine Transaktion je Preisschlüssel, Schlüssel sortiert abarbeiten. **Vorauswahl**, weil im Parallelbetrieb unbedenklich. |
-| **M2 — Spalte in `kurs`** | Einfacher und schneller. Aber: im Parallelbetrieb schreibt das Altsystem `kurs` mit und würde die Spalte nicht pflegen — ein vom Altsystem geschriebener Satz hätte keinen Marker. Erst nach Ende des Parallelbetriebs sauber. |
-
-`kurs.guelt` umzudeuten ist keine Option: C3 sieht `guelt` als Reparatursignal vor.
+Damit ist M2 dauerhaft vom Tisch, nicht nur für den Parallelbetrieb. `preis_herkunft` liegt als
+Business-Tabelle auf Postgres (Katalog `kurs`, **nicht** `infra` — Runde 8); den Preis dafür — die
+Klammer-Transaktion über zwei DBMS samt Fehlerfenster-Analyse — beschreibt *Zwei Server, ein Pool*,
+und mit der Sybase-Migration 2027 entfällt er. `kurs.guelt` umzudeuten bleibt ebenso
+ausgeschlossen (C3 sieht `guelt` als Reparatursignal vor).
 
 ### N. Wozu dient der `tmp_if_last`-Fallback?
 
@@ -1228,6 +1427,9 @@ Entscheidung 6 wieder aufwerfen würde — deshalb vor der Filegenerierung klär
 - **`AllowOldPreisFormat`, `AllowTxtExt4PreisFile`** — davon hängt ab, ob das alte Format 1
   bedient werden muss.
 - **`MFT_*.INI`** — Zielverzeichnisse und Accounts sind nicht im Repo.
+- **`pool_if_kurs`-Semantik** — Upsert oder Append, welcher Schlüssel? Davon hängt ab, ob der
+  monotone Guard auch dort gilt (zwei Lieferungen zur selben unbekannten ISIN, außer der Reihe
+  verarbeitet).
 - **Vollständiger `fplausib.txt`** mit Treffern in allen Abschnitten, für die Meldungstexte.
 - **Aktuelle `preis.dtd`**, wie sie tatsächlich ausgeliefert wird.
 - **`datum_min`-Vergleichsrichtung** (`M_INSERT.CPP:2020,2906` vergleichen mit `> daDatumMin`,
@@ -1281,14 +1483,53 @@ Ordnungsauflagen für die restlichen Schritte: 3 setzt 2 voraus, 8 setzt 7 vorau
 
 ---
 
+## Parallelbetrieb
+
+**Vorgaben (User, 2026-09-02):** Das Neusystem schreibt in eine **eigene Sybase**
+(Business-Kontext); die Sybase des Altsystems ist read-only angebunden (Kontext `legacy-business`).
+Beide Schemata sind eingefroren — keine neuen Tabellen, keine neuen Spalten (M); alles Neue liegt
+in Postgres.
+
+Der Modus ist derselbe wie bei den Steuermeldungen und den ISIN-Anforderungslisten: **das Altsystem
+verarbeitet und persistiert zuerst**; seine Input- und Resultfiles kommen ins Neusystem, das
+dieselbe Operation inklusive Persistenz in der eigenen Sybase durchführt — und dann wird verglichen.
+Träger ist ein **`PreisMeldungDiffJob`** nach dem Muster `IsinAnforderungslisteDiffJob` /
+`AusschuettungsMeldungDiffJobSubmissionService`; der Einstieg existiert schon:
+`ParallelbetriebJobSubmissionService` erkennt Preismeldungs-Files und ruft den heutigen Stub
+`PreisMeldungDiffJobSubmissionService` (derzeit BadInput).
+
+Vier Diff-Ebenen:
+
+| Ebene | Neusystem | gegen |
+|---|---|---|
+| Rückmeldung | das erzeugte ZIP (`data.log`/`error.log`/`info.log`) | das Rückmelde-ZIP des Altsystems |
+| Ausgabefiles | `preis.csv`/`solva.csv`, Reports | die Files des Altsystems |
+| DB-Stand | `kurs`, `pool_if_kurs`, `del_protokoll` in der Neusystem-Sybase | dieselben Tabellen im Altsystem (`DatabaseCompareService`) |
+| Projektion | `kurs.letzte_preise` (Postgres) | `kurs..tmp_if_last` im Altsystem — der B3-Diff |
+
+**Außenwirkungen sind unterdrückt:** keine Rückmeldungs-Mails an Lieferanten, kein MFT/T2S-Upload,
+keine Fehlmeldungs-Mails. Die Rückmeldung wird als File erzeugt und gedifft statt versandt; die
+Ergebnisartefakte hängen am Diff-Job (Muster `resultBundleFile`).
+
+**Bekannte Abweichungen** müssen im Diff konfigurierbar geführt werden — dasselbe Muster wie die
+`ValidationSettings` der STM-Return-File-Diffs. Von Anfang an bekannt: das explizite `I3` aus D und
+das `del_protokoll`-Rauschen aus 8.
+
+Der Diff-Job wächst mit den Schnitten: nach Schnitt 1 difft er die Rückmeldung, nach Schnitt 2 den
+DB-Stand und die Projektion, nach den Schnitten 4/5 die Ausgabefiles.
+
+---
+
 ## Vorgehen
 
 1. **Query-Ergebnisse zu J auswerten** (`fondspreise-lieferant-isin-analyse.sql`). Entscheidet die
    Adressierung der Fehlmeldung.
 2. **Datenbeschaffung anstoßen** — `tax_code` und `preismeldung` zuerst.
-3. **Offene Punkte klären.** A ist geschlossen, C und D entschieden, B und I(Voreinstellung) intern
-   entscheidbar; E, F, G, H, J, K und L brauchen die Fachabteilung bzw. Markus. Nur **K** blockiert
-   einen Schnitt (Stufe 3), alle anderen nicht.
+3. **Offene Punkte klären.** A ist geschlossen, C, D und M entschieden, B und I (Voreinstellung)
+   intern entscheidbar; E, F, G, H, J, K, L und N brauchen die Fachabteilung bzw. Markus. Blocker
+   je Schnitt: die produktiven `tax_code`-Zeilen blockieren Schnitt 1, **N** und **F** blockieren
+   Schnitt 5 (N könnte Entscheidung 6 kippen, F die Auslieferung des Deltas), **K** und die noch
+   fehlende Kennzahlen-Ist-Analyse blockieren Schnitt 6, **J** blockiert Schnitt 7.
 4. **Konzept nach `docs/Fondspreise/fondspreise-soll-konzept.md`**, sobald B und I entschieden sind.
    Dieser Plan ist der Arbeitsstand; das Dokument im Repo ist das Ergebnis.
 5. **`docs/Technische Konzepte/ifas13-jobs.md`** aktualisieren — „Fondspreise — out of scope"
@@ -1299,12 +1540,13 @@ Ordnungsauflagen für die restlichen Schritte: 3 setzt 2 voraus, 8 setzt 7 vorau
 Der Zuschnitt folgt jetzt den Jobs, nicht den Legacy-Stufen:
 
 1. **Lieferkette, Stufe 1** — Ingest, Landezone, Rückmeldung. Landezone-Schreiben auf `job_id`
-   gescoped, Rückmeldung über `rueckmeldung_gesendet` geguardet.
+   gescoped, Rückmeldung über `rueckmeldung_gesendet_at` geguardet.
 2. **Lieferkette, Stufe 2** — Sync nach `kurs`, plus `preis_herkunft` mit dem monotonen Guard und
    `tmp_if_last` (B3: geführt, mit Guard über `(preisdatum, angekommen_am)`). **Nicht** serialisiert;
    der Guard ersetzt die Serialisierung. Die Rebuild-Funktion aus der Landezone gehört dazu — sie ist
    gleichzeitig der Parallelbetrieb-Vergleich und der Konsistenz-Testfall.
-3. **Auflösung** als Komponente — nur für den Sammelreport. Früh und isoliert getestet.
+3. **`WirksamePreismeldungen`** als Komponente — nur für den Sammelreport. Früh und isoliert
+   getestet.
 4. **Sammelreport Lauf 1** — Plausi-Report, Filegenerierung, Publikationsprotokoll, Verteilung.
 5. **Lauf 2 als Delta** — inklusive `I3` gegen das Publikationsprotokoll.
 6. **Lieferkette, Stufe 3 + Sweep** — Kennzahlen. Damit ist der Job `COMPLETED`, auch wenn die
@@ -1313,13 +1555,18 @@ Der Zuschnitt folgt jetzt den Jobs, nicht den Legacy-Stufen:
 7. **Fehlmeldungs-Job** — hängt an der Landezone und an J, nicht an der Filegenerierung.
 8. **Lieferketten-Transparenz** im Report (12.).
 
+Quer dazu wächst der **`PreisMeldungDiffJob`** (siehe *Parallelbetrieb*): er ersetzt den
+BadInput-Stub, sobald Schnitt 1 steht, und nimmt mit jedem weiteren Schnitt eine Diff-Ebene dazu.
+Die Initialbefüllung von `letzte_preise` (9.) gehört zu Schnitt 2.
+
 ## Verifikation
 
 Noch kein Code — prüfbar ist die Konsistenz des Konzepts:
 
 - Jede Aussage über das Altsystem gegen die Ist-Analyse und, wo dort nicht belegt, gegen
   `file:line` im Legacy-Repo (ISO-8859-1 → `grep -a` / `iconv`).
-- Die Landezone gegen ihre Verbraucher durchspielen: Auflösung, Plausi, Transparenz-Abschnitt,
+- Die Landezone gegen ihre Verbraucher durchspielen: `WirksamePreismeldungen`, Plausi,
+  Transparenz-Abschnitt,
   Projektion (`tmp_if_last`), Fehlmeldung. Jeder muss aus den Zeilen pro Job bedient werden können.
 - **Das zweiachsige Statusmodell gegen die Fehlerfälle** durchspielen: Sync-Stufe hängt, während
   Lauf 1 die Lieferung schon berichtet; Kennzahlen-Stufe scheitert am fehlenden Referenzkurs; Lauf 2
@@ -1329,14 +1576,22 @@ Noch kein Code — prüfbar ist die Konsistenz des Konzepts:
   **in beiden Bearbeitungsreihenfolgen**. Dasselbe für `tmp_if_last` mit gleichem Preisdatum und
   unterschiedlicher Ankunft.
 - **Deadlockfreiheit**: zwei Lieferungen mit überlappenden, unterschiedlich sortierten
-  Schlüsselmengen gleichzeitig — keine Verklemmung, weil je Schlüssel eine Transaktion und die
+  Schlüsselmengen gleichzeitig — keine Verklemmung, weil je Schlüssel eine Klammer und die
   Schlüssel sortiert abgearbeitet werden.
+- **Das Crash-Fenster der Klammer-Transaktion**: Sybase-Commit ohne Postgres-Commit → der Retry
+  konvergiert; kommt dazwischen eine neuere Lieferung, verliert der Retry am Prädikat.
+- **Claims-Übernahme**: Lauf 1 scheitert nach dem Claimen → der Folgelauf mit `repeatedFromJob`
+  nimmt die geclaimten Lieferungen mit; keine Lieferung bleibt unsichtbar.
+- **Initialbefüllung**: nach dem Seed aus `tmp_if_last` liefert der erste Lauf-1-Fallback dieselben
+  Zeilen wie das Altsystem.
+- **Parallelbetrieb**: derselbe Input durch Alt- und Neusystem → alle vier Diff-Ebenen leer bis auf
+  die geführten bekannten Abweichungen.
 - **Idempotenz je Stufe** prüfen: denselben Job zweimal laufen lassen. Landezone unverändert (kein
   PK-Verstoß), `kurs` unverändert, `tmp_if_last` unverändert, Kennzahlen identisch — und die
   Rückmeldung geht **nicht** zweimal raus.
 - **Die Reihenfolge-Gefahr dokumentiert nachstellen** (akzeptiertes Risiko, aber der Testfall soll
   zeigen, was passiert): A scheitert im Sync, B überschreibt, A wird wiederholt.
-- Die D/N-Auflösung an den Fällen aus 4. prüfen, inklusive „`D` ohne vorheriges `N`" (läuft durch)
+- Die D/N-Regeln an den Fällen aus 4. prüfen, inklusive „`D` ohne vorheriges `N`" (läuft durch)
   und „`N` und `D` am selben Tag, dazwischen Lauf 1" (→ `I3`).
 - Die Delta-Semantik: Fallback in Lauf 1 und echter Preis in Lauf 2 (zwei Schlüssel); zweimal
   `I2` auf denselben Schlüssel (Upsert, kein `I4`); Ausgabefilter unterdrückt `I2` in Lauf 1, `D`
@@ -1400,7 +1655,6 @@ mit den neun Schritten und der EZB-Warteschleife; neuer Abschnitt 9.1 „Was `-P
 Quelle von 18:36: es zeigt weiterhin `I4`, kennt keinen der neuen Abschnitte 1.1, 1.2 und 9.1, und
 hat 26 Sektionen gegen 53 Abschnitte in der Ist-Analyse. Muss neu erzeugt werden.
 
-**C1b ist nicht eingearbeitet.** Der Vorschlag „markieren statt löschen" (eine Spalte
-`stale_since` auf den fünf Kennzahlentabellen, damit die vier externen Auswertungen weiter einen
-Wert lesen können) steht nur im Gesprächsverlauf, nicht im Konzept. Offener Punkt C nennt weiterhin
-C1/C2/C3.
+**C1b ist eingearbeitet** (2026-09-02): steht jetzt bei offenem Punkt C — samt der Einschränkung,
+dass die Sybase-Schemasperre (M) die `stale_since`-Spalte ausschließt und nur eine eigene
+Postgres-Tabelle bliebe.

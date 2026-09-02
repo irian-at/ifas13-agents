@@ -615,8 +615,9 @@
   <p class="lede">Der manuell gestartete Tagesjob des Altsystems wird zu einer Lieferkette mit
      Stufen plus vier terminierten Jobs. Was pro Lieferung gehen kann, geht pro Lieferung;
      gesammelt wird nur, was gesammelt werden muss.</p>
-  <p class="meta">Stand 2026-09-01 · Diskussion vom 2026-08-31, fachlicher Input von Markus und
-     die Nachfragen zum Jobschnitt vom 2026-09-01 · abgeleitet aus
+  <p class="meta">Stand 2026-09-02 · Diskussion vom 2026-08-31, fachlicher Input von Markus, die
+     Nachfragen zum Jobschnitt vom 2026-09-01 und das Review gegen die Codebase vom 2026-09-02
+     (Runde 7) · abgeleitet aus
      <code>docs/Fondspreise/fondspreise-legacy-analyse.md</code> und dem Legacy-Quelltext, nicht
      aus einer Spezifikation</p>
   <div class="stats">
@@ -680,7 +681,7 @@
             fill="var(--tint)" stroke="var(--line-strong)"/>
       <text x="306" y="142" fill="currentColor" font-size="15">nach kurs</text>
       <text x="306" y="161" fill="var(--muted)" font-size="12">Berechtigungsfilter · Löschungen</text>
-      <text x="306" y="196" fill="var(--muted)" font-size="12">seriell — Auflage, siehe unten</text>
+      <text x="306" y="196" fill="var(--muted)" font-size="12">parallel — der Guard ordnet</text>
 
       <line x1="528" y1="166" x2="562" y2="166" stroke="var(--muted)" stroke-width="2" marker-end="url(#m)"/>
 
@@ -786,6 +787,145 @@
      alphabetisch je Lieferant).</p>
 </section>
 
+<section id="namen" data-nav="Namen im Code">
+  <h2>Namen für die Implementierung</h2>
+  <p class="lede">Die Begriffe dieses Konzepts sind zum Teil Bilder — „Landezone" beschreibt einen
+     Behälter, nicht eine Sache. Für den Code gilt: <strong>Metaphern bleiben in der Prosa,
+     Identifier benennen Dinge.</strong></p>
+  <h3>Konventionen, wie sie im Code tatsächlich gelten</h3>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Regel</th><th>Belege</th></tr></thead>
+    <tbody>
+      <tr><td>Typen: deutsche Domänen-Substantive, <strong>umlautfrei transliteriert</strong></td>
+          <td><code>AusschuettungJob</code>, <code>FristenpruefungJob</code>,
+              <code>GeschaeftsjahreCalcJob</code>, <code>Meldekategorie</code></td></tr>
+      <tr><td>Englisch für Technisches, Mischung erlaubt</td>
+          <td><code>…Job</code>, <code>…Repository</code>, <code>Csv…</code>,
+              <code>isQuoteOrGebuehr()</code></td></tr>
+      <tr><td><strong>Kein Binde-s vor <code>Job</code></strong></td>
+          <td><code>AusschuettungJob</code>, nicht <code>AusschuettungsJob</code></td></tr>
+      <tr><td>Tabellen: <code>catalog = "infra"</code> für Neues, snake_case <strong>Plural</strong></td>
+          <td><code>infra.stm_calc_jobs</code>,
+              <code>infra.isin_anforderungsliste_diff_jobs</code></td></tr>
+      <tr><td>Spalten: snake_case, Englisch technisch / Deutsch fachlich, Zeitstempel <code>…_at</code></td>
+          <td><code>input_filename</code>, <code>error_count</code> vs. <code>liefer_id</code>;
+              <code>started_at</code>, <code>next_retry_at</code></td></tr>
+      <tr><td>Status: <code>&lt;Domain&gt;JobStatus implements JobStatus</code>, die fünf Standardwerte</td>
+          <td><code>StmCalcJobStatus</code>, <code>BadInputJobStatus</code></td></tr>
+      <tr><td>Indizes <code>ux_&lt;tabelle&gt;_&lt;spalten&gt;</code>, FK
+              <code>fk_&lt;tabelle&gt;_&lt;rolle&gt;</code></td>
+          <td><code>ux_jobs_type_key_date_daily_run_number</code>,
+              <code>fk_jobs_repeated_from</code></td></tr>
+      <tr><td>Javadoc: englische Prosa, deutsche Fachbegriffe <strong>mit</strong> Umlauten</td>
+          <td><code>Meldekategorie</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Kataloge sind <code>kurs</code>, <code>ifas</code> und <code>vwkn</code> (Legacy-Schemata) sowie
+     <strong><code>infra</code></strong> für die Job- und Work-Queue-Infrastruktur.
+     <strong>Sybase ist schema-gesperrt</strong> (Vorgabe 2026-09-02, Punkt M): keine neuen Tabellen
+     und Spalten, weder Alt- noch Neusystem-Sybase — und die Sybase wandert im Lauf von 2027 ohnehin
+     nach Postgres. Daraus die Aufteilung (Runde 8): die <strong>vier Job-Tabellen</strong> sind
+     Infrastruktur — <code>infra</code>, Paket <code>fondspreise</code> in
+     <code>ifas-persistence-infra</code>. Die <strong>vier Artefakte</strong> (Landezone,
+     Publikationsprotokoll, <code>preis_herkunft</code>, <code>letzte_preise</code>) sind
+     <strong>Business-Tabellen</strong> und gehören <strong>nicht</strong> nach <code>infra</code>:
+     Postgres, Katalog <code>kurs</code>, eigener Context-Key
+     (<code>database-context.fondspreise-db-key</code>), Modul
+     <code>ifas-persistence-fondspreise</code> — das Muster von <code>ifas.ausschuettung_tmp</code>.
+     Business-Kontext auf Sybase gegen neue Tabellen auf Postgres heißt bis zur Migration: zwei DBMS,
+     keine gemeinsame Transaktion; <code>job_id</code> an den Artefakten ist eine <strong>logische
+     Referenz</strong> (UUID), kein DB-FK.</p>
+
+  <h3>Die Namen</h3>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Begriff im Konzept</th><th>Typ</th><th>Tabelle</th></tr></thead>
+    <tbody>
+      <tr><td>Preismeldungs-Job, pro Lieferdatei</td><td><code>PreismeldungJob</code></td>
+          <td><code>infra.preismeldung_jobs</code></td></tr>
+      <tr><td>dessen Status</td><td><code>PreismeldungJobStatus</code></td><td>—</td></tr>
+      <tr><td><strong>Landezone</strong> — eine gelieferte Zeile</td>
+          <td><code>PreismeldungZeile</code></td><td><code>kurs.preismeldung_zeilen</code> (Postgres)</td></tr>
+      <tr><td>Preisschlüssel (ISIN, Preisdatum, Währung, Meldekategorie)</td>
+          <td><code>Preisschluessel</code> (embeddable)</td><td>eingebettet</td></tr>
+      <tr><td><strong>Sammelreport</strong>-Lauf</td><td><code>PreisSammelreportJob</code></td>
+          <td><code>infra.preis_sammelreport_jobs</code></td></tr>
+      <tr><td><strong>Publikationsprotokoll</strong> — ein publizierter Schlüssel je Lauf</td>
+          <td><code>PreisPublikation</code></td><td><code>kurs.preis_publikationen</code> (Postgres)</td></tr>
+      <tr><td>die Aktion <code>I2</code>/<code>I3</code> darin</td>
+          <td><code>AusgabeAktion { UPSERT, DELETE }</code></td><td>—</td></tr>
+      <tr><td>monotoner Guard</td><td><code>PreisHerkunft</code></td>
+          <td><code>kurs.preis_herkunft</code> (Postgres)</td></tr>
+      <tr><td><code>tmp_if_last</code>-Projektion</td><td><code>LetzterPreis</code></td>
+          <td><code>kurs.letzte_preise</code> (Postgres)</td></tr>
+      <tr><td><strong>welche Lieferung sich durchsetzt</strong> — die Komponente</td>
+          <td><code>WirksamePreismeldungen</code><br><small>statische Fabriken, Muster
+              <code>SteuerMeldungBundles</code></small></td><td>—</td></tr>
+      <tr><td>deren Ergebniszeile</td><td><code>WirksamePreismeldung</code></td><td>—</td></tr>
+      <tr><td>Fehlmeldungs-Job</td><td><code>FehlendePreismeldungenJob</code></td>
+          <td><code>infra.fehlende_preismeldungen_jobs</code></td></tr>
+      <tr><td>Kennzahlen-Sweep</td><td><code>OffeneKennzahlenJob</code></td>
+          <td><code>infra.offene_kennzahlen_jobs</code></td></tr>
+      <tr><td>Zielgruppe des Ausgabestroms</td>
+          <td><code>Zielgruppe { ALLE, VENDOR, PUBLIKUM }</code></td><td>—</td></tr>
+      <tr><td>erwartete Lieferung (Soll)</td><td><code>ErwartetePreismeldung</code></td>
+          <td>Abfrage, keine Tabelle</td></tr>
+    </tbody>
+  </table>
+  </div>
+<pre><code>@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "sammelreport_job_id",
+            foreignKey = @ForeignKey(name = "fk_preismeldung_jobs_sammelreport"))
+private PreisSammelreportJob sammelreportJob;   // null = noch in keinem Lauf berichtet
+
+@Column(name = "rueckmeldung_gesendet_at")
+private OffsetDateTime rueckmeldungGesendetAt;  // Guard gegen doppelte Mails</code></pre>
+
+  <h3>Was die Basisklasse schon liefert — und das Konzept erfunden hatte</h3>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>geerbt von <code>Job</code></th><th>ersetzt im Konzept</th></tr></thead>
+    <tbody>
+      <tr><td><code>keyDate</code> + <strong><code>dailyRunNumber</code></strong>, mit Unique-Index
+              <code>ux_jobs_type_key_date_daily_run_number</code></td>
+          <td>die erfundene „Laufnummer" und das angebliche „Muster" aus Entscheidung 5 — es ist ein
+              <strong>geerbtes Feld</strong>, kein Nachbau</td></tr>
+      <tr><td><strong><code>repeatedFromJob</code></strong>
+              (<code>repeated_from_job_id</code>, mit FK)</td>
+          <td>bedient direkt „neu laufen lassen": ein Lauf mit gesetztem
+              <code>repeatedFromJob</code> <strong>ist</strong> Lauf 1b</td></tr>
+      <tr><td><code>status</code>, <code>statusMessage</code>, <code>createdAt</code>,
+              <code>startedAt</code>, <code>finishedAt</code>, <code>protocolFile</code>,
+              <code>createdBy</code>, <code>archived</code></td><td>—</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note ok">Und eine Verbesserung, die aus den Konventionen folgt:
+     <code>sammelreport_lauf</code> wird <strong>kein <code>int</code></strong>, sondern ein FK auf
+     den Lauf — nach dem Muster von <code>repeatedFromJob</code>. Die Abfrage bleibt
+     <code>sammelreport_job_id IS NULL</code>, aber man kommt vom Job an seinen Lauf, und
+     <code>dailyRunNumber</code> daran ist die 1 oder 2.</p>
+
+  <h3>Offene Namensfragen</h3>
+  <div class="grid">
+    <div class="card warn"><h3><code>PreisHerkunft</code> oder <code>KursHerkunft</code>?</h3>
+      <p>Die Tabelle hält die Ankunftsmarke der Lieferung, die eine <code>kurs</code>-Zeile zuletzt
+         geschrieben hat. <code>PreisHerkunft</code> passt zu <code>PreisPublikation</code>,
+         <code>KursHerkunft</code> sagt genauer, wessen Herkunft protokolliert wird. Vorauswahl
+         <code>PreisHerkunft</code>.</p></div>
+    <div class="card warn"><h3><code>OffeneKennzahlenJob</code> ohne Domänenpräfix</h3>
+      <p>Ein <code>Preis</code>-Präfix wäre zu eng: Legacy trennt <code>preisekennzahl.cpp</code>
+         (je Preis) von <code>fondskennzahl.cpp</code> (je Fonds), und der Sweep deckt beides ab.</p></div>
+  </div>
+  <p class="note danger"><strong>„Fehlmeldung" darf kein Identifier werden.</strong> Das Wort ist im
+     Deutschen zweideutig — „Meldung über etwas Fehlendes" <em>und</em> „irrtümliche Meldung". In der
+     Prosa bleibt es, im Code heißt es <code>FehlendePreismeldungenJob</code>.
+     <code>PreismeldungMahnungJob</code> wäre die naheliegende Alternative, kollidiert aber mit den
+     Legacy-„Mahnungen" der ausländischen Fonds (<code>preis_dld.e -M/-L</code>).</p>
+</section>
+
 <section id="status" data-nav="Status &amp; Retry">
   <h2>Status und Wiederholbarkeit</h2>
   <p class="lede">Ein vierstufiges eigenes Enum war über-modelliert. Der Test ist: was fragt den
@@ -794,7 +934,7 @@
   <table>
     <thead><tr><th>Wer</th><th>fragt</th><th>braucht einen Fortschritts-Status?</th></tr></thead>
     <tbody>
-      <tr><td>Sammelreport-Lauf</td><td><code>sammelreport_lauf IS NULL</code></td><td>nein</td></tr>
+      <tr><td>Sammelreport-Lauf</td><td><code>sammelreport_job_id IS NULL</code></td><td>nein</td></tr>
       <tr><td>Kennzahlen-Sweep</td>
           <td>„Preise ohne Kennzahl" — <strong>aus den Daten</strong>, nicht aus dem Jobzustand</td>
           <td>nein</td></tr>
@@ -811,16 +951,16 @@
      Domänen-Enums sind dieselben fünf, und <code>StmCalcJobStatus</code> fügt genau
      <strong>einen</strong> hinzu — <code>WAITING_FOR_START_OF_DAY</code>, also einen
      <em>Wartezustand auf etwas außerhalb</em>, keinen Fortschrittsmarker. Das ist das Kriterium.</p>
-<pre><code>PreismeldungsJobStatus  =  PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED
+<pre><code>PreismeldungJobStatus  =  PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED
 
-am Job zusätzlich:         sammelreport_lauf     : null | 1 | 2
-                           rueckmeldung_gesendet : timestamp</code></pre>
+am Job zusätzlich:        sammelreportJob        : FK → PreisSammelreportJob, nullable
+                          rueckmeldungGesendetAt : timestamp</code></pre>
   <p class="note">Revision des eigenen Arguments: die Orthogonalität war mit dem Fall „berichtet,
      aber noch nicht <code>IN_KURS</code>" begründet. Besser — <strong>der Sammelreport nimmt nur
      <code>COMPLETED</code>-Jobs mit.</strong> Der begründende Zustand verschwindet, <code>kurs</code>
-     und das ausgehende File bleiben konsistent, und der Preis ist nur Latenz: eine im seriellen Sync
+     und das ausgehende File bleiben konsistent, und der Preis ist nur Latenz: eine im Sync
      steckende Lieferung verpasst den Cutoff und geht im nächsten Lauf mit. Die Abfrage lautet
-     <code>status = COMPLETED AND sammelreport_lauf IS NULL</code>.</p>
+     <code>status = COMPLETED AND sammelreport_job_id IS NULL</code>.</p>
 
   <h3>Reproduzierbarkeit: die Daten ja, die Außenwirkung nein</h3>
   <div class="scrollx">
@@ -833,7 +973,7 @@ am Job zusätzlich:         sammelreport_lauf     : null | 1 | 2
               <code>(job_id, zeilen_nr)</code>, ein naives Re-Insert knallt</td><td>—</td></tr>
       <tr><td>Rückmeldung</td><td>—</td>
           <td><span class="tag danger">nicht idempotent</span> zweite Mail beim Lieferanten. Guard:
-              <code>rueckmeldung_gesendet</code></td></tr>
+              <code>rueckmeldung_gesendet_at</code></td></tr>
       <tr><td>nach <code>kurs</code></td>
           <td>Upsert idempotent; <code>D</code> auf gelöschte Zeile ist No-op;
               <code>tmp_if_last</code> schreibt „nur wenn neuer" → No-op</td>
@@ -850,6 +990,12 @@ am Job zusätzlich:         sammelreport_lauf     : null | 1 | 2
      und festhalten, was hinausgegangen ist.</strong> Das Publikationsprotokoll tut das für das
      Preisfile; dasselbe braucht die Rückmeldung und die Fehlmeldung — sonst mailt jeder Retry
      erneut.</p>
+  <p class="note">Der Rückmeldungs-Guard braucht dieselbe Form wie der monotone: ein
+     <strong>bedingtes Update</strong>
+     (<code>… where rueckmeldung_gesendet_at is null</code>), gesendet wird nur bei
+     <code>rowcount&nbsp;=&nbsp;1</code>. Markieren-dann-Senden heißt at-most-once — stürzt der
+     Prozess dazwischen ab, fehlt die Mail; die richtige Seite des Zweifels, weil „erneut senden"
+     eine benannte manuelle Reparatur ist.</p>
 
   <h3>Die eine echte Gefahr ist nicht Wiederholung, sondern Reihenfolge</h3>
   <pre class="mermaid">
@@ -897,6 +1043,10 @@ sequenceDiagram
       </div>
     </div>
   </div>
+  <p class="note warn"><strong>Neu in Runde 7 — Lauf scheitert nach dem Claimen:</strong> die
+     geclaimten Lieferungen tragen die <code>sammelreport_job_id</code> des gescheiterten Laufs und
+     wären für <code>IS NULL</code> unsichtbar. Der Folgelauf (<code>repeatedFromJob</code> auf ihn)
+     <strong>übernimmt sie</strong> zusätzlich zur <code>IS NULL</code>-Menge.</p>
 </section>
 
 <section id="reihenfolge" data-nav="Zwei Server">
@@ -934,8 +1084,9 @@ sequenceDiagram
 
   <h3>Gewählt: monotoner Guard (Last-Write-Wins nach Ankunft)</h3>
   <p>Eine eigene kleine Tabelle als Serialisierungspunkt je Preisschlüssel — nicht in
-     <code>kurs</code>, weil dort keine Spalte dafür existiert und die Tabelle im Parallelbetrieb mit
-     dem Altsystem geteilt wird:</p>
+     <code>kurs</code>, weil die Sybase schema-gesperrt ist (Punkt M, entschieden);
+     <code>preis_herkunft</code> liegt wie die übrigen Artefakte als Business-Tabelle auf Postgres
+     (Runde 8):</p>
 <pre><code>preis_herkunft   PK (num_wfs_ku, dat_kurs, cod_fliesscode, waehrung)
                  → job_id, angekommen_am
 
@@ -973,23 +1124,41 @@ update preis_herkunft
   <p class="note"><strong>Versionsbasiertes optimistisches Sperren löst ein Reihenfolgeproblem
      nicht</strong> — ein Vergleich auf einem <em>monoton wachsenden fachlichen Wert</em> löst es.
      Das ist der ganze Unterschied. <code>angekommen_am</code> muss dafür aus <strong>einer</strong>
-     Uhr kommen, bei zwei Servern also nicht aus der Serverzeit:
-     <code>work_queue_items.created_at</code> wird in der DB erzeugt, ist einuhrig und schon
-     vorhanden. Gleichstand deterministisch über <code>job_id</code> brechen.</p>
+     Uhr kommen, bei zwei Servern also nicht aus der Serverzeit.
+     <code>work_queue_items.created_at</code> taugt <strong>nicht</strong> — es wird
+     applikationsseitig gesetzt (<code>OffsetDateTimes.now()</code> im <code>WorkQueueService</code>).
+     Stattdessen: ein Feld <code>angekommen_am</code> am <code>PreismeldungJob</code>,
+     <strong>DB-seitig befüllt</strong> beim Insert (Postgres <code>now()</code>); ein wiederholter
+     Job <strong>erbt</strong> die Ankunftszeit seines Originals. Gleichstand deterministisch über
+     <code>job_id</code> brechen.</p>
 
-  <h3>Die eine Einschränkung</h3>
-  <p>Guard-Update und <code>kurs</code>-Schreiben müssen in <strong>einer Transaktion</strong>
-     liegen, sonst kann A den Guard gewinnen und sein <code>kurs</code>-Write <em>nach</em> dem von B
-     landen. Damit gibt es eine kurze Zeilensperre auf <code>preis_herkunft</code> — eine DB-Rowlock
-     über Millisekunden, <strong>kein</strong> Applikations-Lock. Deadlockfrei bleibt es durch:</p>
+  <h3>Die eine Einschränkung: die Klammer-Transaktion</h3>
+  <p><strong>Korrigiert in Runde 7:</strong> Guard und <code>kurs</code> liegen in <strong>zwei
+     DBMS</strong> — <code>preis_herkunft</code> in Postgres, <code>kurs</code> auf Sybase; eine
+     gemeinsame Transaktion gibt es nicht (kein XA). Stattdessen eine <strong>Klammer</strong>: die
+     Postgres-Transaktion mit dem Guard-Update bleibt offen, bis der Sybase-Write committet ist —
+     erst dann committet sie selbst. Die Rowlock auf der Guard-Zeile hält über den
+     <code>kurs</code>-Write hinweg; ein nebenläufiges B wartet auf dieser Zeile, bis As Write
+     sichtbar ist. Dieselbe Garantie wie die Ein-DB-Transaktion, nur über zwei Verbindungen.
+     Deadlockfrei bleibt es durch:</p>
   <ul>
-    <li><strong>eine Transaktion pro Preisschlüssel</strong> statt pro Datei, und</li>
-    <li>die Schlüssel in <strong>deterministischer Reihenfolge</strong> (sortiert) abarbeiten.</li>
+    <li><strong>eine Klammer pro Preisschlüssel</strong> statt pro Datei, und</li>
+    <li>die Schlüssel in <strong>deterministischer Reihenfolge</strong> (sortiert) abarbeiten —
+        gesperrt wird nur in Postgres, die Sybase-Writes sind kurze eigenständige Transaktionen.</li>
   </ul>
-  <p>Bei ~4200 Preisen/Tag ist der Overhead irrelevant. Wäre eine Spalte in <code>kurs</code>
-     erlaubt, fiele selbst das weg — dann <em>ist</em> das bedingte Update der
-     <code>kurs</code>-Write: ein Statement, atomar, keine Transaktion, keine Sperre. Offener
-     Punkt M.</p>
+  <p class="note"><strong>Das neue Fehlerfenster:</strong> Crash zwischen Sybase-Commit und
+     Postgres-Commit → <code>kurs</code> geschrieben, Guard unmarkiert. Konvergiert: der Retry
+     gewinnt am unveränderten Guard erneut und wiederholt den idempotenten Upsert; kam dazwischen
+     eine neuere Lieferung, verliert der Retry am Prädikat — Endzustand korrekt. Nur ein endgültig
+     aufgegebener <code>FAILED</code>-Job kann veraltete Daten hinterlassen; dafür gibt es die
+     B3-Neu-Herleitung. Die Gegenrichtung ist ausgeschlossen: scheitert der Sybase-Write, rollt die
+     Klammer den Guard mit zurück.</p>
+  <p>Bei ~4200 Preisen/Tag ist der Overhead irrelevant. Eine Spalte in <code>kurs</code>, die das
+     alles erübrigt hätte, ist <strong>entschieden ausgeschlossen</strong> — die Sybase ist
+     schema-gesperrt (Punkt M). Die Klammer ist ein <strong>Übergangszustand</strong>: mit der
+     Sybase-Migration nach Postgres (im Lauf von 2027) liegen Guard und <code>kurs</code> im selben
+     DBMS, und sie kollabiert zu einer gewöhnlichen Transaktion — Prädikat und Schlüssel-Sortierung
+     bleiben unverändert.</p>
 
   <h3><code>tmp_if_last</code> braucht dieselbe Behandlung</h3>
   <p>Legacy schreibt dort „nur wenn Preisdatum neuer" — schon ein monotoner Guard, aber der falsche:
@@ -1258,8 +1427,10 @@ flowchart TD
          Heute schickt Legacy es einfach ohne Ausschüttungsangaben.</p></div>
   </div>
   <p><strong>Empfehlung: O1 plus O3.</strong> O3 ist unabhängig von O1/O2 richtig, weil es die
-     einzige Stelle ist, die den Fehler überhaupt sichtbar macht. Und es hat einen natürlichen
-     Platz: der Fehlmeldungs-Job prüft ohnehin Soll gegen Ist — „für diese ISIN ist heute eine
+     einzige Stelle ist, die den Fehler überhaupt sichtbar macht. O3 lebt an <strong>zwei
+     Stellen</strong>: je Lauf leisten es die portierten Plausi-Abschnitte 18–20 im Sammelreport
+     (15., Teil 1) — die Prüfung zur Laufzeit, im Report des Laufs, der das File erzeugt; am
+     Tagesende ergänzt der Fehlmeldungs-Job die Mail-Sicht — „für diese ISIN ist heute eine
      Ausschüttung gebucht, aber kein Preis geliefert" ist dieselbe Art von Befund und deckt
      gleichzeitig Markus Punkt 8 ab.</p>
   <h3>Neuer offener Punkt K: wem gehört <code>ASF.r_faktor</code>?</h3>
@@ -1286,12 +1457,64 @@ flowchart TD
   </table>
   </div>
   <p class="note danger">Vor der Entscheidung nicht implementieren: die Kennzahlen-Stufe berührt
-     <code>ASF.r_faktor</code> sonst, ohne dass geklärt ist, ob sie darf. <strong>K ist der einzige
-     offene Punkt, der einen Implementierungsschnitt blockiert.</strong></p>
+     <code>ASF.r_faktor</code> sonst, ohne dass geklärt ist, ob sie darf. <strong>Blocker je
+     Schnitt</strong> (korrigiert in Runde 7): die produktiven <code>tax_code</code>-Zeilen
+     blockieren Schnitt 1, N und F blockieren Schnitt 5, K und die fehlende Kennzahlen-Ist-Analyse
+     blockieren Schnitt 6, J blockiert Schnitt 7.</p>
 </section>
 
 <section id="delta" data-nav="Was sich geändert hat">
   <h2>Änderungsprotokoll</h2>
+  <h3>Runde 8 — 2026-09-02, Business-Tabellen nicht nach <code>infra</code></h3>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Was</th><th>vorher</th><th>jetzt</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Die vier Artefakte</strong></td>
+          <td>Katalog <code>infra</code>, <code>ifas-persistence-infra</code></td>
+          <td><strong>Business-Tabellen</strong>: Postgres, Katalog <code>kurs</code>, eigener
+              Context-Key, Modul <code>ifas-persistence-fondspreise</code> — Muster
+              <code>ifas.ausschuettung_tmp</code>. Die Job-Tabellen bleiben <code>infra</code></td></tr>
+      <tr><td><code>job_id</code> an den Artefakten</td><td>FK auf den Job</td>
+          <td><strong>logische Referenz</strong> (UUID) — verschiedene DB-Kontexte</td></tr>
+      <tr><td>Ausblick</td><td>—</td>
+          <td>Sybase-Migration nach Postgres im Lauf von 2027 — die Klammer-Transaktion kollabiert
+              dann zu einer gewöhnlichen</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <h3>Runde 7 — 2026-09-02, Review gegen die Codebase</h3>
+  <p>Zwei technische Kernannahmen hielten dem Code nicht stand; dazu die Vorgaben zum
+     Parallelbetrieb.</p>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Was</th><th>vorher</th><th>jetzt</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Guard-Transaktion</strong></td>
+          <td>Guard-Update und <code>kurs</code>-Write „in einer Transaktion"</td>
+          <td>geht nicht — <code>infra</code> (Postgres) und <code>kurs</code> (Sybase) sind
+              <strong>zwei DBMS</strong>. Neu: <strong>Klammer-Transaktion</strong>, Fehlerfenster
+              analysiert</td></tr>
+      <tr><td><strong><code>angekommen_am</code></strong></td>
+          <td>aus <code>work_queue_items.created_at</code>, „wird in der DB erzeugt"</td>
+          <td>falsch — das ist Serverzeit. Neu: eigenes Feld am Job, <strong>DB-seitig</strong>
+              befüllt; Wiederholungen <strong>erben</strong> es</td></tr>
+      <tr><td>Offener Punkt M</td><td>offen, Vorauswahl M1</td>
+          <td><span class="tag ok">entschieden</span> Sybase ist <strong>schema-gesperrt</strong>;
+              alles Neue nach Postgres</td></tr>
+      <tr><td><strong>Parallelbetrieb</strong></td><td>nur als Argument referenziert</td>
+          <td>eigener Abschnitt: eigene Neusystem-Sybase, vier Diff-Ebenen, Träger
+              <code>PreisMeldungDiffJob</code></td></tr>
+      <tr><td>Claims eines gescheiterten Laufs</td><td>Fehlerfall fehlte</td>
+          <td>der Folgelauf (<code>repeatedFromJob</code>) übernimmt die geclaimten Lieferungen</td></tr>
+      <tr><td>Initialbefüllung <code>letzte_preise</code></td><td>fehlte</td>
+          <td>Seed aus <code>kurs..tmp_if_last</code>, sonst 65 Tage blinder Fallback</td></tr>
+      <tr><td>Schnitt-Blocker</td><td>„nur K blockiert einen Schnitt"</td>
+          <td><code>tax_code</code> → Schnitt 1; N, F → Schnitt 5; K + Kennzahlen-Analyse →
+              Schnitt 6; J → Schnitt 7</td></tr>
+    </tbody>
+  </table>
+  </div>
   <h3>Runde 2 — Nachfragen zum Jobschnitt</h3>
   <p>Die einschneidendste Runde: der Jobschnitt selbst hat sich geändert.</p>
   <div class="scrollx">
@@ -1383,12 +1606,12 @@ flowchart TD
     <thead><tr><th>Leistung von <code>tmp_if_kurs</code></th><th>Wohin sie wandert</th></tr></thead>
     <tbody>
       <tr><td>Akkumulator, „letzte Lieferung gewinnt"</td>
-          <td>Auflösung im Sammelreport-Lauf; für <code>kurs</code> ergibt sie sich aus der
-              seriellen Anwendung von selbst</td></tr>
+          <td><code>WirksamePreismeldungen</code> im Sammelreport-Lauf; für <code>kurs</code>
+              ergibt es sich aus der seriellen Anwendung von selbst</td></tr>
       <tr><td>Datenquelle für Plausi, Files und Einspielung</td><td>Landezone</td></tr>
       <tr><td>Puffer für Spätlieferungen (<code>RemoveTmpKurse</code>, QMS 644)</td>
           <td><span class="tag">entfällt</span> eine spät eingelangte Lieferung bleibt auf
-              <code>sammelreport_lauf IS NULL</code></td></tr>
+              <code>sammelreport_job_id IS NULL</code></td></tr>
       <tr><td>Cross-File-Abgleich beim Ingest (<code>Check4DeleteInTmp</code>)</td>
           <td>verschoben in den Sammelreport-Lauf</td></tr>
     </tbody>
@@ -1396,7 +1619,8 @@ flowchart TD
   </div>
   <p>Der Nebeneffekt ist der eigentliche Gewinn: die erste Stufe läuft <strong>parallel über alle
      Lieferungen</strong>. Legacy musste den ganzen Ingest serialisieren — PID-File, alphabetisch je
-     Lieferant. Bei uns bleibt nur die schreibende Stufe seriell.</p>
+     Lieferant. Bei uns läuft auch die schreibende Stufe parallel; die Reihenfolge je Preisschlüssel
+     erzwingt der monotone Guard.</p>
 </section>
 
 <section id="landezone" data-nav="Die Landezone">
@@ -1404,8 +1628,10 @@ flowchart TD
   <dl>
     <dt><code>job_id</code>, <code>zeilen_nr</code></dt>
     <dd>PK. <code>job_id</code> ersetzt <code>liefer_id</code> <em>und</em>
-      <code>eintragezeit</code> — beides steht am Job. <code>zeilen_nr</code> bindet an
-      <code>data.log</code>/<code>error.log</code> zurück und hält die Reihenfolge in der Datei.</dd>
+      <code>eintragezeit</code> — beides steht am Job; logische Referenz (UUID), kein DB-FK, weil
+      Job und Landezone in verschiedenen DB-Kontexten liegen (Runde 8). <code>zeilen_nr</code>
+      bindet an <code>data.log</code>/<code>error.log</code> zurück und hält die Reihenfolge in der
+      Datei.</dd>
     <dt><code>isin</code>, <code>preisdatum</code>, <code>waehrung</code>,
       <code>meldekategorie</code>, <code>aktion</code></dt>
     <dd>Der Preisschlüssel plus <code>N</code>/<code>D</code>/<code>I</code>. Die Meldekategorie
@@ -1428,21 +1654,24 @@ flowchart TD
          brauchen die <em>Historie</em> der Lieferungen, nicht ihr Ergebnis.</p></div>
     <div class="card accent"><h3>Gehört genau einem Job</h3>
       <p>Kein lieferantenübergreifender veränderlicher Zustand.</p></div>
+    <div class="card accent"><h3>Retention</h3>
+      <p>Mindestens das 65-Tage-Lesefenster des Fallbacks plus Puffer — B3-Rebuild, Transparenz und
+         Fehlmeldung hängen an der Historie. Archivierung erst danach.</p></div>
   </div>
   <p class="note">Nicht übernommen: <code>num_ausschuettung</code>/<code>dat_zahltag</code> — die
      Ausschüttungsangaben im Preisfile kommen aus den Stammdaten — und <code>intervall</code>, das
      produktiv seit 2017 ersatzlos geleert wird.</p>
 </section>
 
-<section id="aufloesung" data-nav="Auflösung">
-  <h2>Auflösung — nur für den Sammelreport, nicht für <code>kurs</code></h2>
+<section id="aufloesung" data-nav="Wer sich durchsetzt">
+  <h2>Welche Lieferung sich durchsetzt — nur für den Sammelreport, nicht für <code>kurs</code></h2>
   <p class="lede">Der Unterschied ist der Grund, warum die Sync-Stufe pro Lieferung laufen kann.</p>
   <p>Ein File darf keine zwei widersprüchlichen Zeilen zum selben Schlüssel enthalten, und sein
      Footer zählt. <code>kurs</code> ist dagegen eine Tabelle: <strong>sequenzielle Upserts in
      Ankunftsreihenfolge konvergieren auf denselben Zustand wie „letzte gewinnt"</strong>. Auch die
      D/N-Fälle: <code>D</code> auf eine vorhandene Zeile löscht sie, <code>D</code> auf eine fehlende
-     ist ein No-op, <code>N</code> nach <code>D</code> fügt wieder ein. Die Auflösung ist damit ein
-     <strong>Datei</strong>-Anliegen.</p>
+     ist ein No-op, <code>N</code> nach <code>D</code> fügt wieder ein. Welche Lieferung sich
+     durchsetzt, ist damit ein <strong>Datei</strong>-Anliegen.</p>
   <h3>Die D/N-Regeln des Altsystems, präzise</h3>
   <div class="scrollx">
   <table>
@@ -1471,6 +1700,10 @@ flowchart TD
   <p>Neu ist, woran „schon berichtet" gemessen wird: nicht mehr an <code>kurs</code> — das ist jetzt
      untertags aktuell und damit kein Maß für „hat der Bezieher es gesehen" — sondern am
      Publikationsprotokoll.</p>
+  <p class="note">Die Verrechnung, das Publikationsprotokoll und der Delta-Mechanismus gelten
+     <strong>einheitlich auch für die Solvabilitätssätze</strong> (<code>S</code>/<code>S2</code>/<code>S3</code>,
+     ausgehend <code>S1</code>–<code>S3</code> bzw. <code>D1</code>–<code>D3</code>); sie
+     unterscheiden sich nur im Ausgabestrom (<code>solva.csv</code>).</p>
 </section>
 
 <section id="laeufe" data-nav="Lauf 1 und Lauf 2">
@@ -1569,10 +1802,10 @@ flowchart TD
      <code>FONDS_ZGRU</code>, Zielgruppe) werden auf das <code>I3</code> genauso angewandt wie auf das
      <code>I2</code>. Dadurch wird ein nie berichteter Preis auch nie zurückgenommen, ohne dass der
      Lauf das gesondert wissen muss.</p>
-  <p class="note danger"><strong>Auflage: das Protokoll wird vom File-Writer gefüttert, nicht aus der
-     Auflösung.</strong> Der <code>tmp_if_last</code>-Fallback aus Lauf 1 stammt nicht aus der
-     Tagesmenge, sondern aus der Projektion. Eine Implementierung, die das Protokoll aus dem
-     Auflösungsergebnis ableitet, übersieht Fallback-Zeilen — und dann greift der <code>I3</code>-Bezug
+  <p class="note danger"><strong>Auflage: das Protokoll wird vom File-Writer gefüttert, nicht aus
+     <code>WirksamePreismeldungen</code>.</strong> Der <code>tmp_if_last</code>-Fallback aus Lauf 1
+     stammt nicht aus den wirksamen Preismeldungen, sondern aus der Projektion. Eine
+     Implementierung, die das Protokoll aus deren Ergebnis ableitet, übersieht Fallback-Zeilen — und dann greift der <code>I3</code>-Bezug
      für genau diese nicht: Lauf 1 gibt den Fallback für (X, T−3) aus, einen Preis, der <em>nie in
      <code>kurs</code></em> war; um 15:00 kommt ein <code>D</code> dafür; die Legacy-Regel prüft
      <code>kurs</code>, findet nichts, verwirft das <code>D</code> — und der Bezieher behält einen
@@ -1639,7 +1872,16 @@ flowchart TD
      Löschsätze wären strukturell unsichtbar.</p>
   <p class="note">Nebenläufigkeit: der Guard aus <em>Zwei Server, ein Pool</em> muss auch hier
      greifen, und zwar lexikografisch über <code>(preisdatum, angekommen_am)</code> — Legacys „nur
-     wenn Preisdatum neuer" würde eine Korrektur zum <em>gleichen</em> Preisdatum verwerfen.</p>
+     wenn Preisdatum neuer" würde eine Korrektur zum <em>gleichen</em> Preisdatum verwerfen. Und
+     weil <code>letzte_preise</code> in Postgres liegt, ist der Guard hier ein einzelnes bedingtes
+     Update in der eigenen Zeile — keine Klammer-Transaktion nötig.</p>
+  <h3>Initialbefüllung</h3>
+  <p class="note warn">Beim Start — des Parallelbetriebs wie später des Echtbetriebs — ist
+     <code>letzte_preise</code> leer. Ohne Seed verfehlt der Lauf-1-Fallback 65 Tage lang fast alle
+     Fonds, und der B3-Diff gegen die Legacy-Tabelle wäre von Tag 1 an rot. Deshalb ein einmaliger
+     Migrationsschritt: <strong>Seed aus <code>kurs..tmp_if_last</code></strong> des Altsystems, mit
+     synthetischem <code>angekommen_am</code> (Seed-Zeitpunkt); ab dann führt die Kette die Tabelle
+     selbst.</p>
   <h3>Wozu der Fallback da ist, steht nirgends</h3>
   <p>Der Mechanismus ist dokumentiert, der <strong>Zweck nicht</strong>. Weil <code>I2</code> ein
      Upsert ist, ist eine Fallback-Zeile beim Bezieher ein No-op — gleicher Schlüssel, gleicher Wert.
@@ -1777,7 +2019,7 @@ flowchart TD
       <p>Der Report soll die <em>Folge</em> je Preisschlüssel zeigen („New, Delete, New..."), nicht
          nur das aufgelöste Ergebnis. Die Landezone liefert das ohne Zusatzaufwand. Ein neuer
          Abschnitt listet je Schlüssel mit mehr als einer Lieferung die Kette in
-         Ankunftsreihenfolge, mit Lieferant, Zeit und Aktion, und markiert den Gewinner.
+         Ankunftsreihenfolge, mit Lieferant, Zeit und Aktion, und markiert, welche sich durchgesetzt hat.
          Nebeneffekt: die <code>INFO_DEL_*</code>-Meldungen werden hier wieder sichtbar.</p>
     </div>
     <div class="card ok">
@@ -1809,8 +2051,9 @@ flowchart TD
 </section>
 
 <section id="offen" data-nav="Offene Punkte">
-  <h2>Offene Entscheidungen A–J</h2>
-  <p class="lede">Keiner davon blockiert den Zuschnitt der ersten Implementierungsschritte.</p>
+  <h2>Offene Entscheidungen A–N</h2>
+  <p class="lede">A, B, C, D und M sind entschieden. Was noch offen ist, blockiert die ersten
+     Schnitte nicht — die Blocker je Schnitt stehen im Vorgehen.</p>
   <div class="scrollx">
   <table>
     <thead><tr><th></th><th>Frage</th><th>Stand</th><th>bei wem</th></tr></thead>
@@ -1826,7 +2069,9 @@ flowchart TD
       <tr><td><strong>C</strong></td><td>Kennzahlen: Invalidierung oder Auftragsübergabe?</td>
           <td><span class="tag ok">C1 faktisch gesetzt</span> der Sweep braucht ein Kriterium, und
               „Preise ohne Kennzahl" ist es. Rest: welche anderen Verbraucher mit abwesenden statt
-              veralteten Kennzahlen leben können</td><td>intern</td></tr>
+              veralteten Kennzahlen leben können. <strong>C1b</strong> (markieren statt löschen) ist
+              als <code>stale_since</code>-Spalte mit der Sybase-Schemasperre nicht umsetzbar —
+              bliebe eine eigene Postgres-Tabelle</td><td>intern</td></tr>
       <tr><td><strong>D</strong></td><td>Rücknahme eines berichteten Preises</td>
           <td><span class="tag ok">entschieden</span> explizites <code>I3</code> gegen das
               Publikationsprotokoll. Bewusste Abweichung vom Altsystem</td><td>—</td></tr>
@@ -1850,8 +2095,8 @@ flowchart TD
               betrifft nur Fremdwährungsfonds</td><td>intern + Fachabteilung</td></tr>
       <tr><td><strong>K</strong></td><td>Wem gehört <code>ASF.r_faktor</code>?</td>
           <td>Beide Domänen schreiben ihn. K1 (Ausschüttungs-Domäne), K2 (Kennzahlen-Domäne, mit
-              Datenmodell-Änderung) oder K3 (geteilt, mit Vorrangregel). <strong>Der einzige Punkt,
-              der einen Implementierungsschnitt blockiert</strong></td>
+              Datenmodell-Änderung) oder K3 (geteilt, mit Vorrangregel). <strong>Blockiert
+              Schnitt 6</strong> — gemeinsam mit der fehlenden Kennzahlen-Ist-Analyse</td>
           <td>Markus</td></tr>
       <tr><td><strong>L</strong></td><td>Vorrang Preis- gegen Ausschüttungs-Einspielung</td>
           <td>O1 (Ausschüttungs-Tagesjob vor Cutoff 1), O2 (auch pro Lieferung) oder O3
@@ -1863,9 +2108,12 @@ flowchart TD
               und Entscheidung 6 wäre wieder offen). <strong>Vor der Filegenerierung klären</strong></td>
           <td>Fachabteilung / Bezieher</td></tr>
       <tr><td><strong>M</strong></td><td>Darf <code>kurs</code> eine Spalte bekommen?</td>
-          <td><span class="tag accent">neu</span> M1 (eigene Tabelle <code>preis_herkunft</code>,
-              Vorauswahl — im Parallelbetrieb unbedenklich) oder M2 (Spalte in <code>kurs</code>,
-              einfacher, aber das Altsystem pflegt sie nicht mit)</td><td>intern</td></tr>
+          <td><span class="tag ok">entschieden</span> nein — <strong>Sybase ist schema-gesperrt</strong>
+              (keine neuen Tabellen und Spalten, Alt wie Neu); alles Neue nach Postgres.
+              <code>preis_herkunft</code> liegt als Business-Tabelle auf Postgres (Katalog
+              <code>kurs</code>, nicht <code>infra</code> — Runde 8), der Preis ist die
+              Klammer-Transaktion (siehe <em>Zwei Server, ein Pool</em>) — und mit der
+              Sybase-Migration 2027 entfällt er</td><td>—</td></tr>
       <tr><td><strong>J</strong></td><td>Fehlmeldung: Zuordnung und Empfänger</td>
           <td>Datenanalyse läuft. Ist <code>INV.preismeldung</code> die gemeinte Tabelle? Nur
               <code>R</code> oder alle Codes? Ein Lieferant je ISIN — und was mit Fonds ohne jeden
@@ -1894,6 +2142,8 @@ flowchart TD
     <li><code>AllowOldPreisFormat</code> und <code>AllowTxtExt4PreisFile</code> — davon hängt ab, ob
       das alte Format 1 bedient werden muss.</li>
     <li><code>MFT_*.INI</code> — Zielverzeichnisse und Accounts sind nicht im Repo.</li>
+    <li><code>pool_if_kurs</code>-Semantik — Upsert oder Append, welcher Schlüssel? Davon hängt ab,
+      ob der monotone Guard auch dort gilt.</li>
     <li>Vollständiger <code>fplausib.txt</code> mit Treffern in allen Abschnitten.</li>
     <li>Aktuelle <code>preis.dtd</code>, wie sie tatsächlich ausgeliefert wird.</li>
     <li><code>datum_min</code>-Vergleichsrichtung mit der Fachabteilung klären.</li>
@@ -1949,13 +2199,56 @@ flowchart TD
      Vendoren, WDBO.</p>
 </section>
 
+<section id="parallelbetrieb" data-nav="Parallelbetrieb">
+  <h2>Parallelbetrieb</h2>
+  <p class="lede">Vorgaben vom 2026-09-02: das Neusystem schreibt in eine eigene Sybase, die
+     Altsystem-Sybase ist read-only angebunden. Beide Schemata sind eingefroren — alles Neue liegt
+     in Postgres.</p>
+  <p>Der Modus ist derselbe wie bei den Steuermeldungen und den ISIN-Anforderungslisten:
+     <strong>das Altsystem verarbeitet und persistiert zuerst</strong>; seine Input- und Resultfiles
+     kommen ins Neusystem, das dieselbe Operation inklusive Persistenz in der eigenen Sybase
+     durchführt — und dann wird verglichen. Träger ist ein <strong><code>PreisMeldungDiffJob</code></strong>
+     nach dem Muster <code>IsinAnforderungslisteDiffJob</code>; der Einstieg existiert schon:
+     <code>ParallelbetriebJobSubmissionService</code> erkennt Preismeldungs-Files und ruft den
+     heutigen Stub <code>PreisMeldungDiffJobSubmissionService</code> (derzeit BadInput).</p>
+  <h3>Vier Diff-Ebenen</h3>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Ebene</th><th>Neusystem</th><th>gegen</th></tr></thead>
+    <tbody>
+      <tr><td>Rückmeldung</td>
+          <td>das erzeugte ZIP (<code>data.log</code>/<code>error.log</code>/<code>info.log</code>)</td>
+          <td>das Rückmelde-ZIP des Altsystems</td></tr>
+      <tr><td>Ausgabefiles</td><td><code>preis.csv</code>/<code>solva.csv</code>, Reports</td>
+          <td>die Files des Altsystems</td></tr>
+      <tr><td>DB-Stand</td>
+          <td><code>kurs</code>, <code>pool_if_kurs</code>, <code>del_protokoll</code> in der
+              Neusystem-Sybase</td>
+          <td>dieselben Tabellen im Altsystem (<code>DatabaseCompareService</code>)</td></tr>
+      <tr><td>Projektion</td><td><code>kurs.letzte_preise</code> (Postgres)</td>
+          <td><code>kurs..tmp_if_last</code> im Altsystem — der B3-Diff</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note warn"><strong>Außenwirkungen sind unterdrückt:</strong> keine Rückmeldungs-Mails an
+     Lieferanten, kein MFT/T2S-Upload, keine Fehlmeldungs-Mails. Die Rückmeldung wird als File
+     erzeugt und gedifft statt versandt; die Ergebnisartefakte hängen am Diff-Job (Muster
+     <code>resultBundleFile</code>).</p>
+  <p><strong>Bekannte Abweichungen</strong> müssen im Diff konfigurierbar geführt werden — dasselbe
+     Muster wie die <code>ValidationSettings</code> der STM-Return-File-Diffs. Von Anfang an bekannt:
+     das explizite <code>I3</code> aus D und das <code>del_protokoll</code>-Rauschen aus dem Sync.
+     Der Diff-Job wächst mit den Schnitten: nach Schnitt 1 difft er die Rückmeldung, nach Schnitt 2
+     den DB-Stand und die Projektion, nach den Schnitten 4/5 die Ausgabefiles.</p>
+</section>
+
 <section id="vorgehen" data-nav="Vorgehen">
   <h2>Vorgehen</h2>
   <ul class="todo">
     <li>Query-Ergebnisse zu J auswerten. Entscheidet die Adressierung der Fehlmeldung.</li>
     <li>Datenbeschaffung anstoßen — <code>tax_code</code> und <code>preismeldung</code> zuerst.</li>
-    <li>Offene Punkte klären. A geschlossen, C und D entschieden; B und I intern; E, F, G, H, J
-      brauchen die Fachabteilung.</li>
+    <li>Offene Punkte klären. A geschlossen, C, D und M entschieden; B und I intern; E, F, G, H, J,
+      K, L, N brauchen die Fachabteilung bzw. Markus. Blocker je Schnitt: <code>tax_code</code> →
+      Schnitt 1; N, F → Schnitt 5; K + Kennzahlen-Ist-Analyse → Schnitt 6; J → Schnitt 7.</li>
     <li>Konzept nach <code>docs/Fondspreise/fondspreise-soll-konzept.md</code>, sobald B und I
       entschieden sind.</li>
     <li><code>docs/Technische Konzepte/ifas13-jobs.md</code> aktualisieren — „Fondspreise — out of
@@ -1968,9 +2261,9 @@ flowchart TD
   <div class="boxflow">
     <div class="bx accent">Stufe 1<small>Ingest, Landezone, Rückmeldung</small></div>
     <div class="arrow accent">&rarr;</div>
-    <div class="bx accent">Stufe 2<small>Sync, seriell, + tmp_if_last</small></div>
+    <div class="bx accent">Stufe 2<small>Sync + Guard + letzte_preise + Seed</small></div>
     <div class="arrow">&rarr;</div>
-    <div class="bx">Auflösung<small>Komponente, isoliert getestet</small></div>
+    <div class="bx"><code>WirksamePreismeldungen</code><small>isoliert getestet</small></div>
   </div>
   <div class="boxflow">
     <div class="bx">Lauf 1<small>Plausi, Files, Protokoll</small></div>
@@ -1983,6 +2276,9 @@ flowchart TD
     <div class="arrow">&rarr;</div>
     <div class="bx">Transparenz</div>
   </div>
+  <p class="note">Quer dazu wächst der <code>PreisMeldungDiffJob</code> (siehe
+     <em>Parallelbetrieb</em>): er ersetzt den BadInput-Stub, sobald Schnitt 1 steht, und nimmt mit
+     jedem weiteren Schnitt eine Diff-Ebene dazu.</p>
 </section>
 
 <section id="verifikation" data-nav="Verifikation">
@@ -1991,7 +2287,7 @@ flowchart TD
   <ul>
     <li>Jede Aussage über das Altsystem gegen die Ist-Analyse und, wo dort nicht belegt, gegen
       <code>file:line</code> im Legacy-Repo (ISO-8859-1 → <code>grep -a</code>).</li>
-    <li>Die Landezone gegen ihre Verbraucher durchspielen: Auflösung, Plausi,
+    <li>Die Landezone gegen ihre Verbraucher durchspielen: <code>WirksamePreismeldungen</code>, Plausi,
       Transparenz-Abschnitt, <code>tmp_if_last</code>, Fehlmeldung.</li>
     <li><strong>Das zweiachsige Statusmodell gegen die Fehlerfälle:</strong> Sync-Stufe hängt,
       während Lauf 1 die Lieferung schon berichtet hat; Kennzahlen-Stufe scheitert am fehlenden
@@ -2001,7 +2297,16 @@ flowchart TD
       späteren Ankunft sein, und zwar <strong>in beiden Bearbeitungsreihenfolgen</strong>.</li>
     <li><strong>Deadlockfreiheit:</strong> zwei Lieferungen mit überlappenden, unterschiedlich
       sortierten Schlüsselmengen gleichzeitig — keine Verklemmung.</li>
-    <li>Die D/N-Auflösung, inklusive „<code>D</code> ohne vorheriges <code>N</code>" (läuft durch)
+    <li><strong>Das Crash-Fenster der Klammer-Transaktion:</strong> Sybase-Commit ohne
+      Postgres-Commit → der Retry konvergiert; kommt dazwischen eine neuere Lieferung, verliert der
+      Retry am Prädikat.</li>
+    <li><strong>Claims-Übernahme:</strong> Lauf 1 scheitert nach dem Claimen → der Folgelauf mit
+      <code>repeatedFromJob</code> nimmt die geclaimten Lieferungen mit.</li>
+    <li><strong>Initialbefüllung:</strong> nach dem Seed aus <code>tmp_if_last</code> liefert der
+      erste Lauf-1-Fallback dieselben Zeilen wie das Altsystem.</li>
+    <li><strong>Parallelbetrieb:</strong> derselbe Input durch Alt- und Neusystem → alle vier
+      Diff-Ebenen leer bis auf die geführten bekannten Abweichungen.</li>
+    <li>Die D/N-Regeln, inklusive „<code>D</code> ohne vorheriges <code>N</code>" (läuft durch)
       und „<code>N</code> und <code>D</code> am selben Tag, dazwischen Lauf 1" (→ <code>I3</code>).</li>
     <li>Die Delta-Semantik: Fallback in Lauf 1 und echter Preis in Lauf 2 (zwei Schlüssel); zweimal
       <code>I2</code> auf denselben Schlüssel (Upsert); Ausgabefilter unterdrückt <code>I2</code> in
