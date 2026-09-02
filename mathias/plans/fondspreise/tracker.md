@@ -113,6 +113,12 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
 
 ## Erledigt
 
+- 2026-09-02 — **`tax_code` im YAML-Datenexport**: Entity auf alle 26 Legacy-Spalten
+  vervollständigt, `TaxCodeDto` mit `@TypeId("TAX_CODE")` + MapStruct-Paar in
+  `ifas-data-import-export` — der Typ erscheint automatisch in der UI-Export-Liste.
+  Round-Trip-Test (Export → Tabelle leeren → Re-Import) grün. Damit können
+  Parallelbetrieb-Fixtures die produktive tax_code-Konfiguration als YAML mitführen
+
 - 2026-09-01 — A geschlossen; B entschieden (B3); C entschieden (C1, C1b dokumentiert);
   D entschieden (explizites `I3`)
 - 2026-09-02 — M entschieden (Sybase schema-gesperrt, Business-Tabellen nach Postgres/`kurs`);

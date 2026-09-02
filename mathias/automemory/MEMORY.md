@@ -3,6 +3,7 @@
 ## User
 - [Communication style](user_style.md) — prefers direct, raw, unfiltered communication
 - [NixOS / fish / IntelliJ](user_nixos_fish_shell.md) — NixOS + home-manager, fish shell, comma (`,`) for ad-hoc nixpkgs CLI tools
+- [IntelliJ git add](user_intellij-git-add.md) — User staged manuell in IntelliJ; Index oft vorbefüllt (auch AD-Leichen von Renames) — prüfen statt trauen, git reset verwirft seine Adds
 
 ## Feedback
 - [English method names](feedback_english-method-names.md) — Methodennamen englisch (write/process/compare); deutsch nur Fachbegriffe in Typ-/Feldnamen oder als Substantiv im Methodennamen.
