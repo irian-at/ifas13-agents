@@ -1,0 +1,1053 @@
+<!doctype html>
+<!--
+  Deck template — copy, then replace everything between the SECTIONS markers.
+
+  Shape: one long scrolling document, with a sticky table of contents on the left.
+  Rules baked in here, do not undo them:
+    * Nothing is ever display:none. All text stays in the DOM for Ctrl+F. That also
+      rules out scroll-reveal animations that start at opacity:0 — see MOTION below.
+    * The table of contents BUILDS ITSELF from each <section>'s heading — just write
+      sections with an <h2> and they appear in the menu. Give a section an id to
+      control its anchor, otherwise one is slugged from the heading.
+    * Section numbers in the menu and above each <h2> are CSS counters. Do not
+      hand-number headings; the counters stay right when sections move.
+    * Mermaid sources are cached in JS so diagrams re-render on a theme change, and
+      mermaid is themed from the deck's own tokens — diagrams match the page.
+    * Everything is local: mermaid comes from the sibling _deck/ directory.
+
+  GEOMETRY IS LOAD-BEARING. --toc-w 17rem + main max-width 58rem + 3.5rem padding
+  give a content column of exactly 816px, which is the number every mermaid width
+  budget in references/diagram-patterns.md is derived from. Change the type, the
+  colour, the spacing — but leave those three alone unless you also redo that table.
+-->
+<!-- data-headings picks the heading treatment: "rule" for a diagram-heavy deck,
+     "accent" for a prose-heavy one. See HEADING TREATMENT in the stylesheet;
+     probe.sh reports which one fits and flags the attribute if it is missing.
+
+     data-palette is the deck's colour: ink (blue), ember (rust) or iris (indigo).
+     Pick one per deck rather than defaulting every time — decks that all look
+     identical are harder to tell apart at a glance. The reader can cycle it from
+     the sidebar, and that choice is remembered per file. -->
+<html lang="en" data-headings="accent" data-palette="ember">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>jTDS shared-Calendar race in the ISIN diff job</title>
+<style>
+  /* ====================================================================== */
+  /*  STRUCTURAL TOKENS — the same in every palette                         */
+  /* ====================================================================== */
+  :root {
+    --sans: "Ubuntu", "Fira Sans", "Source Sans 3", "Segoe UI Variable Text",
+            "Segoe UI", "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+    --display: "TeX Gyre Pagella", "Palatino Linotype", "Iowan Old Style", Palatino,
+               "Book Antiqua", Georgia, ui-serif, serif;
+    --mono: "JetBrains Mono", "JetBrainsMono Nerd Font Mono", "IBM Plex Mono",
+            "Cascadia Mono", "SF Mono", Consolas, ui-monospace, monospace;
+
+    /* spacing scale — use these, do not invent one-off rem values */
+    --s1:.25rem; --s2:.5rem; --s3:.75rem; --s4:1rem; --s5:1.5rem;
+    --s6:2rem;   --s7:3rem;  --s8:4.5rem;
+    --r1:.35rem; --r2:.55rem; --r3:.85rem;
+
+    --toc-w:17rem;
+    --measure:64ch;   /* prose stops here; tables and diagrams run the full column */
+  }
+
+  /* ====================================================================== */
+  /*  PALETTES — set data-palette on <html>; the sidebar button cycles them  */
+  /*                                                                        */
+  /*  ink    blue on cool paper.   The documentation default: GitHub Primer  */
+  /*                              (#0969da), MDN, Tailwind all land here.    */
+  /*  ember  rust on warm bone.    Editorial, closer to print than to a UI.  */
+  /*  iris   indigo on cool paper. The Stripe/Linear register.               */
+  /*                                                                        */
+  /*  Accent text values are Radix Colors step 11 (light) and step 11 dark,  */
+  /*  which are tuned for text contrast against their own backgrounds; ink's */
+  /*  solid is Primer's link blue. Every palette keeps the SAME three        */
+  /*  semantics, so green never stops meaning safe — except --warn, which is */
+  /*  nudged per palette to stay clear of the accent (in ember an amber warn */
+  /*  is nearly the accent, so it goes olive).                               */
+  /* ====================================================================== */
+
+  /* ---- ink (default) ---------------------------------------------------- */
+  :root, :root[data-palette="ink"] {
+    --bg:#fbfcfd; --surface:#fff; --surface-2:#f1f4f8; --tint:#eef3f9;
+    --fg:#16191d; --ink-2:#383e46; --muted:#5f6771; --faint:#8a929c;
+    --line:#e0e5eb; --line-strong:#c4cbd4;
+    --accent:#0969da; --accent-ink:#0b5cad; --accent-wash:rgba(9,105,218,.08);
+    --ok:#2f7d46;     --ok-wash:rgba(47,125,70,.09);
+    --warn:#8a6206;   --warn-wash:rgba(138,98,6,.10);
+    --danger:#b42323; --danger-wash:rgba(180,35,35,.08);
+    --shadow:0 1px 2px rgba(16,24,40,.05), 0 8px 20px -14px rgba(16,24,40,.30);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]), :root[data-palette="ink"]:not([data-theme="light"]) {
+      --bg:#0f1216; --surface:#171b21; --surface-2:#0a0d11; --tint:#1a2431;
+      --fg:#e6eaef; --ink-2:#c3cad3; --muted:#97a0ab; --faint:#727b87;
+      --line:#252b33; --line-strong:#3b434f;
+      --accent:#70b8ff; --accent-ink:#8ecaff; --accent-wash:rgba(112,184,255,.10);
+      --ok:#6fc48a;     --ok-wash:rgba(111,196,138,.11);
+      --warn:#d8ab4a;   --warn-wash:rgba(216,171,74,.11);
+      --danger:#f07a72; --danger-wash:rgba(240,122,114,.11);
+      --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -16px rgba(0,0,0,.9);
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"], :root[data-palette="ink"][data-theme="dark"] {
+    --bg:#0f1216; --surface:#171b21; --surface-2:#0a0d11; --tint:#1a2431;
+    --fg:#e6eaef; --ink-2:#c3cad3; --muted:#97a0ab; --faint:#727b87;
+    --line:#252b33; --line-strong:#3b434f;
+    --accent:#70b8ff; --accent-ink:#8ecaff; --accent-wash:rgba(112,184,255,.10);
+    --ok:#6fc48a;     --ok-wash:rgba(111,196,138,.11);
+    --warn:#d8ab4a;   --warn-wash:rgba(216,171,74,.11);
+    --danger:#f07a72; --danger-wash:rgba(240,122,114,.11);
+    --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -16px rgba(0,0,0,.9);
+    color-scheme:dark;
+  }
+
+  /* ---- ember ------------------------------------------------------------ */
+  :root[data-palette="ember"] {
+    --bg:#fbfaf7; --surface:#fff; --surface-2:#f3f1ec; --tint:#f6efe6;
+    --fg:#1a1917; --ink-2:#3d3a35; --muted:#6a655c; --faint:#948e82;
+    --line:#e2ded4; --line-strong:#c8c2b4;
+    --accent:#b4530a; --accent-ink:#8f4108; --accent-wash:rgba(180,83,10,.08);
+    --ok:#3f7042;     --ok-wash:rgba(63,112,66,.09);
+    --warn:#6d6a0f;   --warn-wash:rgba(109,106,15,.11);
+    --danger:#a83232; --danger-wash:rgba(168,50,50,.08);
+    --shadow:0 1px 2px rgba(40,32,20,.05), 0 8px 20px -14px rgba(40,32,20,.28);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root[data-palette="ember"]:not([data-theme="light"]) {
+      --bg:#141311; --surface:#1d1b18; --surface-2:#100f0e; --tint:#241f19;
+      --fg:#ece7dd; --ink-2:#cdc7bb; --muted:#a09a8d; --faint:#7c766b;
+      --line:#2e2b26; --line-strong:#463f36;
+      --accent:#e8913c; --accent-ink:#f0a65c; --accent-wash:rgba(232,145,60,.10);
+      --ok:#7fb383;     --ok-wash:rgba(127,179,131,.11);
+      --warn:#c3c257;   --warn-wash:rgba(195,194,87,.11);
+      --danger:#e07a72; --danger-wash:rgba(224,122,114,.11);
+      --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -16px rgba(0,0,0,.9);
+      color-scheme:dark;
+    }
+  }
+  :root[data-palette="ember"][data-theme="dark"] {
+    --bg:#141311; --surface:#1d1b18; --surface-2:#100f0e; --tint:#241f19;
+    --fg:#ece7dd; --ink-2:#cdc7bb; --muted:#a09a8d; --faint:#7c766b;
+    --line:#2e2b26; --line-strong:#463f36;
+    --accent:#e8913c; --accent-ink:#f0a65c; --accent-wash:rgba(232,145,60,.10);
+    --ok:#7fb383;     --ok-wash:rgba(127,179,131,.11);
+    --warn:#c3c257;   --warn-wash:rgba(195,194,87,.11);
+    --danger:#e07a72; --danger-wash:rgba(224,122,114,.11);
+    --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -16px rgba(0,0,0,.9);
+    color-scheme:dark;
+  }
+
+  /* ---- iris ------------------------------------------------------------- */
+  :root[data-palette="iris"] {
+    --bg:#fdfdff; --surface:#fff; --surface-2:#f3f3fa; --tint:#f0f1fe;
+    --fg:#1a1a22; --ink-2:#3b3b47; --muted:#62626f; --faint:#8c8c9a;
+    --line:#e3e3ed; --line-strong:#c6c6d5;
+    --accent:#5753c6; --accent-ink:#4a46b0; --accent-wash:rgba(87,83,198,.08);
+    --ok:#2f7d46;     --ok-wash:rgba(47,125,70,.09);
+    --warn:#8a6206;   --warn-wash:rgba(138,98,6,.10);
+    --danger:#b42323; --danger-wash:rgba(180,35,35,.08);
+    --shadow:0 1px 2px rgba(20,20,43,.05), 0 8px 20px -14px rgba(20,20,43,.30);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root[data-palette="iris"]:not([data-theme="light"]) {
+      --bg:#121218; --surface:#1b1b24; --surface-2:#0d0d12; --tint:#202248;
+      --fg:#e8e7f0; --ink-2:#c9c8d6; --muted:#9c9bad; --faint:#787889;
+      --line:#282833; --line-strong:#41414f;
+      --accent:#b1a9ff; --accent-ink:#c5bfff; --accent-wash:rgba(177,169,255,.10);
+      --ok:#6fc48a;     --ok-wash:rgba(111,196,138,.11);
+      --warn:#d8ab4a;   --warn-wash:rgba(216,171,74,.11);
+      --danger:#f07a72; --danger-wash:rgba(240,122,114,.11);
+      --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -16px rgba(0,0,0,.9);
+      color-scheme:dark;
+    }
+  }
+  :root[data-palette="iris"][data-theme="dark"] {
+    --bg:#121218; --surface:#1b1b24; --surface-2:#0d0d12; --tint:#202248;
+    --fg:#e8e7f0; --ink-2:#c9c8d6; --muted:#9c9bad; --faint:#787889;
+    --line:#282833; --line-strong:#41414f;
+    --accent:#b1a9ff; --accent-ink:#c5bfff; --accent-wash:rgba(177,169,255,.10);
+    --ok:#6fc48a;     --ok-wash:rgba(111,196,138,.11);
+    --warn:#d8ab4a;   --warn-wash:rgba(216,171,74,.11);
+    --danger:#f07a72; --danger-wash:rgba(240,122,114,.11);
+    --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -16px rgba(0,0,0,.9);
+    color-scheme:dark;
+  }
+
+  /* ---- base ------------------------------------------------------------- */
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body {
+    margin:0; background:var(--bg); color:var(--fg);
+    font:400 1.125rem/1.7 var(--sans);
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  /* Atmosphere, not decoration: one soft accent wash behind the masthead so the
+     top of the page has depth instead of reading as a flat fill. Fixed, so it
+     fades out as the reader scrolls into the body. */
+  body::before {
+    content:""; position:fixed; inset:0 0 auto 0; height:38rem; pointer-events:none;
+    background:radial-gradient(58rem 26rem at 34% -12%, var(--accent-wash), transparent 68%);
+    z-index:0;
+  }
+  #toc, main { position:relative; z-index:1; }
+  ::selection { background:var(--accent-wash); }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:.2rem; }
+
+  /* ---- reading progress -------------------------------------------------- */
+  /* Orientation on a page that can run very long. No text, no layout cost. */
+  #progress {
+    position:fixed; top:0; left:var(--toc-w); right:0; height:2px; z-index:6;
+    background:var(--accent); transform:scaleX(0); transform-origin:0 50%;
+  }
+
+  /* ====================================================================== */
+  /*  TABLE OF CONTENTS                                                     */
+  /* ====================================================================== */
+  #toc {
+    position:fixed; top:0; left:0; width:var(--toc-w); height:100vh; overflow-y:auto;
+    background:var(--surface-2); border-right:1px solid var(--line);
+    padding:var(--s6) var(--s4) var(--s6) var(--s5);
+    display:flex; flex-direction:column;
+  }
+  #toc .deck-title {
+    font:600 1.15rem/1.25 var(--display); letter-spacing:-.01em;
+    margin:0 0 var(--s2); color:var(--fg);
+  }
+  #toc .deck-meta {
+    font:500 .7rem/1.5 var(--mono); letter-spacing:.08em; text-transform:uppercase;
+    color:var(--faint); margin:0 0 var(--s6);
+  }
+  /* the rail: one hairline the active marker sits on top of */
+  #toc nav { display:flex; flex-direction:column; border-left:1px solid var(--line); }
+  #toc nav { counter-reset:toc; }
+  #toc a {
+    display:grid; grid-template-columns:1.7rem 1fr; align-items:baseline;
+    margin-left:-1px; border-left:2px solid transparent;
+    text-decoration:none; color:var(--muted);
+    font-size:.92rem; line-height:1.35; padding:.42rem .6rem .42rem .75rem;
+    transition:color .14s ease, background-color .14s ease, border-color .14s ease;
+  }
+  #toc a:not(.lvl1) { counter-increment:toc; }
+  #toc a:not(.lvl1)::before {
+    content:counter(toc,decimal-leading-zero);
+    font:500 .68rem/1.6 var(--mono); color:var(--faint); letter-spacing:.02em;
+  }
+  #toc a.lvl1 { font-weight:600; color:var(--ink-2); }
+  #toc a.lvl1::before { content:"§"; font:500 .7rem/1.6 var(--mono); color:var(--faint); }
+  #toc a:hover { color:var(--fg); background:var(--accent-wash); }
+  #toc a.active { color:var(--accent-ink); border-left-color:var(--accent); font-weight:600; }
+  #toc a.active::before { color:var(--accent); }
+  #toc .spacer { flex:1 1 auto; min-height:var(--s5); }
+  #toc .hint {
+    font-size:.72rem; line-height:1.45; color:var(--faint); margin:0 0 var(--s3);
+  }
+  #toc .controls { display:flex; flex-wrap:wrap; gap:.4rem; }
+  #toc button {
+    font:500 .72rem/1 var(--mono); letter-spacing:.06em; text-transform:uppercase;
+    cursor:pointer; text-align:left;
+    background:none; border:1px solid var(--line-strong); color:var(--muted);
+    border-radius:var(--r1); padding:.5rem .7rem;
+    transition:color .14s ease, border-color .14s ease, background-color .14s ease;
+  }
+  #toc button:hover { color:var(--accent-ink); border-color:var(--accent); background:var(--accent-wash); }
+
+  /* ====================================================================== */
+  /*  PAGE                                                                  */
+  /* ====================================================================== */
+  main { margin-left:var(--toc-w); max-width:58rem; padding:var(--s8) 3.5rem 10rem;
+         counter-reset:sec; }
+  section { padding:var(--s7) 0; scroll-margin-top:var(--s5); }
+  section:first-child { padding-top:var(--s2); }
+  section + section { border-top:1px solid var(--line); }
+  main > section:has(h2) { counter-increment:sec; }
+
+  /* Prose stops at the measure; everything visual keeps the full 816px column.
+     The resulting asymmetry is deliberate — it is what makes the page read as a
+     document rather than a wall. */
+  section > :is(p, ul, ol, dl, blockquote, .note, .lede), figcaption {
+    max-width:var(--measure);
+  }
+
+  /* ---- headings ---------------------------------------------------------- */
+  h1 {
+    font:600 clamp(2.3rem,4.8vw,3.3rem)/1.08 var(--display);
+    letter-spacing:-.022em; margin:0 0 var(--s4); max-width:20ch;
+  }
+  h2 {
+    font:600 clamp(1.6rem,3.1vw,2.15rem)/1.18 var(--display);
+    letter-spacing:-.014em; margin:0 0 var(--s5); color:var(--fg);
+  }
+  /* HEADING TREATMENT — chosen per deck with `data-headings` on <html>, because
+     what makes a long page scannable depends on what is in it. probe.sh measures
+     the ratio and tells you which one this deck wants.
+
+       data-headings="rule"    diagram-heavy decks. Ink heading, a short accent
+                               rule opening each section. The diagrams are already
+                               the landmarks, and they need the accent to mark what
+                               changes — so the headings stay out of its way.
+
+       data-headings="accent"  prose-heavy decks. Accent heading, no rule. With few
+                               diagrams nothing competes for the accent, and a
+                               coloured heading is by far the strongest landmark
+                               when scrolling a wall of text.
+
+     The number stays faint in both. Do not mix them within one deck. */
+  main > section:has(h2)::before {
+    content:""; display:block; width:2.6rem; height:3px; border-radius:2px;
+    background:var(--accent); margin-bottom:var(--s5);
+  }
+  :root[data-headings="accent"] main > section:has(h2)::before { content:none; }
+  :root[data-headings="accent"] h2 { color:var(--accent); }
+  main > section:has(h2) > h2::before {
+    content:counter(sec,decimal-leading-zero);
+    display:block; font:600 .72rem/1 var(--mono); letter-spacing:.16em;
+    color:var(--faint); margin-bottom:.7rem;
+  }
+  h3 {
+    font:600 1.02rem/1.4 var(--sans); letter-spacing:.02em;
+    margin:var(--s6) 0 var(--s2); color:var(--fg);
+  }
+  h4 { font:600 .8rem/1.4 var(--mono); letter-spacing:.1em; text-transform:uppercase;
+       color:var(--muted); margin:var(--s5) 0 var(--s2); }
+
+  p { margin:0 0 var(--s4); }
+  strong { font-weight:600; color:var(--fg); }
+  em { font-style:italic; }
+  a { color:var(--accent-ink); text-underline-offset:.18em; text-decoration-thickness:1px; }
+
+  .eyebrow {
+    font:600 .74rem/1 var(--mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--accent); margin:0 0 var(--s4);
+  }
+  .lede {
+    font:400 1.35rem/1.55 var(--display); color:var(--ink-2);
+    max-width:44ch; margin-bottom:var(--s5);
+  }
+  .meta { font:500 .8rem/1.6 var(--mono); letter-spacing:.05em; color:var(--faint); }
+
+  /* ---- lists ------------------------------------------------------------- */
+  ol,ul { padding-left:1.4rem; margin:0 0 var(--s4); }
+  li { margin:.45rem 0; }
+  li::marker { color:var(--accent); }
+  ol { list-style:none; counter-reset:step; padding-left:2.4rem; }
+  ol > li { counter-increment:step; position:relative; }
+  ol > li::before {
+    content:counter(step) "."; position:absolute; left:-2.4rem; top:0;
+    width:1.7rem; text-align:right;
+    font:600 .95rem/1.78 var(--mono); color:var(--accent);
+  }
+
+  /* Absolute marker, NOT flex — flex would turn every inline <code> in the item
+     into a flex item and shred the line into columns. */
+  ul.todo { list-style:none; padding-left:1.9rem; }
+  ul.todo li { position:relative; }
+  ul.todo li::before { content:"\2610"; color:var(--accent); font-size:1.05em;
+                       position:absolute; left:-1.9rem; }
+  ul.todo li.done::before { content:"\2611"; color:var(--ok); }
+  ul.todo li.done { color:var(--muted); }
+
+  /* gap:0 with padding on the cells instead — a column gap would break the row
+     rule into two floating hairlines with a hole between them */
+  dl { display:grid; grid-template-columns:minmax(7rem,13rem) 1fr; gap:0;
+       margin:var(--s5) 0; max-width:none; }
+  dt { font-weight:600; padding:.55rem var(--s5) .55rem 0; border-top:1px solid var(--line); }
+  dd { margin:0; color:var(--ink-2); padding:.55rem 0; border-top:1px solid var(--line); }
+
+  /* ---- code -------------------------------------------------------------- */
+  /* Inline code carries no border: at the density of a technical plan, a boxed
+     chip every few words turns running prose into confetti. */
+  code { font:.88em/1.5 var(--mono); background:var(--tint); color:var(--ink-2);
+         border-radius:.28rem; padding:.12em .34em; }
+  pre:not(.mermaid) {
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r2);
+    padding:var(--s4) var(--s5); overflow-x:auto;
+    font-size:.92rem; line-height:1.6; margin:var(--s5) 0;
+    box-shadow:var(--shadow);
+  }
+  pre:not(.mermaid) code { background:none; padding:0; font-size:1em; color:var(--fg); }
+
+  /* ---- callouts ---------------------------------------------------------- */
+  .note {
+    border-left:3px solid var(--accent); background:var(--accent-wash);
+    padding:var(--s3) var(--s4); border-radius:0 var(--r1) var(--r1) 0;
+    color:var(--ink-2); margin:var(--s5) 0;
+  }
+  .note > :last-child { margin-bottom:0; }
+  .note.ok     { border-left-color:var(--ok);     background:var(--ok-wash); }
+  .note.warn   { border-left-color:var(--warn);   background:var(--warn-wash); }
+  .note.danger { border-left-color:var(--danger); background:var(--danger-wash); }
+
+  blockquote {
+    margin:var(--s5) 0; padding:.1rem 0 .1rem var(--s5);
+    border-left:2px solid var(--line-strong); color:var(--ink-2);
+    font:400 1.15rem/1.6 var(--display); font-style:italic;
+  }
+
+  /* ---- tags -------------------------------------------------------------- */
+  .tag {
+    display:inline-block; font:600 .7rem/1.6 var(--mono); letter-spacing:.07em;
+    text-transform:uppercase; padding:.05em .45em; border-radius:.28rem;
+    border:1px solid var(--line-strong); color:var(--muted); background:var(--surface);
+    vertical-align:.08em;
+  }
+  .tag.accent { color:var(--accent-ink); border-color:var(--accent); background:var(--accent-wash); }
+  .tag.ok     { color:var(--ok);     border-color:var(--ok);     background:var(--ok-wash); }
+  .tag.warn   { color:var(--warn);   border-color:var(--warn);   background:var(--warn-wash); }
+  .tag.danger { color:var(--danger); border-color:var(--danger); background:var(--danger-wash); }
+
+  /* ---- stats — only for counts the source actually states ---------------- */
+  .stats { display:flex; flex-wrap:wrap; gap:var(--s5) var(--s7); margin:var(--s6) 0; }
+  .stat b {
+    display:block; font:600 2.2rem/1 var(--display); letter-spacing:-.02em;
+    font-variant-numeric:tabular-nums; color:var(--fg);
+  }
+  .stat span {
+    display:block; margin-top:.3rem;
+    font:500 .72rem/1.4 var(--mono); letter-spacing:.1em; text-transform:uppercase;
+    color:var(--faint);
+  }
+
+  /* ---- cards ------------------------------------------------------------- */
+  .grid { display:grid; gap:var(--s4) var(--s5); margin:var(--s5) 0;
+          grid-template-columns:repeat(var(--cols,2),minmax(0,1fr)); }
+  .card {
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r2);
+    padding:var(--s4) var(--s5); box-shadow:var(--shadow);
+  }
+  .card h3 { margin:0 0 var(--s2); font:600 1.02rem/1.35 var(--sans); letter-spacing:0; }
+  .card p  { margin:0; color:var(--ink-2); font-size:.98rem; line-height:1.6; }
+  .card p + p { margin-top:var(--s2); }
+  /* a spine, not a ring — the colour reads at a glance without boxing the card in */
+  .card.accent, .card.ok, .card.warn, .card.danger {
+    padding-left:calc(var(--s5) - 3px); border-left:3px solid var(--spine);
+  }
+  .card.accent { --spine:var(--accent); }
+  .card.ok     { --spine:var(--ok); }
+  .card.warn   { --spine:var(--warn); }
+  .card.danger { --spine:var(--danger); }
+
+  /* ---- tables ------------------------------------------------------------ */
+  /* .scrollx wraps anything that could be wider than the column — a table that
+     overflows makes the whole PAGE scroll sideways, which the probe fails. */
+  .scrollx { overflow-x:auto; margin:var(--s5) 0; }
+  .scrollx > table { margin:0; }
+  table {
+    border-collapse:collapse; width:100%; margin:var(--s5) 0;
+    font-size:.98rem; font-variant-numeric:tabular-nums;
+  }
+  th,td { text-align:left; padding:.55rem .8rem; vertical-align:top;
+          border-bottom:1px solid var(--line); }
+  th {
+    color:var(--muted); font:600 .72rem/1.5 var(--mono); letter-spacing:.1em;
+    text-transform:uppercase; border-bottom:1px solid var(--line-strong);
+    padding-bottom:.5rem;
+  }
+  tbody tr:last-child td { border-bottom:0; }
+  td:first-child { color:var(--fg); }
+
+  /* ---- figures ----------------------------------------------------------- */
+  figure { margin:var(--s6) 0; }
+  figcaption {
+    font-size:.9rem; color:var(--muted); margin-top:var(--s3);
+    padding-left:var(--s3); border-left:2px solid var(--line);
+  }
+  pre.mermaid { background:none; border:0; box-shadow:none; padding:0;
+                margin:var(--s6) 0; text-align:center; }
+  pre.mermaid svg, figure svg { max-width:100%; height:auto; }
+  /* Hand-authored SVG is drawn at the COLUMN's scale: a full-width figure has a
+     viewBox around 660–816 units wide, so one unit is about one pixel and
+     font-size 15 lands on the deck's own body size. A drawing much narrower than
+     that gets upscaled by max-width:100% until its labels are larger than the
+     headings — put those in <figure class="narrow"> rather than redrawing them. */
+  figure.narrow { max-width:34rem; }
+
+  .split { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);
+           gap:var(--s6); align-items:center; margin:var(--s5) 0; }
+  .split > :is(p,ul,ol) { max-width:none; }
+
+  /* ====================================================================== */
+  /*  CSS BOX DIAGRAMS                                                      */
+  /*  The browser lays the text out, so a label can never overrun its box    */
+  /*  and "make that one wider" is a single property. Reach for these before */
+  /*  hand-SVG whenever the shape is a stack, a pipeline, a matrix or a      */
+  /*  before/after pair.                                                     */
+  /* ====================================================================== */
+  .bx {
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r2);
+    padding:.7rem .9rem; font-size:.96rem; line-height:1.4;
+    font-variant-numeric:tabular-nums;
+  }
+  .bx small { display:block; color:var(--muted); font-size:.78rem; line-height:1.35;
+              margin-top:.22rem; }
+  .bx strong { font-weight:600; }
+  .bx.accent { border-color:var(--accent); border-width:2px; background:var(--accent-wash);
+               padding:calc(.7rem - 1px) calc(.9rem - 1px); }
+  .bx.ok     { border-color:var(--ok);     border-width:2px; background:var(--ok-wash);
+               padding:calc(.7rem - 1px) calc(.9rem - 1px); }
+  .bx.danger { border-color:var(--danger); border-width:2px; background:var(--danger-wash);
+               padding:calc(.7rem - 1px) calc(.9rem - 1px); }
+  .bx.ghost  { background:none; border-style:dashed; color:var(--muted); }
+
+  /* pipeline — boxes in a row, arrows between; add .down to run it vertically.
+     An .arrow may carry a <small> label: what flows is usually the point. */
+  .boxflow { display:flex; flex-wrap:wrap; align-items:stretch; gap:.6rem; margin:var(--s6) 0; }
+  .boxflow > .bx { flex:1 1 0; min-width:8rem; }
+  .boxflow > .arrow {
+    flex:0 0 auto; align-self:center; color:var(--muted);
+    display:flex; flex-direction:column; align-items:center; gap:.1rem;
+    font-size:1.15rem; line-height:1;
+  }
+  .boxflow > .arrow small {
+    font:500 .7rem/1.25 var(--mono); color:var(--faint); text-align:center;
+    max-width:7rem; letter-spacing:.02em;
+  }
+  .boxflow > .arrow.accent { color:var(--accent); }
+  .boxflow.down { flex-direction:column; align-items:stretch; }
+  .boxflow.down > .bx { flex:0 0 auto; }
+
+  /* stack — layers butted together, top to bottom */
+  .boxstack { display:flex; flex-direction:column; margin:var(--s6) 0;
+              border:1px solid var(--line); border-radius:var(--r2); overflow:hidden;
+              box-shadow:var(--shadow); }
+  .boxstack > .bx { border:0; border-bottom:1px solid var(--line); border-radius:0;
+                    background:var(--surface); }
+  /* inside a stack the accent is a spine, not a ring — and must not re-add the
+     divider the :last-child rule below removes, hence the explicit colour */
+  .boxstack > .bx.accent, .boxstack > .bx.ok, .boxstack > .bx.danger {
+    border-width:0 0 1px; border-bottom-color:var(--line);
+    padding:.7rem .9rem .7rem 1.1rem;
+  }
+  .boxstack > .bx.accent { box-shadow:inset 3px 0 0 var(--accent); }
+  .boxstack > .bx.ok     { box-shadow:inset 3px 0 0 var(--ok); }
+  .boxstack > .bx.danger { box-shadow:inset 3px 0 0 var(--danger); }
+  .boxstack > .bx:last-child { border-bottom:0; }
+
+  /* matrix — set --cols to the column count */
+  .boxgrid { display:grid; gap:.6rem; margin:var(--s6) 0;
+             grid-template-columns:repeat(var(--cols,3),minmax(0,1fr)); }
+  .boxgrid > .head { color:var(--muted); font:600 .72rem/1.5 var(--mono);
+                     letter-spacing:.1em; text-transform:uppercase; padding:0 .2rem; }
+
+  /* before/after — identical geometry twice, so only the change stands out */
+  .beforeafter { display:grid; grid-template-columns:1fr 1fr; gap:var(--s6);
+                 margin:var(--s6) 0; }
+  .beforeafter h4 { margin:0 0 var(--s3); }
+  .beforeafter .boxflow, .beforeafter .boxstack, .beforeafter .boxgrid { margin:0; }
+
+  /* ---- narrow: TOC becomes a bar on top --------------------------------- */
+  @media (max-width:62rem) {
+    #toc { position:static; width:auto; height:auto; flex-direction:column;
+           border-right:0; border-bottom:1px solid var(--line); padding:var(--s5); }
+    #toc nav { flex-direction:row; flex-wrap:wrap; border-left:0; gap:.2rem; }
+    #toc a { border-left:0; border-bottom:2px solid transparent; margin-left:0;
+             grid-template-columns:auto auto; gap:.4rem; padding:.35rem .5rem; }
+    #toc a.active { border-left:0; border-bottom-color:var(--accent); }
+    #toc .spacer, #toc .hint { display:none; }
+    #toc button { margin-top:var(--s4); }
+    #progress { left:0; }
+    main { margin-left:0; padding:var(--s6) var(--s5) 6rem; }
+    .grid, .split, .beforeafter { grid-template-columns:1fr; }
+    .boxgrid { --cols:1; }
+    dl { grid-template-columns:1fr; gap:0; }
+    dd { border-top:0; padding-top:0; padding-bottom:var(--s3); }
+  }
+
+  /* ---- MOTION ------------------------------------------------------------ */
+  /* Deliberately confined to hover, focus and the active marker. No entrance
+     animations and no scroll reveals: anything that starts at opacity:0 is
+     invisible to a printed page and to a reader who lands mid-document via
+     Ctrl+F, which is exactly what this deck exists to support. */
+  @media (prefers-reduced-motion:reduce) {
+    html { scroll-behavior:auto; }
+    *, *::before, *::after { transition:none !important; animation:none !important; }
+  }
+
+  @media print {
+    /* Force paper — printing while the deck is in dark mode would otherwise put
+       dark cards and boxes on white paper. The selector list has to reach the
+       specificity of the palette blocks above (0,3,0) or their dark values
+       outrank this; it comes later in the file, so equal specificity wins. */
+    :root, :root[data-theme], :root[data-palette], :root[data-palette][data-theme],
+    :root:not([data-theme="light"]), :root[data-palette]:not([data-theme="light"]) {
+      --bg:#fff; --surface:#fff; --surface-2:#fff; --tint:#f2f2f2;
+      --fg:#000; --ink-2:#222; --muted:#555; --faint:#666;
+      --line:#bbb; --line-strong:#888;
+      --accent:#8f4108; --accent-ink:#8f4108; --accent-wash:transparent;
+      --ok:#2f5a32; --warn:#6f4d06; --danger:#8a2020;
+      --ok-wash:transparent; --warn-wash:transparent; --danger-wash:transparent;
+      --shadow:none;
+    }
+    body::before, #toc, #progress { display:none; }
+    main { margin-left:0; max-width:none; padding:0; }
+    body { background:#fff; color:#000; font-size:11pt; }
+    section { page-break-inside:avoid; }
+    h1,h2,h3 { page-break-after:avoid; }
+    .boxflow, .boxstack, .boxgrid, .beforeafter, figure, .card { page-break-inside:avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+
+<aside id="toc">
+  <p class="deck-title">jTDS shared&nbsp;Calendar race</p>
+  <p class="deck-meta">2026-09-03 · ifas13 · analysis</p>
+  <nav></nav>
+  <div class="spacer"></div>
+  <p class="hint">← → jump between sections</p>
+  <div class="controls">
+    <button id="theme">Theme</button>
+    <button id="palette">Palette</button>
+  </div>
+</aside>
+
+<main>
+
+<section data-nav="Overview">
+  <p class="eyebrow">Analysis &middot; ifas13 &middot; Sybase</p>
+  <h1>The ISIN diff job crash is a shared Calendar, not bad data</h1>
+  <p class="lede">Hibernate hands jTDS one JVM-wide static <code>Calendar</code>, and jTDS converts
+     by writing into it. Any two threads touching a Sybase <code>datetime</code> corrupt each other.</p>
+  <p class="meta">2026-09-03 &middot; root cause read off the stack trace, reproduced with no production data</p>
+  <div class="stats">
+    <div class="stat"><b>1</b><span>shared static Calendar</span></div>
+    <div class="stat"><b>4</b><span>Sybase columns exposed</span></div>
+    <div class="stat"><b>0</b><span>stored values changed by the fix</span></div>
+  </div>
+</section>
+
+<section data-nav="What the trace says">
+  <h2>What the stack trace actually says</h2>
+  <p>It failed while exporting <code>SteuerField</code> rows, so the first suspicion was a broken
+     <code>guelt</code> value in the fund being exported. The frame numbers rule that out.</p>
+<pre><code>public static long timeToZone(java.util.Date value, Calendar target) {
+    GregorianCalendar cal = new GregorianCalendar();
+    cal.setTime(value);                                 // the DB value
+    target.set(Calendar.HOUR_OF_DAY, cal.get(...));     // 1298  read fine
+    ...
+    target.set(Calendar.DAY_OF_MONTH, cal.get(...));    // 1304  read fine
+    return target.getTime().getTime();                  // 1305  threw
+}</code></pre>
+  <p>The throwing frame is <code>Support.java:1305</code>, and it works on <em>target</em> &mdash;
+     Hibernate's static calendar &mdash; only after every read of the database value on lines
+     1298&ndash;1304 has succeeded. A corrupt <code>datetime</code> would have failed three lines earlier.</p>
+  <p class="note">The array in <code>Index 17 out of bounds for length 13</code> is the JDK's
+     accumulated-days-per-month table. Arriving at month 17 means the calendar's own field state was
+     inconsistent &mdash; the documented consequence of driving one <code>Calendar</code> from two threads.</p>
+</section>
+
+<section data-nav="The mechanism">
+  <h2>The mechanism</h2>
+  <figure>
+    <svg viewBox="0 0 666 176" role="img" xmlns="http://www.w3.org/2000/svg">
+      <title>Two threads convert through one shared static Calendar, producing a wrong instant or a crash</title>
+      <rect x="4" y="0" width="170" height="70" rx="8" fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="89" y="30" text-anchor="middle" fill="currentColor" font-size="15">wq-7</text>
+      <text x="89" y="50" text-anchor="middle" fill="var(--muted)" font-size="12">reads SteuerField.guelt</text>
+      <rect x="4" y="106" width="170" height="70" rx="8" fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="89" y="136" text-anchor="middle" fill="currentColor" font-size="15">wq-3</text>
+      <text x="89" y="156" text-anchor="middle" fill="var(--muted)" font-size="12">any other Sybase read</text>
+
+      <line x1="178" y1="40" x2="244" y2="68" stroke="var(--muted)" stroke-width="2"/>
+      <line x1="178" y1="136" x2="244" y2="108" stroke="var(--muted)" stroke-width="2"/>
+      <text x="211" y="93" text-anchor="middle" fill="var(--muted)" font-size="12">passes cal</text>
+
+      <rect x="248" y="53" width="170" height="70" rx="8" fill="var(--danger-wash)" stroke="var(--danger)" stroke-width="2"/>
+      <text x="333" y="83" text-anchor="middle" fill="currentColor" font-size="15">UTC_CALENDAR</text>
+      <text x="333" y="103" text-anchor="middle" fill="var(--muted)" font-size="12">static, JVM-wide</text>
+
+      <line x1="422" y1="68" x2="488" y2="40" stroke="var(--muted)" stroke-width="2"/>
+      <line x1="422" y1="108" x2="488" y2="136" stroke="var(--muted)" stroke-width="2"/>
+      <text x="455" y="93" text-anchor="middle" fill="var(--muted)" font-size="12">torn state</text>
+
+      <rect x="492" y="0" width="170" height="70" rx="8" fill="var(--surface)" stroke="var(--danger)"/>
+      <text x="577" y="30" text-anchor="middle" fill="currentColor" font-size="15">Wrong instant</text>
+      <text x="577" y="50" text-anchor="middle" fill="var(--muted)" font-size="12">another thread's value</text>
+      <rect x="492" y="106" width="170" height="70" rx="8" fill="var(--surface)" stroke="var(--danger)"/>
+      <text x="577" y="136" text-anchor="middle" fill="currentColor" font-size="15">AIOOBE</text>
+      <text x="577" y="156" text-anchor="middle" fill="var(--muted)" font-size="12">in computeFields</text>
+    </svg>
+    <figcaption>The culprit is filled; both outcomes are the same race. Neither thread has to be
+      reading the same row, the same table or even the same database.</figcaption>
+  </figure>
+  <p>Hibernate assumes a driver only reads the time zone off the calendar it is given. jTDS instead
+     sets seven fields on it and calls <code>getTime()</code>. It is unfixed upstream: the static
+     field is still there in Hibernate 7.1.8.</p>
+</section>
+
+<section data-nav="Why UTC at all">
+  <h2>Why UTC is in play when the app is Vienna</h2>
+  <p>Nothing in our code asks for UTC. <code>hibernate.timezone.default_storage</code> is unset, so
+     the strategy is <code>DEFAULT</code>, which Hibernate resolves against the <em>dialect</em>
+     &mdash; <code>MetadataBuilderImpl.java:858-866</code>, comment: <em>"otherwise we normalize
+     things to UTC"</em>.</p>
+  <div class="scrollx">
+    <table>
+      <thead>
+        <tr><th>Dialect</th><th>getTimeZoneSupport()</th><th>Strategy</th><th>Column type</th><th>Calendar handed to the driver</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>H2</td><td>NATIVE</td><td>NATIVE</td><td>TIMESTAMP_WITH_TIMEZONE</td><td>none <span class="tag ok">safe</span></td></tr>
+        <tr><td>PostgreSQL</td><td>NORMALIZE</td><td>NORMALIZE_UTC</td><td>TIMESTAMP_UTC</td><td>yes, but pgjdbc copies only the zone <span class="tag ok">safe</span></td></tr>
+        <tr><td>Sybase ASE</td><td>NONE</td><td>NORMALIZE_UTC</td><td>TIMESTAMP_UTC</td><td>yes, and jTDS writes into it <span class="tag danger">the bug</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><code>hibernate.jdbc.time_zone=Europe/Vienna</code> never reaches those columns. It is consulted
+     only by <code>TimestampJdbcType</code>, which serves <code>LocalDateTime</code> and
+     <code>LocalDate</code> &mdash; the bulk of the schema. Note what that class does at
+     <code>TimestampJdbcType.java:110</code>: <code>Calendar.getInstance(options.getJdbcTimeZone())</code>,
+     <strong>a fresh calendar per call</strong>. The Vienna path was never exposed, because Hibernate
+     already does there exactly what the fix does here.</p>
+</section>
+
+<section data-nav="Blast radius">
+  <h2>Blast radius</h2>
+  <p>Only offset- and instant-typed fields take the UTC path. On the Sybase units there are four:</p>
+  <ul>
+    <li><code>SteuerField.guelt</code> &mdash; what crashed; read for every fund the exporter touches</li>
+    <li><code>SteuerFieldFormel.guelt</code></li>
+    <li><code>Kest98.guelt</code></li>
+    <li><code>Land.validFrom</code> &mdash; an <code>Instant</code>, and already carrying a <code>// todo - change datatype!</code></li>
+  </ul>
+  <p>The 13 <code>OffsetDateTime</code> fields on the infra entities use the same descriptor, but
+     infra runs on PostgreSQL and H2, so they were never at risk.</p>
+  <p class="note danger">The crash is the loud form. The quiet form is a read that silently returns
+     another thread's timestamp &mdash; in the reproduction, a reader expecting
+     <code>12:34:56Z</code> got <code>12:35:00Z</code>, <code>12:34:59Z</code> and
+     <code>12:35:02Z</code>. Nothing logs that, and an export keeps the value.</p>
+</section>
+
+<section data-nav="Options">
+  <h2>The options we had</h2>
+  <div class="scrollx">
+    <table>
+      <thead><tr><th>Option</th><th>What it does</th><th>Verdict</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Switch the fields to <code>ZonedDateTime</code></td>
+          <td>Nothing. <code>ZonedDateTimeJavaType</code> and <code>OffsetDateTimeJavaType</code>
+              carry the identical line, <code>getDefaultZonedTimestampSqlType()</code></td>
+          <td><span class="tag danger">no effect</span></td>
+        </tr>
+        <tr>
+          <td><code>hibernate.type.prefer_java_time_jdbc_types=true</code></td>
+          <td>Maps to <code>OffsetDateTimeJdbcType</code>, which touches no Calendar at all &mdash;
+              but it calls <code>rs.getObject(pos, Class)</code>, and jTDS throws
+              <code>AbstractMethodError</code> there (<code>JtdsResultSet.java:1798</code>)</td>
+          <td><span class="tag danger">breaks every read</span></td>
+        </tr>
+        <tr>
+          <td><code>@TimeZoneStorage(NORMALIZE)</code>, or plain <code>LocalDateTime</code></td>
+          <td>Moves the four fields onto the Vienna path, which is thread-safe by construction and
+              matches what <code>getdate()</code> writes</td>
+          <td><span class="tag warn">right model, data decision</span></td>
+        </tr>
+        <tr>
+          <td>Replace the descriptor <span class="tag accent">done</span></td>
+          <td>Same conversion, one calendar per call</td>
+          <td><span class="tag ok">no stored value moves</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section data-nav="What is implemented">
+  <h2>What is implemented</h2>
+  <ul class="todo">
+    <li class="done"><code>ThreadSafeTimestampUtcJdbcType</code> &mdash; per-call
+        <code>Calendar</code>, in bind and extract</li>
+    <li class="done"><code>ThreadSafeTimestampUtcTypeContributor</code> &mdash; ServiceLoader, swaps
+        the descriptor per persistence unit, only where the dialect registered the sharing one</li>
+    <li class="done">Unit test driving the extractor through jTDS' real
+        <code>Support.timeToZone</code> from 8 threads</li>
+  </ul>
+  <p>Verified: the test fails when pointed back at Hibernate's descriptor, and
+     <code>TemporalTypeRoundtripTest</code> stays 12/12 green on H2, PostgreSQL&nbsp;15 and
+     Sybase&nbsp;16 &mdash; so no stored or read value changed. The startup log confirms it engages
+     for Sybase and PostgreSQL and skips H2.</p>
+  <p class="note">Worth keeping even if we later move the four fields: the defect is upstream and
+     invisible, so the next <code>OffsetDateTime</code> on a Sybase entity would re-arm it, with an
+     <code>AIOOBE</code> in JDK calendar code as the only symptom.</p>
+</section>
+
+<section data-nav="Open question">
+  <h2>The open question for us</h2>
+  <p>On Sybase, <code>steuer_fields.guelt</code> is <code>datetime default getdate()</code>
+     (<code>V005__vorgabe.sql:45</code>). <code>getdate()</code> is <em>server local</em> time. So the
+     same column holds Vienna wall clocks from legacy and from the column default, and UTC wall clocks
+     from every row the new system wrote &mdash; one to two hours apart, with nothing marking which is which.</p>
+  <div class="grid">
+    <div class="card"><h3>Leave it on UTC</h3><p>&rarr; No migration, no fixture churn. We document
+      the split and accept that <code>guelt</code> means different things per writer.</p></div>
+    <div class="card accent"><h3>Move the four to Vienna</h3><p>&rarr; One storage meaning, aligned
+      with legacy, and off the racy descriptor for free. Needs a decision on existing rows.</p></div>
+  </div>
+  <p>What to settle before touching it:</p>
+  <ol>
+    <li>Do the existing rows need converting, or is <code>guelt</code> only ever compared, never displayed?</li>
+    <li>Does anything outside IFAS13 read these columns and assume Vienna?</li>
+    <li>The YAML export fixtures the diff jobs compare against encode the current values &mdash; they move with the mapping.</li>
+  </ol>
+</section>
+
+</main>
+
+<script src="_deck/mermaid.min.js"></script>
+<script>
+(function () {
+  var sections = Array.prototype.slice.call(document.querySelectorAll('main > section'));
+  var mNodes   = Array.prototype.slice.call(document.querySelectorAll('pre.mermaid'));
+  var mSrc     = mNodes.map(function (n) { return n.textContent; });
+  var root     = document.documentElement;
+
+  /* ---- keep the reader's place across a reload -------------------------- */
+  /* The deck is refined interactively — edit, reload, look. Being thrown back to
+     the top on every reload is the real latency in that loop. Keyed on the file
+     path so two decks never share a position. Restored after mermaid has drawn,
+     because rendering the diagrams changes the page height. */
+  var POS = 'deck-scroll:' + location.pathname;
+  var savedY = null;
+  try { savedY = sessionStorage.getItem(POS); } catch (e) {}
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  addEventListener('beforeunload', function () {
+    try { sessionStorage.setItem(POS, String(scrollY)); } catch (e) {}
+  });
+
+  function restoreScroll() {
+    var y = parseInt(savedY, 10);
+    if (!(y > 0)) return;
+    var prev = root.style.scrollBehavior;
+    root.style.scrollBehavior = 'auto';        /* land, do not animate the whole page */
+    scrollTo(0, y);
+    root.style.scrollBehavior = prev;
+    tick();
+  }
+
+  /* ---- build the menu from the headings -------------------------------- */
+  var nav = document.querySelector('#toc nav');
+  var links = [];
+  function slug(s) {
+    return s.toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-').slice(0, 40);
+  }
+  sections.forEach(function (sec, i) {
+    var head = sec.querySelector('h1, h2');
+    if (!head) return;
+    if (!sec.id) sec.id = slug(head.textContent) || ('section-' + (i + 1));
+    /* data-nav="Short label" overrides the menu text — use it when the heading is
+       too long to read in a 17rem column, e.g. the title section. */
+    var a = document.createElement('a');
+    a.href = '#' + sec.id;
+    a.textContent = sec.dataset.nav || head.textContent;
+    /* .lvl1 marks the title entry so the CSS counter skips it and the numbers in
+       the menu line up with the ones above each <h2>. */
+    if (head.tagName === 'H1') a.className = 'lvl1';
+    nav.appendChild(a);
+    links.push({ a: a, sec: sec });
+  });
+
+  /* ---- scrollspy -------------------------------------------------------- */
+  /* Read from geometry on every scroll frame, not from an IntersectionObserver.
+     `section` carries scroll-margin-top, so a jump lands with the boundary a few
+     px BELOW the viewport top and the previous section still overlaps any band
+     anchored there. An observer that marks the topmost intersecting section then
+     names the section above the one the reader just landed on — and the arrow
+     keys, which read the marked entry, target where they already are and stop
+     moving. The menu entries are the spine: `current` indexes links, so a
+     section without a heading cannot strand the keyboard on an unlisted one. */
+  var SPY_LINE = 0.28;         /* a section top at or above here owns the menu */
+  var current  = 0;            /* index into links */
+
+  /* Held while a jump is in flight: the mark is already on the target, and the
+     positions the page passes through on the way must not drag it back. Every
+     scroll event re-arms it, so it releases once the motion stops, however long
+     the smooth scroll takes. */
+  var hold = 0, holdTimer = null;
+
+  function mark(i) {
+    current = i;
+    links.forEach(function (l, k) { l.a.classList.toggle('active', k === i); });
+  }
+
+  function spy() {
+    if (hold || !links.length) return;
+    var line = Math.max(48, innerHeight * SPY_LINE), i = 0;
+    for (var k = 0; k < links.length; k++) {
+      if (links[k].sec.getBoundingClientRect().top <= line) i = k;
+    }
+    /* the last section is usually too short to ever reach the line, so the
+       bottom of the document hands it the mark — but only on a page that
+       actually scrolls, or a one-screen deck would open on its last entry */
+    var max = root.scrollHeight - innerHeight;
+    if (max > 4 && scrollY >= max - 2) i = links.length - 1;
+    mark(i);
+  }
+
+  function holdSpy() {
+    hold = 1;
+    clearTimeout(holdTimer);
+    holdTimer = setTimeout(function () { hold = 0; spy(); }, 400);
+  }
+
+  /* One jump, from the keyboard. The menu marks the target immediately, so a
+     second keypress mid-scroll moves on instead of bouncing back. */
+  function go(i) {
+    if (!links.length) return;
+    i = Math.max(0, Math.min(i, links.length - 1));
+    mark(i);
+    holdSpy();
+    links[i].sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  /* A menu click keeps the native anchor jump — that is what updates the hash
+     and feeds the back button — and only pins the mark. */
+  links.forEach(function (l, i) {
+    l.a.addEventListener('click', function () { mark(i); holdSpy(); });
+  });
+
+  /* ---- reading progress ------------------------------------------------- */
+  var bar = document.getElementById('progress'), queued = false;
+  function tick() {
+    queued = false;
+    var max = root.scrollHeight - innerHeight;
+    var p = max > 0 ? Math.min(1, Math.max(0, scrollY / max)) : 0;
+    bar.style.transform = 'scaleX(' + p.toFixed(4) + ')';
+    spy();
+  }
+  addEventListener('scroll', function () {
+    if (hold) holdSpy();       /* still moving: keep the mark on the target */
+    if (!queued) { queued = true; requestAnimationFrame(tick); }
+  }, { passive: true });
+  addEventListener('resize', tick);
+
+  /* ---- theme ----------------------------------------------------------- */
+  function stored() { try { return localStorage.getItem('deck-theme'); } catch (e) { return null; } }
+  function save(v)  { try { localStorage.setItem('deck-theme', v); } catch (e) {} }
+
+  var override = stored();
+  if (override) root.setAttribute('data-theme', override);
+
+  function isDark() {
+    var o = root.getAttribute('data-theme');
+    if (o === 'dark')  return true;
+    if (o === 'light') return false;
+    return matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+
+  /* ---- mermaid, themed from the deck's own tokens ----------------------- */
+  /* Read every colour back out of CSS so a diagram is made of the same palette
+     as the page around it. Without this, mermaid's stock themes drop a grey-blue
+     diagram into a warm document and it reads as a screenshot from elsewhere. */
+  function tok(n) { return getComputedStyle(root).getPropertyValue(n).trim(); }
+
+  function draw() {
+    if (typeof mermaid === 'undefined' || !mNodes.length) return null;
+    mNodes.forEach(function (n, i) {
+      n.innerHTML = mSrc[i];
+      n.removeAttribute('data-processed');
+    });
+    var fg = tok('--fg'), muted = tok('--muted'), line = tok('--line-strong');
+    var surface = tok('--surface'), surface2 = tok('--surface-2'), bg = tok('--bg');
+    var accent = tok('--accent'), tint = tok('--tint');
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'base',
+      themeVariables: {
+        darkMode: isDark(),
+        fontFamily: tok('--sans'), fontSize: '15px',
+        background: bg,
+        primaryColor: surface, primaryTextColor: fg, primaryBorderColor: line,
+        secondaryColor: surface2, secondaryTextColor: fg, secondaryBorderColor: line,
+        tertiaryColor: tint, tertiaryTextColor: fg, tertiaryBorderColor: line,
+        mainBkg: surface, nodeBorder: line, nodeTextColor: fg, textColor: fg,
+        lineColor: muted, titleColor: fg,
+        edgeLabelBackground: bg, labelBackground: bg,
+        clusterBkg: surface2, clusterBorder: line,
+        /* sequence */
+        actorBkg: surface, actorBorder: line, actorTextColor: fg, actorLineColor: line,
+        signalColor: muted, signalTextColor: fg,
+        labelBoxBkgColor: surface, labelBoxBorderColor: line, labelTextColor: fg,
+        loopTextColor: fg, activationBkgColor: tint, activationBorderColor: accent,
+        noteBkgColor: tint, noteTextColor: fg, noteBorderColor: accent,
+        sequenceNumberColor: bg,
+        /* state + class */
+        transitionColor: muted, transitionLabelColor: fg,
+        stateBkg: surface, stateLabelColor: fg, altBackground: surface2,
+        compositeBackground: surface2, compositeBorder: line, compositeTitleBackground: surface2,
+        specialStateColor: accent, innerEndBackground: accent,
+        classText: fg,
+        /* er */
+        attributeBackgroundColorOdd: surface, attributeBackgroundColorEven: surface2
+      },
+      flowchart: { curve: 'basis', useMaxWidth: true, htmlLabels: true, padding: 10 },
+      sequence:  { useMaxWidth: true, actorMargin: 60 },
+      state:     { useMaxWidth: true },
+      er:        { useMaxWidth: true }
+    });
+    try {
+      var p = mermaid.run({ nodes: mNodes });
+      return p && p.catch ? p.catch(function (e) { console.error('mermaid', e); }) : null;
+    } catch (e) { console.error('mermaid', e); return null; }
+  }
+
+  document.getElementById('theme').addEventListener('click', function () {
+    var next = isDark() ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    save(next);
+    draw();
+  });
+
+  /* ---- palette --------------------------------------------------------- */
+  /* Keyed on the file, NOT globally like the theme: the point of having three
+     palettes is that different decks look different, and one global override
+     would flatten them all back to whichever the reader last clicked. */
+  var PALETTES = ['ink', 'ember', 'iris'];
+  var PKEY = 'deck-palette:' + location.pathname;
+  var pbtn = document.getElementById('palette');
+
+  function paletteName() { return root.getAttribute('data-palette') || 'ink'; }
+  function label() { var p = paletteName(); pbtn.textContent = p.charAt(0).toUpperCase() + p.slice(1); }
+
+  try {
+    var storedP = localStorage.getItem(PKEY);
+    if (storedP && PALETTES.indexOf(storedP) !== -1) root.setAttribute('data-palette', storedP);
+  } catch (e) {}
+  label();
+
+  pbtn.addEventListener('click', function () {
+    var next = PALETTES[(PALETTES.indexOf(paletteName()) + 1) % PALETTES.length];
+    root.setAttribute('data-palette', next);
+    try { localStorage.setItem(PKEY, next); } catch (e) {}
+    label();
+    draw();                      /* mermaid is built from the tokens, so re-run it */
+  });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+    if (!root.getAttribute('data-theme')) draw();
+  });
+
+  /* ---- jump between sections with the arrow keys ------------------------ */
+  addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;          // leave Ctrl+F alone
+    var t = e.target.tagName;
+    if (t === 'INPUT' || t === 'TEXTAREA') return;
+    var dir = (e.key === 'ArrowRight' || e.key === 'PageDown') ? 1
+            : (e.key === 'ArrowLeft'  || e.key === 'PageUp')   ? -1 : 0;
+    if (!dir) return;
+    e.preventDefault();
+    go(current + dir);
+  });
+
+  tick();
+  var drawn = draw();
+  if (drawn && drawn.then) drawn.then(restoreScroll); else restoreScroll();
+})();
+</script>
+</body>
+</html>
