@@ -99,6 +99,12 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
       passend zu `fplausib.txt`) — nötig für die Byte-Verifikation des Rückmeldungs-Diffs
       (Schnitt 1, blockiert nicht die Implementierung)
 
+- [ ] **Zeichenkodierung in `kurs..tax_code`**: 3 der 57 GAST-Zeilen haben doppelt kodierte
+      Umlaute in `txt_bez` (`AQS`, `L1`, `TD` — z. B. „RuecknahmebeschrÃ¤nkung"); `txt_bez_e` ist
+      jeweils sauber. Zusätzlich Tippfehler in `Z.txt_bez` („Rüchnahmepreis"). Betrifft die
+      Preismeldung nur über `L1`. Datenkorrektur im Altsystem anfragen (Fachabteilung), sonst
+      wandert der Fehler beim Umstieg mit
+
 - [ ] Kennzahlen-Ist-Analyse erstellen (`preisekennzahl.cpp`, `fondskennzahl.cpp`, `c_calc.cpp`) —
       fehlt laut Abgrenzung, Voraussetzung für Schnitt 6
 - [ ] Soll-Konzept nach `docs/Fondspreise/fondspreise-soll-konzept.md`, sobald I entschieden ist
@@ -109,6 +115,15 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
       zeigt noch `I4`, 26 Sektionen gegen 53 Abschnitte)
 
 ## Erledigt
+
+- 2026-09-03 — **`tax_code`-Stammdaten als YAML im Testdatenmodul**: `standard_TAX_CODE_data.yaml`
+  (57 Zeilen, Abzug von sybase-gast) unter `at/oekb/ifas/testdata/fondspreise/`, dazu
+  `TaxCodeTestdataCreator` + `FondspreiseBasedataCreator`. Bewusst **nicht** in `BasedataCreator`:
+  die Fondspreise-Tabellen liegen in einer eigenen DB, der Aufrufer setzt den Kontext
+  (`withFondspreiseDbContext`). `PreisMeldungDiffJobTest` seedet damit die echte Konfiguration
+  statt handkopierter Werte — bestätigt die Werte in `TaxCodeTestdata` (Unter-/Obergrenzen,
+  `maxNk=8`, `lieferungAb=2026-03-01`). Restbegriffe „Landezone"/„ingest" in Properties-Kommentaren
+  und einem Javadoc nachgezogen
 
 - 2026-09-02 — **`tax_code` im YAML-Datenexport**: Entity auf alle 26 Legacy-Spalten
   vervollständigt, `TaxCodeDto` mit `@TypeId("TAX_CODE")` + MapStruct-Paar in
