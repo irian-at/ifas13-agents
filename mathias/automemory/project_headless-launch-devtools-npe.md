@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: c0af06a5-1928-49d3-87de-525dee7e7658
-  modified: 2026-08-19T15:20:41.010Z
+  modified: 2026-09-04T10:45:49.928Z
 ---
 
 Running a `Local*IfasApplication` test launcher outside the IDE (bare `java -cp <test-classes:classes:deps>`)
@@ -23,3 +23,21 @@ configurations don't hit this, so it looks like a code bug when it is purely a l
 always pass `-Dspring.devtools.restart.enabled=false`, and add `--server.port=<n>` to avoid
 colliding with an instance already on 8080. Don't chase the NPE stack trace — no frames in it
 belong to application code. See [[project-recalc-historical-fidelity]] for other launcher notes.
+
+**Full recipe** from `ifas-applications/ifas-main-application` after `mvn install -DskipTests`:
+
+```bash
+mvn -Pdev-build dependency:build-classpath -Dmdep.outputFile=<tmp>/cp.txt -Dmdep.includeScope=test
+mvn -o -Pdev-build test-compile
+java -Dspring.devtools.restart.enabled=false \
+     -cp "target/test-classes:target/classes:$(cat <tmp>/cp.txt)" \
+     at.oekb.ifas.app.LocalH2OnlyIfasApplication
+```
+
+Ready when the log says `Started LocalH2OnlyIfasApplication in`; H2 comes up with the Stammdaten
+already loaded (all 316 Lieferanten), so no import step is needed for read-only checks.
+
+**POSTing to the UI with curl** needs the CSRF token *and* the session cookie — the token is in the
+`<meta name="_csrf" content="...">` tag `layout.html` renders, and it is only valid for the session
+that fetched it: `curl -c jar <page>`, scrape the meta, then `curl -b jar -F "_csrf=$TOKEN" ...`.
+CSRF is disabled for `/api/**` only, never for `/ui/**`.
