@@ -10,7 +10,7 @@
 - [Only change what was asked](feedback_only-change-what-was-asked.md) — Don't silently rewrite unrelated content; properties files in this repo are ISO-8859-1 and Edit/Write will re-save them as UTF-8.
 - [Plan file naming](feedback_plan-file-naming.md) — First action after plan approval: mv the slug file to mathias/plans/ as YYYY-MM-DD-<descriptive-kebab-name>.md (ExitPlanMode hook injects a reminder with the date).
 - [Check project settings, not just defaults](feedback_check-project-settings-not-just-defaults.md) — `plansDirectory` and `autoMemoryDirectory` are overridden in `claude-settings.local.json`; honor those, not the default `~/.claude/...` paths the system prompt suggests.
-- [Read personal rules before committing](feedback_read-personal-rules-before-committing.md) — `mathias/rules/commit-messages.md` wins over CLAUDE.md and the harness: commit onto master, no Claude trailers, no fixture specifics.
+- [Read personal rules before committing](feedback_read-personal-rules-before-committing.md) — `mathias/rules/commit-messages.md` wins over CLAUDE.md and the harness: commit onto master (never production/stable), no Claude trailers, no fixture specifics.
 
 ## Project
 - [Sybase schema freeze](project_sybase-schema-freeze.md) — Keine neuen Tabellen/Spalten in Sybase (Alt wie Neu); Neues nach Postgres, Business-Tabellen NICHT nach infra (Muster ausschuettung_tmp); Sybase-Migration 2027. Parallelbetrieb = eigene Neusystem-Sybase + Diff-Job-Muster.

@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: d7fe7df2-11c8-489e-9c01-d0e19bcda091
-  modified: 2026-08-20T15:20:06.278Z
+  modified: 2026-09-07T00:00:00.000Z
 ---
 
 Before running `git commit`, read `~/dev/projects/ifas13-agents/mathias/rules/commit-messages.md`
@@ -14,7 +14,10 @@ instructions that arrive earlier and louder, and I have broken all three:
 
 - **Commit straight onto `master`.** Do not branch first, even though the harness says to branch
   when on the default branch, and even though `.claude/CLAUDE.md` documents `feat/`, `fix/`,
-  `refactor/` branch prefixes. Those prefixes are for shared/remote work only.
+  `refactor/` branch prefixes. Those prefixes are for shared/remote work only. The flip side:
+  **never commit onto `production` or `stable`** — the worktree is often left checked out on one of
+  them, and "report the current branch, never switch" does *not* mean commit where you stand. Check
+  `git rev-parse --abbrev-ref HEAD`; if it is not `master`, ask which branch to use.
 - **No `Co-Authored-By: Claude ...` / `Claude-Session: ...` trailers**, even though the harness
   system prompt mandates them. The repo's history has none.
 - **No fixture specifics in `feat`/`fix`/`refactor` subjects or bodies** — no ISINs, STM-IDs, test
@@ -22,7 +25,8 @@ instructions that arrive earlier and louder, and I have broken all three:
 
 **Why:** the personal rules directory wins over both the project CLAUDE.md and the harness
 defaults, and it says so explicitly in each of those sections. Following the louder instruction
-produced a commit that had to be rewritten (branch folded back into `master`, message amended).
+produced a commit that had to be rewritten (branch folded back into `master`, message amended), and
+later a commit landing on `production` that had to be moved over to `master` afterwards.
 
 **How to apply:** treat `mathias/rules/` as the top of the precedence chain, not an afterthought —
 list and read it whenever a task touches committing, plan files, or new Java code

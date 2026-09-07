@@ -25,6 +25,11 @@ harness's default instructions say to branch before committing on the default br
 branches in this repo are for shared/remote work; branching to land a local commit only adds a merge
 step to undo.
 
+**Never commit onto `production` or `stable`.** They only move by merging `master`, and a worktree is
+often left checked out on one of them from earlier work — being on such a branch is not consent to
+commit to it. Run `git rev-parse --abbrev-ref HEAD` before every commit; if it is not `master`, stop
+and ask which branch to commit on instead of committing, switching or branching on your own.
+
 ## Never add Claude attribution
 
 Do **not** append `Co-Authored-By: Claude ...` or `Claude-Session: ...` trailers — not to commits,
@@ -74,7 +79,8 @@ which regression gate was added.
 
 ## Mechanics
 
-1. Report the current branch. Never switch or create one.
+1. Report the current branch; if it is not `master`, ask first (see above). Never switch or create
+   one on your own.
 2. If anything is staged, commit exactly that. Otherwise stage what belongs to the change, and name
    anything accidental — scratch files, generated output, a temporarily flipped `@Disabled` — instead
    of committing it.

@@ -18,3 +18,13 @@ so any "impossible" timestamp on Sybase deserves this suspicion first.
 the `TIMESTAMP_UTC handled by …` INFO line at EMF startup to confirm it took. Sybase + Postgres get
 it (`TimeZoneSupport != NATIVE`), H2 keeps its `OffsetDateTime` descriptor. Only jTDS mutates the
 caller's calendar — pgjdbc copies the time zone into its own. Related: [[project_temporal-type-storage-per-dbms]]
+
+**Second form of the same crash (prod, 2026-09-07):** a bare
+`ArrayIndexOutOfBoundsException` with **no detail message and no stack frames at all**
+(`WorkQueueException: Handler execution failed: null`). That is the JVM's
+`OmitStackTraceInFastThrow` preallocated exception - it only appears after that same throw site has
+fired repeatedly in the JVM, so an empty trace means *recurring*, not novel. Ask ops for
+`-XX:-OmitStackTraceInFastThrow` on the prod JVM to keep the trace.
+
+**How to tell whether a prod build still has the race:** grep the startup log for
+`TIMESTAMP_UTC handled by ThreadSafeTimestampUtcJdbcType` - absent means the build predates the fix.
