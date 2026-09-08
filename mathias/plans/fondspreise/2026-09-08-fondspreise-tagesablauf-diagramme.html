@@ -1,0 +1,643 @@
+<!doctype html>
+<!--
+  Companion zum Deck 2026-09-08-fondspreise-tagesablauf-alt-vs-neu.deck.html.
+  Hier stehen die Diagramme in voller Breite: kein 816-px-Textspaltenlimit,
+  useMaxWidth:false, jedes Diagramm in einem eigenen Scroll-Panel.
+  Mermaid kommt aus dem Nachbarverzeichnis _deck/ (im Repo eingecheckt).
+-->
+<html lang="de" data-palette="ink">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fondspreise — Tagesablauf, Diagramme in voller Breite</title>
+<style>
+  :root {
+    --sans: "Ubuntu", "Fira Sans", "Source Sans 3", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+    --display: "TeX Gyre Pagella", "Palatino Linotype", "Iowan Old Style", Palatino, Georgia, ui-serif, serif;
+    --mono: "JetBrains Mono", "IBM Plex Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
+    --s2:.5rem; --s3:.75rem; --s4:1rem; --s5:1.5rem; --s6:2rem; --s7:3rem;
+    --bg:#fbfcfd; --surface:#fff; --surface-2:#f1f4f8; --tint:#eef3f9;
+    --fg:#16191d; --ink-2:#383e46; --muted:#5f6771; --faint:#8a929c;
+    --line:#e0e5eb; --line-strong:#c4cbd4;
+    --accent:#0969da; --accent-wash:rgba(9,105,218,.08);
+    --ok:#2f7d46; --ok-wash:rgba(47,125,70,.09);
+    --warn:#8a6206; --warn-wash:rgba(138,98,6,.10);
+    --danger:#b42323; --danger-wash:rgba(180,35,35,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#0f1216; --surface:#171b21; --surface-2:#0a0d11; --tint:#1a2431;
+      --fg:#e6eaef; --ink-2:#c3cad3; --muted:#97a0ab; --faint:#727b87;
+      --line:#252b33; --line-strong:#3b434f;
+      --accent:#70b8ff; --accent-wash:rgba(112,184,255,.10);
+      --ok:#6fc48a; --ok-wash:rgba(111,196,138,.11);
+      --warn:#d8ab4a; --warn-wash:rgba(216,171,74,.11);
+      --danger:#f07a72; --danger-wash:rgba(240,122,114,.11);
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:#0f1216; --surface:#171b21; --surface-2:#0a0d11; --tint:#1a2431;
+    --fg:#e6eaef; --ink-2:#c3cad3; --muted:#97a0ab; --faint:#727b87;
+    --line:#252b33; --line-strong:#3b434f;
+    --accent:#70b8ff; --accent-wash:rgba(112,184,255,.10);
+    --ok:#6fc48a; --ok-wash:rgba(111,196,138,.11);
+    --warn:#d8ab4a; --warn-wash:rgba(216,171,74,.11);
+    --danger:#f07a72; --danger-wash:rgba(240,122,114,.11);
+    color-scheme:dark;
+  }
+
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:400 15px/1.6 var(--sans); }
+  header, section, footer { padding:0 var(--s6); }
+  header { padding-top:var(--s7); padding-bottom:var(--s5);
+           border-bottom:1px solid var(--line); }
+  .eyebrow { font:500 .72rem/1.5 var(--mono); letter-spacing:.14em;
+             text-transform:uppercase; color:var(--muted); margin:0 0 var(--s3); }
+  h1 { font:400 2.1rem/1.15 var(--display); margin:0 0 var(--s3); letter-spacing:-.01em; }
+  h2 { font:400 1.5rem/1.25 var(--display); margin:var(--s7) 0 var(--s3); }
+  h2::before { content:""; display:block; width:2.2rem; height:3px;
+               background:var(--accent); margin-bottom:var(--s4); }
+  h3 { font:600 .95rem/1.4 var(--sans); margin:var(--s5) 0 var(--s2); }
+  p, ul, ol { max-width:70ch; }
+  p { margin:0 0 var(--s4); color:var(--ink-2); }
+  li { margin:0 0 var(--s2); color:var(--ink-2); }
+  a { color:var(--accent); }
+  code { font:.88em/1.4 var(--mono); background:var(--surface-2);
+         padding:.1em .35em; border-radius:.3rem; }
+  .lede { font:400 1.12rem/1.55 var(--display); color:var(--fg); max-width:62ch; }
+  .meta { font:400 .82rem/1.5 var(--sans); color:var(--muted); }
+  nav.jump { display:flex; flex-wrap:wrap; gap:.4rem var(--s4); margin:var(--s5) 0 0;
+             font:500 .8rem/1.5 var(--mono); }
+  .note { background:var(--tint); border-left:3px solid var(--accent);
+          padding:var(--s3) var(--s4); margin:var(--s5) 0; max-width:70ch;
+          color:var(--ink-2); }
+  .note.warn   { background:var(--warn-wash);   border-left-color:var(--warn); }
+  .note.danger { background:var(--danger-wash); border-left-color:var(--danger); }
+  .note.ok     { background:var(--ok-wash);     border-left-color:var(--ok); }
+  /* Das Panel ist der Punkt dieser Datei: das Diagramm darf breiter sein als der
+     Text und scrollt dann selbst, statt auf Lesbarkeit heruntergerechnet zu werden. */
+  .panel { margin:var(--s5) 0 var(--s6); border:1px solid var(--line);
+           border-radius:.6rem; background:var(--surface); overflow:auto;
+           padding:var(--s5); }
+  .panel pre.mermaid { margin:0; background:none; border:0; }
+  figcaption { font:400 .85rem/1.5 var(--sans); color:var(--muted);
+               margin-top:calc(-1 * var(--s3)); margin-bottom:var(--s6); max-width:70ch; }
+  footer { padding-top:var(--s5); padding-bottom:var(--s7);
+           border-top:1px solid var(--line); color:var(--muted);
+           font-size:.88rem; margin-top:var(--s7); }
+  #theme { font:500 .78rem/1 var(--mono); background:var(--surface);
+           color:var(--ink-2); border:1px solid var(--line-strong);
+           border-radius:.4rem; padding:.45rem .7rem; cursor:pointer; }
+  @media print {
+    :root, :root[data-theme] { --bg:#fff; --surface:#fff; --surface-2:#fff;
+      --tint:#f2f2f2; --fg:#000; --ink-2:#222; --muted:#555;
+      --line:#bbb; --line-strong:#888; --accent:#8f4108; }
+    #theme { display:none; }
+    .panel { page-break-inside:avoid; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <p class="eyebrow">Fondspreise · Begleitblatt zum Deck</p>
+  <h1>Tagesablauf, Diagramme in voller Breite</h1>
+  <p class="lede">Der vollständige zeitliche Ablauf des Altsystems — Eingang, Ausschüttungs-Batches,
+     Steuerdaten-Läufe, Tagesjob, Event-Tore — und daneben das Zielbild.</p>
+  <p class="meta">2026-09-08 · Quellen: <code>docs/Tagesjob und Programmablauf/</code> (Crontab,
+     Tagesjob-Logik, Event-Logging), <code>docs/Fondspreise/fondspreise-legacy-analyse.md</code>,
+     Legacy-Scripts unter <code>Ifas/scripts/</code> und <code>Ifas/cprogs2/preise4/</code>.
+     Kurzfassung und Gegenüberstellung:
+     <a href="2026-09-08-fondspreise-tagesablauf-alt-vs-neu.deck.html">das Deck</a>.</p>
+  <nav class="jump">
+    <a href="#alt-uhr">1 Altsystem · Uhr</a>
+    <a href="#alt-fluss">2 Altsystem · Fluss</a>
+    <a href="#alt-tagesjob">3 Altsystem · Tagesjob</a>
+    <a href="#neu-uhr">4 Neusystem · Uhr</a>
+    <a href="#neu-fluss">5 Neusystem · Fluss</a>
+    <a href="#lesarten">6 Was auffällt</a>
+  </nav>
+  <p style="margin-top:var(--s5)"><button id="theme">Theme</button></p>
+</header>
+
+<section id="alt-uhr">
+  <h2>1 · Der Tag im Altsystem, auf der Uhr</h2>
+  <p>Alle terminierten Läufe des Produktionsservers <code>car@sybprd02</code> für die inländischen
+     Fonds, nach Aufgabengebiet gruppiert. Rot ist, was den Tag blockiert; blau, was zum Tagesjob
+     gehört; Rauten sind Kontroll- und Ereigniszeitpunkte ohne Dauer.</p>
+  <div class="panel">
+<pre class="mermaid">
+gantt
+  title Altsystem - terminierte Laeufe, Produktionsserver sybprd02
+  dateFormat HH:mm
+  axisFormat %H:%M
+  todayMarker off
+  section Admin frueh
+    run_monitor.csh                            :milestone, 05:30, 0m
+    run_ifas_admin - Statusfeld befuellen      :milestone, 05:45, 0m
+    run_oenb_stammdaten.csh                    :milestone, 05:48, 0m
+    run_admin_clear_tmp_af_kurs                :milestone, 05:50, 0m
+    run_geschaeftsjahr.csh                     :milestone, 05:55, 0m
+    run_isins_aktivieren.csh                   :milestone, 05:58, 0m
+  section Eingang Inland
+    run_preise alle 10 Min                     :06:05, 570m
+    run_preise last - PREIS_INS_INL_LAST       :milestone, 15:35, 0m
+    ab 16 Uhr nur mehr Fondspreise             :16:05, 110m
+  section Eingang Ausland
+    run_af_lieferung alle 10 Min               :06:00, 570m
+    run_af_lieferung last - PREIS_INS_AUSL_LAST :milestone, 15:30, 0m
+    run_lei_insert.csh alle 10 Min             :07:10, 110m
+    run_ins_i_oekb.csh stuendlich              :07:15, 10h
+    run_ins_a_oekb.csh stuendlich              :07:20, 10h
+  section Ausschuettungen
+    run_aussch.csh 1 - EAUSSCH dann fAUSSCH    :07:30, 20m
+    Kontrolle AUSSCH 1                         :milestone, 08:30, 0m
+    run_aussch.csh 2                           :12:00, 20m
+    Kontrolle AUSSCH 2                         :milestone, 13:00, 0m
+    run_aussch.csh 3                           :16:00, 20m
+    Kontrolle AUSSCH 3                         :milestone, 16:30, 0m
+  section Steuerdaten
+    run_stm.csh 1 mit Mahnungen                :08:00, 30m
+    Kontrolle EStB 1                           :milestone, 08:45, 0m
+    run_stm.csh 2                              :11:45, 30m
+    Kontrolle EStB 2                           :milestone, 12:30, 0m
+    ISIN-Sonderauswertung 1                    :milestone, 12:50, 0m
+    run_stm.csh 3 FINAL - wartet auf beide LAST :crit, 15:40, 20m
+    Kontrolle EStB 3                           :milestone, 16:15, 0m
+    ISIN-Sonderauswertung 2                    :milestone, 17:50, 0m
+  section Stammdaten und OeNB
+    create_boe_st.csh - Boersedruck            :13:05, 20m
+    run_wrapper_plausi 1                       :13:45, 15m
+    run_oenb_bankenstamm.csh 4x je Stunde      :14:13, 165m
+    run_oenb_identnr.csh 4x je Stunde          :14:14, 165m
+    run_oenbid_lei_abgleich.csh                :milestone, 17:10, 0m
+  section Fondspreise
+    create_plausibel - fplausib.txt            :14:35, 15m
+    manuelle Datenwartung                      :crit, 14:50, 10m
+    Tagesjob cp_01 bis cp_06                   :active, 15:00, 5m
+  section Referenzkurse EZB
+    run_refkurs.csh alle 5 Min                 :14:00, 4h
+    Referenzkurse vorhanden                    :milestone, 16:05, 0m
+  section Kennzahlen
+    Tagesjob wartet auf die EZB                :crit, 15:05, 1h
+    Tagesjob cp_07 und cp_08                   :active, 16:05, 6m
+    Tagesjob cp_09 - Plausi taegliche Preise   :active, 16:11, 3m
+    Kontrolle Kennzahlen                       :milestone, 16:30, 0m
+</pre>
+  </div>
+  <figcaption>Dauern sind, wo nicht gemessen, mit einem plausiblen Wert eingesetzt, damit der
+    Balken sichtbar ist; die <em>Startzeiten</em> sind Crontab-Einträge. Der Tagesjob-Block ab
+    15:00 und die einstündige EZB-Wartezeit sind aus dem Event-Log vom 12.06.2023 gemessen
+    (START 15:00:41, ENDE Preise Stammdaten 15:05:50, START Kennzahlen 16:05:55,
+    ENDE 16:11:35, ENDE PREIS PLAUSI 16:11:38).</figcaption>
+
+  <p class="note warn">Zwei Zeitangaben widersprechen sich in den Quellen: die Übersichts- und die
+     Wartungsdokumentation nennen <strong>14:35</strong> für den Start der
+     Fondspreis-Plausibilität, die Crontab <strong>14:50</strong>. Die Tagesablauf-Tabelle nennt
+     zusätzlich ein Fenster „14:45 – 15:45 Fondspreise (in Abhängigkeit von der Vollständigkeit der
+     Lieferung)". Hier steht 14:35.</p>
+</section>
+
+<section id="alt-fluss">
+  <h2>2 · Der Ablauf im Altsystem, vollständig</h2>
+  <p>Wer schreibt was, wer liest es, und was wartet auf wen. Ein Sammler bedient drei
+     Meldungsarten; zwei Cron-Batches und ein manuell gestarteter Tagesjob greifen auf dieselben
+     Tabellen zu.</p>
+  <div class="panel">
+<pre class="mermaid">
+flowchart TB
+
+  subgraph EIN["Eingang · run_preise ruft preis_ins.e · alle 10 Min · 06:05 bis 17:55"]
+    direction LR
+    FTP["Lieferanten-FTP-Account&lt;br/&gt;fondsmeldung/at/LIEFER_ID/send"]
+    INS["preis_ins.e&lt;br/&gt;erkennt die Meldungsart selbst"]
+    RCV["Rückmeldung je Datei&lt;br/&gt;ZIP in receive/, NetApp, Mail"]
+    FTP --> INS
+    INS --> RCV
+  end
+
+  TIK[("kurs..tmp_if_kurs&lt;br/&gt;PREIS, SOLVA, QUST/KEST mit intervall D")]
+  TTX[("kurs..tmp_tax&lt;br/&gt;alle übrigen Codes")]
+  TAU[("ifas..tmp_aussch&lt;br/&gt;Ausschüttungssätze, nur Inland")]
+  LASTI(["run_preise last · 15:35&lt;br/&gt;Event PREIS_INS_INL_LAST"])
+  LASTA(["run_af_lieferung last · 15:30&lt;br/&gt;Event PREIS_INS_AUSL_LAST"])
+
+  INS --> TIK
+  INS --> TTX
+  INS --> TAU
+  INS --> LASTI
+  INS --> LASTA
+
+  subgraph STM["Steuerdaten · run_stm.csh 1 / 2 / 3 · 08:00 · 11:45 · 15:40"]
+    direction TB
+    SGATE{"nur Lauf 3: beide LAST-Events&lt;br/&gt;für den Stichtag vorhanden?"}
+    SCHK["Fristenprüfung, EStB-Files,&lt;br/&gt;Meldefonds-Listen, Verteilung, Mahnungen"]
+    SFIN(["Event STM_FINISHED n"])
+    SGATE -->|"nein: sleep 60,&lt;br/&gt;ab 5 Min Mail an die Fachabteilung"| SGATE
+    SGATE -->|ja| SCHK
+    SCHK --> SFIN
+  end
+
+  TTX --> SGATE
+  LASTI --> SGATE
+  LASTA --> SGATE
+  SCHK -->|"bei FINAL: Ausschüttungsinfo&lt;br/&gt;nachlesen und nach tmp_aussch schreiben"| TAU
+
+  subgraph AUS["Ausschüttungen · run_aussch.csh 1 / 2 / 3 · 07:30 · 12:00 · 16:00"]
+    direction TB
+    AINS["preis_dld.e -EAUSSCH&lt;br/&gt;tmp_aussch nach ASF, Kopie cop_aussch"]
+    AFIL["preis_dld.e -fAUSSCH -Nn&lt;br/&gt;Ausschüttungs-Files und Verteilung"]
+    AARC["run_aussch_archivierung.csh&lt;br/&gt;NetApp"]
+    AINS --> AFIL
+    AFIL --> AARC
+  end
+
+  TAU --> AINS
+  ASF[("ifas..ASF&lt;br/&gt;Ausschüttungen, Splits, r_faktor")]
+  AINS --> ASF
+
+  PLA["create_plausibel · 14:35&lt;br/&gt;preis_dld.e -P, fplausib.txt"]
+  MAN["manuelle Datenwartung&lt;br/&gt;Fachabteilung arbeitet den Report ab"]
+  TIK --> PLA
+  PLA --> MAN
+
+  subgraph TJ["Tagesjob · manuell aus TAGESJOB.jam · ab ~15:00 · Details in Diagramm 3"]
+    direction TB
+    T1["cp_01 create_preise.csh&lt;br/&gt;Preis- und Solvafiles, MFT und T2S"]
+    T4["cp_04 run_preise_einspielen&lt;br/&gt;preise.e -p0"]
+    T5["cp_05 run_asf_vorl&lt;br/&gt;V nach A, Nachrechnung r/s_faktor_ges"]
+    T7["cp_07 run_calc&lt;br/&gt;berichtigte Kurse, Performance, Volatilität"]
+    T1 --> T4
+    T4 --> T5
+    T5 --> T7
+  end
+
+  KURS[("kurs..kurs")]
+  TLAST[("kurs..tmp_if_last&lt;br/&gt;letzter Preis je ISIN")]
+
+  MAN -->|"manueller Start"| T1
+  TIK --> T1
+  TLAST --> T1
+  ASF -->|"ReadAusschuettung,&lt;br/&gt;ohne Statusfilter, erste Zeile"| T1
+  TIK --> T4
+  T4 --> KURS
+  T4 --> TLAST
+  T5 --> ASF
+  KURS --> T7
+  T7 --> ASF
+  KURS -->|"R-Kurs zum ASF_DATUM;&lt;br/&gt;Inland Pflicht, sonst return -1"| AINS
+</pre>
+  </div>
+  <figcaption>Die drei roten Fäden im Bild: der Kreis <code>cp_04 → run_aussch → ASF → cp_01 →
+    cp_04</code>; die Selbstschleife am LAST-Tor von <code>run_stm.csh 3</code>; und die manuelle
+    Datenwartung, die den Startzeitpunkt des ganzen Nachmittags bestimmt.</figcaption>
+
+  <p class="note">Der Sammler schreibt drei Tabellen: <code>tmp_if_kurs</code> (Preise, Solva,
+     <code>QUST</code>/<code>KEST</code> mit <code>intervall = 'D'</code>), <code>tmp_tax</code>
+     (alle übrigen Codes) und — nur für Inland — <code>tmp_aussch</code>
+     (<code>M_INSERT.CPP:2098-2118</code>, „Inländischer Fonds kann auch
+     Ausschuettungsdatensaetze haben"). Ein einziges Programm, drei Domänen.</p>
+
+  <p class="note warn">Die Kante von <code>run_stm.csh</code> nach <code>tmp_aussch</code> ist die
+     unauffälligste und die folgenreichste. Im Quelltext steht sie wörtlich: <em>„Damit die FINAL
+     Ausschüttung auch in ASF und den Ausschüttungsfiles landet, muss ich die
+     Ausschüttungsinformationen auch nach tmp_aussch schreiben"</em>
+     (<code>c_st_meldung.cpp:3060-3066</code>). An den Cron-Zeiten ist die Kopplung ablesbar:
+     Lauf 2 der Ausschüttungen liegt <strong>15 Minuten</strong> nach STM-Lauf 2 (11:45 → 12:00),
+     Lauf 3 <strong>20 Minuten</strong> nach STM-Lauf 3 (15:40 → 16:00). Nur Lauf 1 (07:30) liegt
+     davor — er räumt auf, was der Vortag geschrieben hat.</p>
+</section>
+
+<section id="alt-tagesjob">
+  <h2>3 · Der Tagesjob im Detail</h2>
+  <p>Neun Teilaufgaben plus zwei ausgelagerte Verteilschritte, gesteuert über Checkpoint-Dateien:
+     existiert <code>cp_tagesjob_0n</code> schon, wird der Schritt übersprungen — ein Neustart
+     setzt genau dort fort, wo der Abbruch war. Am Ende werden alle Checkpoints gelöscht.
+     Returncode <code>2</code> heißt durchgehend „kein Börsetag" und beendet die Kette ohne
+     Fehler.</p>
+  <div class="panel">
+<pre class="mermaid">
+flowchart TB
+  START(["run_tagesjob.csh datum [-U]&lt;br/&gt;Background-Job aus TAGESJOB.jam"])
+  Q0{"cp_tagesjob_01&lt;br/&gt;vorhanden?"}
+  EV0(["Event TAGESJOB | START"])
+  EVR(["Event TAGESJOB | START | Restart"])
+  C1["cp_01 create_preise.csh&lt;br/&gt;preis_dld.e -fPREISE: Preis- und Solvafiles, MFT und T2S"]
+  C2["cp_02 create_boe_st.csh&lt;br/&gt;preis_dld.e -B2: Stammdatenfile Börse und Vendoren"]
+  C3["cp_03 create_notify_wdbo.csh&lt;br/&gt;Benachrichtigung an WDBO, neue Fonds"]
+  C4["cp_04 run_preise_einspielen&lt;br/&gt;preise.e -p0: tmp_if_kurs nach kurs, tmp_if_cop, tmp_if_last"]
+  C5["cp_05 run_asf_vorl&lt;br/&gt;vorläufige Ausschüttungen und Splits aktivieren, Nachrechnung"]
+  C6["cp_06 run_vendor_stamm.csh&lt;br/&gt;+ run_vendor_archive_stamm.csh: Vendorauswertung STAMMDATEN"]
+  EV1(["Event TAGESJOB | ENDE | Preise Stammdaten"])
+  C6A["cp_06a run_tagesjob_1_verteilung_test2bg.csh&lt;br/&gt;Background: Börse, Preise, Vendor STAMM auf MFT-TEST"]
+  W{"refkursVorhanden.e&lt;br/&gt;zeas..adev für den Stichtag gefüllt?"}
+  WAIT["wait 1 min"]
+  BRK{"CONFIG.INI CalcOhneReferenzkurs = 1?&lt;br/&gt;Button im Wartungsbildschirm"}
+  EV2(["Event TAGESJOB | START | Kennzahlen"])
+  C7["cp_07 run_calc -r2 -r3 [-r4 -U] -f0 -a&lt;br/&gt;berichtigte Kurse, Performance, bei Ultimo Risikokennzahlen"]
+  C8["cp_08 run_vendor_kennz.csh&lt;br/&gt;+ run_vendor_archive_kennz.csh: Vendorauswertung KENNZAHLEN"]
+  EV3(["Event TAGESJOB | ENDE"])
+  C8A["cp_08a run_tagesjob_2_verteilung_test2bg.csh&lt;br/&gt;Background: Kennzahlen-Files auf MFT-TEST"]
+  C9["cp_09 create_plausi_taegliche_preise.csh&lt;br/&gt;preis_dld.e -P2: liefern die TGL-Fonds auch täglich?"]
+  EV4(["Event TAGESJOB | ENDE | PREIS PLAUSI"])
+  CLR["alle cp_tagesjob_* löschen"]
+  ENDE(["ENDE"])
+
+  START --> Q0
+  Q0 -->|nein| EV0
+  Q0 -->|"ja: Wiederanlauf"| EVR
+  EV0 --> C1
+  EVR -->|"überspringt, was&lt;br/&gt;schon Checkpoints hat"| C2
+  C1 --> C2
+  C2 --> C3
+  C3 --> C4
+  C4 --> C5
+  C5 --> C6
+  C6 --> EV1
+  EV1 --> C6A
+  C6A --> W
+  W -->|nein| BRK
+  BRK -->|nein| WAIT
+  WAIT --> W
+  BRK -->|"ja: Notbremse,&lt;br/&gt;am Jobende zurückgesetzt"| EV2
+  W -->|ja| EV2
+  EV2 --> C7
+  C7 --> C8
+  C8 --> EV3
+  EV3 --> C8A
+  C8A --> C9
+  C9 --> EV4
+  EV4 --> CLR
+  CLR --> ENDE
+</pre>
+  </div>
+  <figcaption>Jeder der neun Schritte trägt dieselbe Checkpoint-Abfrage; im Bild steht sie
+    einmal, bei <code>cp_tagesjob_01</code>. Die beiden <code>*_test2bg</code>-Schritte sind
+    bewusst als Background-Job ausgelagert, „damit der Tagesjob nicht auf die Beendigung warten
+    muss" — die Belieferung des MFT-TEST-Servers hatte den Produktionsablauf verzögert.</figcaption>
+
+  <p class="note danger">Die Warteschleife auf die EZB-Referenzkurse hat <strong>keinen
+     Timeout</strong>. Sie betrifft nur die Kennzahlen, und dort nur die währungsbereinigte
+     Variante von Performance und Volatilität bei <strong>Fremdwährungsfonds</strong> — für einen
+     EUR-Fonds ist der Referenzkurs nirgends im Spiel. Preisfiles, Verteilung, Einspielung und die
+     Stammdatenfiles sind zu diesem Zeitpunkt längst durch: die Umstellung vom 2018-12-27 hat die
+     Vendor-Jobs in zwei geteilt, genau damit die Stammdaten vor dem Warten verteilt sind.</p>
+</section>
+
+<section id="neu-uhr">
+  <h2>4 · Der Tag im Neusystem, auf der Uhr</h2>
+  <p>Dasselbe Raster für das Zielbild. Die Ausschüttungs- und Steuerdaten-Läufe bleiben, wo sie
+     sind; neu sind die durchlaufende Lieferkette und die zwei Cutoffs. Zeiten der Sammelläufe und
+     des Fehlmeldungs-Jobs sind Vorschlag, nicht Beschluss.</p>
+  <div class="panel">
+<pre class="mermaid">
+gantt
+  title Neusystem - Zielbild, Zeiten der Sammellaeufe als Vorschlag
+  dateFormat HH:mm
+  axisFormat %H:%M
+  todayMarker off
+  section Stammdaten
+    GeschaeftsjahreBerechnenJob                :milestone, 05:55, 0m
+  section Lieferkette Preise
+    Preismeldungs-Job je Lieferdatei           :active, 06:00, 12h
+    Stufe 2 - Preis in kurs binnen Minuten     :active, 06:05, 710m
+    Stufe 3 - Kennzahlen je Lieferung          :06:05, 710m
+  section Ausschuettungen
+    AusschuettungJob 1                         :07:30, 20m
+    AusschuettungJob 2                         :12:00, 20m
+    AusschuettungJob 3                         :16:00, 20m
+  section Steuerdaten
+    STM Lauf 1                                 :08:00, 30m
+    STM Lauf 2                                 :11:45, 30m
+    STM Lauf 3                                 :15:40, 25m
+    IsinAnforderungslisteJob 1                 :milestone, 12:50, 0m
+    IsinAnforderungslisteJob 2                 :milestone, 17:50, 0m
+  section Sammellaeufe
+    Sammellauf 1 - Cutoff 1 vollstaendig       :active, 14:00, 20m
+    Sammellauf 2 - Cutoff 2 als Delta          :active, 16:30, 15m
+  section Nachlauf
+    Fehlmeldungs-Job                           :17:00, 15m
+    Kennzahlen-Sweep periodisch                :06:00, 12h
+</pre>
+  </div>
+  <figcaption>Sammellauf 2 liegt hier auf 16:30, nicht auf 16:00: bei gleicher Startzeit wie
+    Ausschüttungs-Job 3 fehlt dessen Buchung im Delta. Das ist die Terminfrage, die mit der
+    Fachabteilung zu klären ist.</figcaption>
+
+  <p class="note ok">Was auf dieser Uhr <em>fehlt</em>, ist der Punkt: kein manueller Start, keine
+     Warteschleife, kein Event-Tor, kein eigener Plausi-Lauf um 14:35 — und keine Cron-Zeit, ab der
+     eine Lieferung verloren wäre. Was nach Cutoff 2 kommt, bleibt auf
+     <code>sammelreport_job_id IS NULL</code> und geht morgen in Lauf 1.</p>
+</section>
+
+<section id="neu-fluss">
+  <h2>5 · Der Ablauf im Neusystem, vollständig</h2>
+  <p>Eine Kette je Lieferdatei mit drei Stufen, vier terminierte Jobs, und die vier eigenen
+     Artefakte: Inbox, <code>preis_herkunft</code>, <code>letzte_preise</code> und das
+     Publikationsprotokoll.</p>
+  <div class="panel">
+<pre class="mermaid">
+flowchart TB
+
+  subgraph LK["Preismeldungs-Job · je Lieferdatei · nicht terminiert"]
+    direction TB
+    ARR["Lieferdatei trifft ein&lt;br/&gt;angekommen_am DB-seitig gesetzt"]
+    WQ["Work Queue: claimItem&lt;br/&gt;Polling 5 s, zwei Server, ein Pool"]
+    S1["Stufe 1 — Eingang&lt;br/&gt;Prüfkette B0–B20, Legacy-Codes und -Texte"]
+    RB["Rückmeldungs-ZIP an den Lieferanten&lt;br/&gt;Guard rueckmeldung_gesendet_at, at-most-once"]
+    GRD{"Guard preis_herkunft&lt;br/&gt;angekommen_am < @arrival?"}
+    SKIP["still überspringen&lt;br/&gt;eine neuere Lieferung hat gewonnen"]
+    S2["Stufe 2 — Sync&lt;br/&gt;Berechtigungsfilter, Klammer-Transaktion Postgres/Sybase"]
+    S3["Stufe 3 — Kennzahlen&lt;br/&gt;optimistischer Versuch, darf unvollständig bleiben"]
+    ARR --> WQ
+    WQ --> S1
+    S1 --> RB
+    S1 --> GRD
+    GRD -->|"rowcount 0"| SKIP
+    GRD -->|"rowcount 1"| S2
+    S2 --> S3
+  end
+
+  INBOX[("kurs..preismeldung_zeilen&lt;br/&gt;Inbox, eine Zeile je gelieferter Zeile")]
+  KURS[("kurs..kurs&lt;br/&gt;plus pool_if_kurs")]
+  LP[("kurs..letzte_preise&lt;br/&gt;Projektion, Guard auf preisdatum und angekommen_am")]
+  PROT[("Publikationsprotokoll&lt;br/&gt;je Schlüssel: als I2 oder I3 in welchem Lauf")]
+  ASF[("ifas..ASF")]
+
+  S1 --> INBOX
+  S2 --> KURS
+  S2 --> LP
+
+  subgraph AUS["Ausschüttungs-Job · Batch, unverändert · 07:30 · 12:00 · 16:00"]
+    direction TB
+    AB["Ausschüttungen buchen&lt;br/&gt;r_faktor, r_faktor_ges, ASF"]
+  end
+  KURS -->|"Vorbedingung erfüllt,&lt;br/&gt;Minuten nach Eingang statt Tagesjob-Schritt 4"| AB
+  AB --> ASF
+
+  subgraph SR["Sammelreport-Läufe · Cron, zwei Cutoffs"]
+    direction TB
+    R1["Lauf 1 · ~14:00&lt;br/&gt;Preisfile vollständig, Plausi-Report, Verteilung"]
+    R2["Lauf 2 · nach 16:00&lt;br/&gt;Delta, ohne letzte_preise-Fallback"]
+  end
+
+  INBOX -->|"status = COMPLETED und&lt;br/&gt;sammelreport_job_id IS NULL"| R1
+  INBOX --> R2
+  LP -->|"Fallback für Fonds&lt;br/&gt;ohne heutigen Preis"| R1
+  ASF -->|"Statusfilter 'A'"| R1
+  ASF --> R2
+  R1 --> PROT
+  R2 --> PROT
+  PROT -->|"Bezugspunkt: war der Preis&lt;br/&gt;je berichtet? sonst kein I3"| R2
+  MFT["MFT und T2S&lt;br/&gt;preis.csv/xml, solva, pr_ready.txt, NetApp"]
+  R1 --> MFT
+  R2 --> MFT
+
+  SWEEP["Kennzahlen-Sweep · periodisch&lt;br/&gt;sucht Preise ohne Kennzahl, aus den Daten"]
+  S3 -->|"unvollständig, z. B. EZB-Kurs&lt;br/&gt;für einen Fremdwährungsfonds fehlt"| SWEEP
+  KURS --> SWEEP
+  FM["Fehlmeldungs-Job · ~17:00&lt;br/&gt;erwartete gegen tatsächliche Lieferung"]
+  INBOX --> FM
+  ASF -->|"Ausschüttung gebucht,&lt;br/&gt;aber kein Preis geliefert"| FM
+</pre>
+  </div>
+  <figcaption>Keine Rückkante: <code>kurs</code> steht vor dem Ausschüttungs-Job, nicht hinter ihm.
+    Die einzige Verzweigung ist der Guard — ein Vergleich auf einem monoton wachsenden
+    fachlichen Wert, der die Reihenfolge ordnungsfrei erzwingt.</figcaption>
+
+  <p class="note">Der Guard steht bewusst <em>nicht</em> in der Sybase: die ist schema-gesperrt.
+     <code>preis_herkunft</code> liegt als Business-Tabelle auf Postgres, und die
+     Klammer-Transaktion hält die Rowlock dort über den Sybase-Write hinweg. Mit der
+     Sybase-Migration im Lauf von 2027 kollabiert sie zu einer gewöhnlichen Transaktion.</p>
+</section>
+
+<section id="lesarten">
+  <h2>6 · Was an den beiden Bildern auffällt</h2>
+
+  <h3>Ein Sammler, drei Domänen</h3>
+  <p><code>preis_ins.e</code> bedient Preise, Steuerdaten und Ausschüttungen in einem Lauf und
+     entscheidet die Zieltabelle selbst. Das aufrufende Script erkennt erst <em>hinterher</em>, was
+     es war: existiert nach dem Lauf ein <code>&lt;basename&gt;_return.csv</code>, war es eine
+     Steuerdaten-Lieferung. Deshalb ist der 15:35-Lauf mit Parameter <code>last</code> nicht nur ein
+     Preis-Ereignis — er ist das Tor für den Steuerdaten-Lauf 3.</p>
+
+  <h3>Drei Wartezustände, drei verschiedene Mechanismen</h3>
+  <ul>
+    <li><strong>Der Mensch</strong> — die manuelle Datenwartung nach der Fondspreis-Plausibilität.
+      Kein Mechanismus, ein Button.</li>
+    <li><strong>Das Event-Tor</strong> — <code>run_stm.csh 3</code> pollt in einer
+      <code>while(1)</code>-Schleife mit <code>sleep 60</code> auf zwei Event-Log-Einträge und
+      mailt der Fachabteilung, wenn es länger als fünf Minuten dauert.</li>
+    <li><strong>Die Fremdsystem-Schleife</strong> — <code>refkursVorhanden.e</code> gegen
+      <code>zeas..adev</code>, ohne Timeout, mit einer einmalig wirksamen Notbremse in der
+      <code>CONFIG.INI</code>.</li>
+  </ul>
+  <p>Im Neusystem bleibt von allen drei nichts übrig: die Plausi wandert in den Sammellauf, das
+     Event-Tor wird ein Abfrage-Prädikat, und die Referenzkurs-Abhängigkeit wird zum Sweep.</p>
+
+  <h3>Die Ausschüttungen sind zweimal gekoppelt</h3>
+  <p>Einmal <em>vorwärts</em>: <code>run_stm.csh</code> schreibt bei einer FINAL-Meldung nach
+     <code>tmp_aussch</code>, und der Ausschüttungslauf 15–20 Minuten später hebt es nach
+     <code>ASF</code>. Einmal <em>rückwärts</em>: die Einspielung braucht den <code>R</code>-Kurs
+     zum <code>ASF_DATUM</code> aus <code>kurs</code> — und der kommt erst in Tagesjob-Schritt 4.
+     Die erste Kopplung funktioniert, weil sie über Cron-Zeiten ausgedrückt ist. Die zweite
+     funktioniert am Ausschüttungstag nicht, und der Ausweg ist der fiktive Preis-Code
+     <code>X</code>: seit 2008 insgesamt 83 solche Kurse, 69 davon an Ausschüttungstagen.</p>
+
+  <h3>Was in keinem Konzept steckt</h3>
+  <p>Aus Diagramm 3 bleiben <code>cp_02</code> (Stammdatenfile Börse und Vendoren),
+     <code>cp_03</code> (WDBO-Notify), <code>cp_06</code> (Vendor STAMM), <code>cp_08</code>
+     (Vendor KENNZ) und <code>cp_05</code> (<code>run_asf_vorl</code>) ohne Nachfolger im
+     Neusystem. Die Ordnungsauflagen dazu: 3 setzt 2 voraus, 8 setzt 7 voraus, und 2 und 6 hängen
+     <strong>nicht</strong> an 1.</p>
+</section>
+
+<footer>
+  <p>Begleitblatt zu
+     <a href="2026-09-08-fondspreise-tagesablauf-alt-vs-neu.deck.html">2026-09-08-fondspreise-tagesablauf-alt-vs-neu.deck.html</a>.
+     Diagramme rendern lokal aus <code>_deck/mermaid.min.js</code> — die Datei muss neben dieser
+     liegen.</p>
+</footer>
+
+<script src="_deck/mermaid.min.js"></script>
+<script>
+(function () {
+  var nodes = Array.prototype.slice.call(document.querySelectorAll('pre.mermaid'));
+  var src = nodes.map(function (n) { return n.textContent; });
+  var root = document.documentElement;
+
+  function isDark() {
+    var t = root.getAttribute('data-theme');
+    if (t) return t === 'dark';
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+  function tok(name) {
+    return getComputedStyle(root).getPropertyValue(name).trim();
+  }
+
+  function draw() {
+    if (typeof mermaid === 'undefined' || !nodes.length) return;
+    nodes.forEach(function (n, i) {
+      /* textContent, nicht innerHTML — sonst wird die Diagrammquelle beim
+         Zurückschreiben erneut als HTML geparst. Aus demselben Grund stehen die
+         Zeilenumbrüche in den Blöcken oben als &amp;lt;br/&amp;gt;: ein rohes <br/> im
+         <pre> ist für den HTML-Parser ein Element, und textContent liefert
+         dafür keinen Text — mermaid bekäme die Zeilen zusammengeklebt. */
+      n.textContent = src[i];
+      n.removeAttribute('data-processed');
+    });
+    var fg = tok('--fg'), muted = tok('--muted'), line = tok('--line-strong');
+    var surface = tok('--surface'), surface2 = tok('--surface-2'), bg = tok('--bg');
+    var accent = tok('--accent'), tint = tok('--tint'), danger = tok('--danger');
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'base',
+      /* loose, weil strict die <br/> in den Labels wegsanitisiert */
+      securityLevel: 'loose',
+      themeVariables: {
+        darkMode: isDark(),
+        fontFamily: tok('--sans'), fontSize: '14px',
+        background: bg,
+        primaryColor: surface, primaryTextColor: fg, primaryBorderColor: line,
+        secondaryColor: surface2, secondaryTextColor: fg, secondaryBorderColor: line,
+        tertiaryColor: tint, tertiaryTextColor: fg, tertiaryBorderColor: line,
+        mainBkg: surface, nodeBorder: line, nodeTextColor: fg, textColor: fg,
+        lineColor: muted, titleColor: fg,
+        edgeLabelBackground: bg, labelBackground: bg,
+        clusterBkg: surface2, clusterBorder: line,
+        /* gantt — Balken müssen sich vom Streifenhintergrund abheben, sonst
+           sieht man nur die Labels */
+        sectionBkgColor: bg, altSectionBkgColor: surface,
+        sectionBkgColor2: bg, gridColor: line,
+        taskBkgColor: surface2, taskBorderColor: tok('--line-strong'),
+        taskTextColor: fg, taskTextDarkColor: fg, taskTextLightColor: fg,
+        taskTextOutsideColor: fg, taskTextClickableColor: accent,
+        activeTaskBkgColor: tint, activeTaskBorderColor: accent,
+        doneTaskBkgColor: surface2, doneTaskBorderColor: line,
+        critBkgColor: tok('--danger-wash'), critBorderColor: danger,
+        todayLineColor: accent
+      },
+      /* useMaxWidth:false ist der ganze Zweck dieser Datei: die Diagramme
+         behalten ihre natürliche Größe, das Panel scrollt. */
+      flowchart: { curve: 'basis', useMaxWidth: false, htmlLabels: true, padding: 12,
+                   nodeSpacing: 45, rankSpacing: 55 },
+      gantt: { useMaxWidth: false, barHeight: 20, barGap: 7, topPadding: 50,
+               leftPadding: 200, gridLineStartPadding: 34, fontSize: 12,
+               sectionFontSize: 12, numberSectionStyles: 2 }
+    });
+    try {
+      var p = mermaid.run({ nodes: nodes });
+      if (p && p.catch) p.catch(function (e) { console.error('mermaid', e); });
+    } catch (e) { console.error('mermaid', e); }
+  }
+
+  document.getElementById('theme').addEventListener('click', function () {
+    root.setAttribute('data-theme', isDark() ? 'light' : 'dark');
+    draw();
+  });
+  draw();
+})();
+</script>
+</body></html>

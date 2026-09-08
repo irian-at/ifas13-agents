@@ -1,0 +1,1583 @@
+<!doctype html>
+<!--
+  Deck template — copy, then replace everything between the SECTIONS markers.
+
+  Shape: one long scrolling document, with a sticky table of contents on the left.
+  Rules baked in here, do not undo them:
+    * Nothing is ever display:none. All text stays in the DOM for Ctrl+F. That also
+      rules out scroll-reveal animations that start at opacity:0 — see MOTION below.
+    * The table of contents BUILDS ITSELF from each <section>'s heading — just write
+      sections with an <h2> and they appear in the menu. Give a section an id to
+      control its anchor, otherwise one is slugged from the heading.
+    * Section numbers in the menu and above each <h2> are CSS counters. Do not
+      hand-number headings; the counters stay right when sections move.
+    * Mermaid sources are cached in JS so diagrams re-render on a theme change, and
+      mermaid is themed from the deck's own tokens — diagrams match the page.
+    * Everything is local: mermaid comes from the sibling _deck/ directory.
+
+  GEOMETRY IS LOAD-BEARING. --toc-w 17rem + main max-width 58rem + 3.5rem padding
+  give a content column of exactly 816px, which is the number every mermaid width
+  budget in references/diagram-patterns.md is derived from. Change the type, the
+  colour, the spacing — but leave those three alone unless you also redo that table.
+-->
+<!-- data-headings picks the heading treatment: "rule" for a diagram-heavy deck,
+     "accent" for a prose-heavy one. See HEADING TREATMENT in the stylesheet;
+     probe.sh reports which one fits and flags the attribute if it is missing.
+
+     data-palette is the deck's colour: ink (blue), ember (rust) or iris (indigo).
+     Pick one per deck rather than defaulting every time — decks that all look
+     identical are harder to tell apart at a glance. The reader can cycle it from
+     the sidebar, and that choice is remembered per file. -->
+<html lang="de" data-headings="rule" data-palette="ink">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fondspreise — Tagesablauf Alt gegen Neu</title>
+<style>
+  /* ====================================================================== */
+  /*  STRUCTURAL TOKENS — the same in every palette                         */
+  /* ====================================================================== */
+  :root {
+    --sans: "Ubuntu", "Fira Sans", "Source Sans 3", "Segoe UI Variable Text",
+            "Segoe UI", "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+    --display: "TeX Gyre Pagella", "Palatino Linotype", "Iowan Old Style", Palatino,
+               "Book Antiqua", Georgia, ui-serif, serif;
+    --mono: "JetBrains Mono", "JetBrainsMono Nerd Font Mono", "IBM Plex Mono",
+            "Cascadia Mono", "SF Mono", Consolas, ui-monospace, monospace;
+
+    /* spacing scale — use these, do not invent one-off rem values */
+    --s1:.25rem; --s2:.5rem; --s3:.75rem; --s4:1rem; --s5:1.5rem;
+    --s6:2rem;   --s7:3rem;  --s8:4.5rem;
+    --r1:.35rem; --r2:.55rem; --r3:.85rem;
+
+    --toc-w:17rem;
+    --measure:64ch;   /* prose stops here; tables and diagrams run the full column */
+  }
+
+  /* ====================================================================== */
+  /*  PALETTES — set data-palette on <html>; the sidebar button cycles them  */
+  /*                                                                        */
+  /*  ink    blue on cool paper.   The documentation default: GitHub Primer  */
+  /*                              (#0969da), MDN, Tailwind all land here.    */
+  /*  ember  rust on warm bone.    Editorial, closer to print than to a UI.  */
+  /*  iris   indigo on cool paper. The Stripe/Linear register.               */
+  /*                                                                        */
+  /*  Accent text values are Radix Colors step 11 (light) and step 11 dark,  */
+  /*  which are tuned for text contrast against their own backgrounds; ink's */
+  /*  solid is Primer's link blue. Every palette keeps the SAME three        */
+  /*  semantics, so green never stops meaning safe — except --warn, which is */
+  /*  nudged per palette to stay clear of the accent (in ember an amber warn */
+  /*  is nearly the accent, so it goes olive).                               */
+  /* ====================================================================== */
+
+  /* ---- ink (default) ---------------------------------------------------- */
+  :root, :root[data-palette="ink"] {
+    --bg:#fbfcfd; --surface:#fff; --surface-2:#f1f4f8; --tint:#eef3f9;
+    --fg:#16191d; --ink-2:#383e46; --muted:#5f6771; --faint:#8a929c;
+    --line:#e0e5eb; --line-strong:#c4cbd4;
+    --accent:#0969da; --accent-ink:#0b5cad; --accent-wash:rgba(9,105,218,.08);
+    --ok:#2f7d46;     --ok-wash:rgba(47,125,70,.09);
+    --warn:#8a6206;   --warn-wash:rgba(138,98,6,.10);
+    --danger:#b42323; --danger-wash:rgba(180,35,35,.08);
+    --shadow:0 1px 2px rgba(16,24,40,.05), 0 8px 20px -14px rgba(16,24,40,.30);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]), :root[data-palette="ink"]:not([data-theme="light"]) {
+      --bg:#0f1216; --surface:#171b21; --surface-2:#0a0d11; --tint:#1a2431;
+      --fg:#e6eaef; --ink-2:#c3cad3; --muted:#97a0ab; --faint:#727b87;
+      --line:#252b33; --line-strong:#3b434f;
+      --accent:#70b8ff; --accent-ink:#8ecaff; --accent-wash:rgba(112,184,255,.10);
+      --ok:#6fc48a;     --ok-wash:rgba(111,196,138,.11);
+      --warn:#d8ab4a;   --warn-wash:rgba(216,171,74,.11);
+      --danger:#f07a72; --danger-wash:rgba(240,122,114,.11);
+      --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -16px rgba(0,0,0,.9);
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"], :root[data-palette="ink"][data-theme="dark"] {
+    --bg:#0f1216; --surface:#171b21; --surface-2:#0a0d11; --tint:#1a2431;
+    --fg:#e6eaef; --ink-2:#c3cad3; --muted:#97a0ab; --faint:#727b87;
+    --line:#252b33; --line-strong:#3b434f;
+    --accent:#70b8ff; --accent-ink:#8ecaff; --accent-wash:rgba(112,184,255,.10);
+    --ok:#6fc48a;     --ok-wash:rgba(111,196,138,.11);
+    --warn:#d8ab4a;   --warn-wash:rgba(216,171,74,.11);
+    --danger:#f07a72; --danger-wash:rgba(240,122,114,.11);
+    --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -16px rgba(0,0,0,.9);
+    color-scheme:dark;
+  }
+
+  /* ---- ember ------------------------------------------------------------ */
+  :root[data-palette="ember"] {
+    --bg:#fbfaf7; --surface:#fff; --surface-2:#f3f1ec; --tint:#f6efe6;
+    --fg:#1a1917; --ink-2:#3d3a35; --muted:#6a655c; --faint:#948e82;
+    --line:#e2ded4; --line-strong:#c8c2b4;
+    --accent:#b4530a; --accent-ink:#8f4108; --accent-wash:rgba(180,83,10,.08);
+    --ok:#3f7042;     --ok-wash:rgba(63,112,66,.09);
+    --warn:#6d6a0f;   --warn-wash:rgba(109,106,15,.11);
+    --danger:#a83232; --danger-wash:rgba(168,50,50,.08);
+    --shadow:0 1px 2px rgba(40,32,20,.05), 0 8px 20px -14px rgba(40,32,20,.28);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root[data-palette="ember"]:not([data-theme="light"]) {
+      --bg:#141311; --surface:#1d1b18; --surface-2:#100f0e; --tint:#241f19;
+      --fg:#ece7dd; --ink-2:#cdc7bb; --muted:#a09a8d; --faint:#7c766b;
+      --line:#2e2b26; --line-strong:#463f36;
+      --accent:#e8913c; --accent-ink:#f0a65c; --accent-wash:rgba(232,145,60,.10);
+      --ok:#7fb383;     --ok-wash:rgba(127,179,131,.11);
+      --warn:#c3c257;   --warn-wash:rgba(195,194,87,.11);
+      --danger:#e07a72; --danger-wash:rgba(224,122,114,.11);
+      --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -16px rgba(0,0,0,.9);
+      color-scheme:dark;
+    }
+  }
+  :root[data-palette="ember"][data-theme="dark"] {
+    --bg:#141311; --surface:#1d1b18; --surface-2:#100f0e; --tint:#241f19;
+    --fg:#ece7dd; --ink-2:#cdc7bb; --muted:#a09a8d; --faint:#7c766b;
+    --line:#2e2b26; --line-strong:#463f36;
+    --accent:#e8913c; --accent-ink:#f0a65c; --accent-wash:rgba(232,145,60,.10);
+    --ok:#7fb383;     --ok-wash:rgba(127,179,131,.11);
+    --warn:#c3c257;   --warn-wash:rgba(195,194,87,.11);
+    --danger:#e07a72; --danger-wash:rgba(224,122,114,.11);
+    --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -16px rgba(0,0,0,.9);
+    color-scheme:dark;
+  }
+
+  /* ---- iris ------------------------------------------------------------- */
+  :root[data-palette="iris"] {
+    --bg:#fdfdff; --surface:#fff; --surface-2:#f3f3fa; --tint:#f0f1fe;
+    --fg:#1a1a22; --ink-2:#3b3b47; --muted:#62626f; --faint:#8c8c9a;
+    --line:#e3e3ed; --line-strong:#c6c6d5;
+    --accent:#5753c6; --accent-ink:#4a46b0; --accent-wash:rgba(87,83,198,.08);
+    --ok:#2f7d46;     --ok-wash:rgba(47,125,70,.09);
+    --warn:#8a6206;   --warn-wash:rgba(138,98,6,.10);
+    --danger:#b42323; --danger-wash:rgba(180,35,35,.08);
+    --shadow:0 1px 2px rgba(20,20,43,.05), 0 8px 20px -14px rgba(20,20,43,.30);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root[data-palette="iris"]:not([data-theme="light"]) {
+      --bg:#121218; --surface:#1b1b24; --surface-2:#0d0d12; --tint:#202248;
+      --fg:#e8e7f0; --ink-2:#c9c8d6; --muted:#9c9bad; --faint:#787889;
+      --line:#282833; --line-strong:#41414f;
+      --accent:#b1a9ff; --accent-ink:#c5bfff; --accent-wash:rgba(177,169,255,.10);
+      --ok:#6fc48a;     --ok-wash:rgba(111,196,138,.11);
+      --warn:#d8ab4a;   --warn-wash:rgba(216,171,74,.11);
+      --danger:#f07a72; --danger-wash:rgba(240,122,114,.11);
+      --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -16px rgba(0,0,0,.9);
+      color-scheme:dark;
+    }
+  }
+  :root[data-palette="iris"][data-theme="dark"] {
+    --bg:#121218; --surface:#1b1b24; --surface-2:#0d0d12; --tint:#202248;
+    --fg:#e8e7f0; --ink-2:#c9c8d6; --muted:#9c9bad; --faint:#787889;
+    --line:#282833; --line-strong:#41414f;
+    --accent:#b1a9ff; --accent-ink:#c5bfff; --accent-wash:rgba(177,169,255,.10);
+    --ok:#6fc48a;     --ok-wash:rgba(111,196,138,.11);
+    --warn:#d8ab4a;   --warn-wash:rgba(216,171,74,.11);
+    --danger:#f07a72; --danger-wash:rgba(240,122,114,.11);
+    --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -16px rgba(0,0,0,.9);
+    color-scheme:dark;
+  }
+
+  /* ---- base ------------------------------------------------------------- */
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body {
+    margin:0; background:var(--bg); color:var(--fg);
+    font:400 1.125rem/1.7 var(--sans);
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  /* Atmosphere, not decoration: one soft accent wash behind the masthead so the
+     top of the page has depth instead of reading as a flat fill. Fixed, so it
+     fades out as the reader scrolls into the body. */
+  body::before {
+    content:""; position:fixed; inset:0 0 auto 0; height:38rem; pointer-events:none;
+    background:radial-gradient(58rem 26rem at 34% -12%, var(--accent-wash), transparent 68%);
+    z-index:0;
+  }
+  #toc, main { position:relative; z-index:1; }
+  ::selection { background:var(--accent-wash); }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:.2rem; }
+
+  /* ---- reading progress -------------------------------------------------- */
+  /* Orientation on a page that can run very long. No text, no layout cost. */
+  #progress {
+    position:fixed; top:0; left:var(--toc-w); right:0; height:2px; z-index:6;
+    background:var(--accent); transform:scaleX(0); transform-origin:0 50%;
+  }
+
+  /* ====================================================================== */
+  /*  TABLE OF CONTENTS                                                     */
+  /* ====================================================================== */
+  #toc {
+    position:fixed; top:0; left:0; width:var(--toc-w); height:100vh; overflow-y:auto;
+    background:var(--surface-2); border-right:1px solid var(--line);
+    padding:var(--s6) var(--s4) var(--s6) var(--s5);
+    display:flex; flex-direction:column;
+  }
+  #toc .deck-title {
+    font:600 1.15rem/1.25 var(--display); letter-spacing:-.01em;
+    margin:0 0 var(--s2); color:var(--fg);
+  }
+  #toc .deck-meta {
+    font:500 .7rem/1.5 var(--mono); letter-spacing:.08em; text-transform:uppercase;
+    color:var(--faint); margin:0 0 var(--s6);
+  }
+  /* the rail: one hairline the active marker sits on top of */
+  #toc nav { display:flex; flex-direction:column; border-left:1px solid var(--line); }
+  #toc nav { counter-reset:toc; }
+  #toc a {
+    display:grid; grid-template-columns:1.7rem 1fr; align-items:baseline;
+    margin-left:-1px; border-left:2px solid transparent;
+    text-decoration:none; color:var(--muted);
+    font-size:.92rem; line-height:1.35; padding:.42rem .6rem .42rem .75rem;
+    transition:color .14s ease, background-color .14s ease, border-color .14s ease;
+  }
+  #toc a:not(.lvl1) { counter-increment:toc; }
+  #toc a:not(.lvl1)::before {
+    content:counter(toc,decimal-leading-zero);
+    font:500 .68rem/1.6 var(--mono); color:var(--faint); letter-spacing:.02em;
+  }
+  #toc a.lvl1 { font-weight:600; color:var(--ink-2); }
+  #toc a.lvl1::before { content:"§"; font:500 .7rem/1.6 var(--mono); color:var(--faint); }
+  #toc a:hover { color:var(--fg); background:var(--accent-wash); }
+  #toc a.active { color:var(--accent-ink); border-left-color:var(--accent); font-weight:600; }
+  #toc a.active::before { color:var(--accent); }
+  #toc .spacer { flex:1 1 auto; min-height:var(--s5); }
+  #toc .hint {
+    font-size:.72rem; line-height:1.45; color:var(--faint); margin:0 0 var(--s3);
+  }
+  #toc .controls { display:flex; flex-wrap:wrap; gap:.4rem; }
+  #toc button {
+    font:500 .72rem/1 var(--mono); letter-spacing:.06em; text-transform:uppercase;
+    cursor:pointer; text-align:left;
+    background:none; border:1px solid var(--line-strong); color:var(--muted);
+    border-radius:var(--r1); padding:.5rem .7rem;
+    transition:color .14s ease, border-color .14s ease, background-color .14s ease;
+  }
+  #toc button:hover { color:var(--accent-ink); border-color:var(--accent); background:var(--accent-wash); }
+
+  /* ====================================================================== */
+  /*  PAGE                                                                  */
+  /* ====================================================================== */
+  main { margin-left:var(--toc-w); max-width:58rem; padding:var(--s8) 3.5rem 10rem;
+         counter-reset:sec; }
+  section { padding:var(--s7) 0; scroll-margin-top:var(--s5); }
+  section:first-child { padding-top:var(--s2); }
+  section + section { border-top:1px solid var(--line); }
+  main > section:has(h2) { counter-increment:sec; }
+
+  /* Prose stops at the measure; everything visual keeps the full 816px column.
+     The resulting asymmetry is deliberate — it is what makes the page read as a
+     document rather than a wall. */
+  section > :is(p, ul, ol, dl, blockquote, .note, .lede), figcaption {
+    max-width:var(--measure);
+  }
+
+  /* ---- headings ---------------------------------------------------------- */
+  h1 {
+    font:600 clamp(2.3rem,4.8vw,3.3rem)/1.08 var(--display);
+    letter-spacing:-.022em; margin:0 0 var(--s4); max-width:20ch;
+  }
+  h2 {
+    font:600 clamp(1.6rem,3.1vw,2.15rem)/1.18 var(--display);
+    letter-spacing:-.014em; margin:0 0 var(--s5); color:var(--fg);
+  }
+  /* HEADING TREATMENT — chosen per deck with `data-headings` on <html>, because
+     what makes a long page scannable depends on what is in it. probe.sh measures
+     the ratio and tells you which one this deck wants.
+
+       data-headings="rule"    diagram-heavy decks. Ink heading, a short accent
+                               rule opening each section. The diagrams are already
+                               the landmarks, and they need the accent to mark what
+                               changes — so the headings stay out of its way.
+
+       data-headings="accent"  prose-heavy decks. Accent heading, no rule. With few
+                               diagrams nothing competes for the accent, and a
+                               coloured heading is by far the strongest landmark
+                               when scrolling a wall of text.
+
+     The number stays faint in both. Do not mix them within one deck. */
+  main > section:has(h2)::before {
+    content:""; display:block; width:2.6rem; height:3px; border-radius:2px;
+    background:var(--accent); margin-bottom:var(--s5);
+  }
+  :root[data-headings="accent"] main > section:has(h2)::before { content:none; }
+  :root[data-headings="accent"] h2 { color:var(--accent); }
+  main > section:has(h2) > h2::before {
+    content:counter(sec,decimal-leading-zero);
+    display:block; font:600 .72rem/1 var(--mono); letter-spacing:.16em;
+    color:var(--faint); margin-bottom:.7rem;
+  }
+  h3 {
+    font:600 1.02rem/1.4 var(--sans); letter-spacing:.02em;
+    margin:var(--s6) 0 var(--s2); color:var(--fg);
+  }
+  h4 { font:600 .8rem/1.4 var(--mono); letter-spacing:.1em; text-transform:uppercase;
+       color:var(--muted); margin:var(--s5) 0 var(--s2); }
+
+  p { margin:0 0 var(--s4); }
+  strong { font-weight:600; color:var(--fg); }
+  em { font-style:italic; }
+  a { color:var(--accent-ink); text-underline-offset:.18em; text-decoration-thickness:1px; }
+
+  .eyebrow {
+    font:600 .74rem/1 var(--mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--accent); margin:0 0 var(--s4);
+  }
+  .lede {
+    font:400 1.35rem/1.55 var(--display); color:var(--ink-2);
+    max-width:44ch; margin-bottom:var(--s5);
+  }
+  .meta { font:500 .8rem/1.6 var(--mono); letter-spacing:.05em; color:var(--faint); }
+
+  /* ---- lists ------------------------------------------------------------- */
+  ol,ul { padding-left:1.4rem; margin:0 0 var(--s4); }
+  li { margin:.45rem 0; }
+  li::marker { color:var(--accent); }
+  ol { list-style:none; counter-reset:step; padding-left:2.4rem; }
+  ol > li { counter-increment:step; position:relative; }
+  ol > li::before {
+    content:counter(step) "."; position:absolute; left:-2.4rem; top:0;
+    width:1.7rem; text-align:right;
+    font:600 .95rem/1.78 var(--mono); color:var(--accent);
+  }
+
+  /* Absolute marker, NOT flex — flex would turn every inline <code> in the item
+     into a flex item and shred the line into columns. */
+  ul.todo { list-style:none; padding-left:1.9rem; }
+  ul.todo li { position:relative; }
+  ul.todo li::before { content:"\2610"; color:var(--accent); font-size:1.05em;
+                       position:absolute; left:-1.9rem; }
+  ul.todo li.done::before { content:"\2611"; color:var(--ok); }
+  ul.todo li.done { color:var(--muted); }
+
+  /* gap:0 with padding on the cells instead — a column gap would break the row
+     rule into two floating hairlines with a hole between them */
+  dl { display:grid; grid-template-columns:minmax(7rem,13rem) 1fr; gap:0;
+       margin:var(--s5) 0; max-width:none; }
+  dt { font-weight:600; padding:.55rem var(--s5) .55rem 0; border-top:1px solid var(--line); }
+  dd { margin:0; color:var(--ink-2); padding:.55rem 0; border-top:1px solid var(--line); }
+
+  /* ---- code -------------------------------------------------------------- */
+  /* Inline code carries no border: at the density of a technical plan, a boxed
+     chip every few words turns running prose into confetti. */
+  code { font:.88em/1.5 var(--mono); background:var(--tint); color:var(--ink-2);
+         border-radius:.28rem; padding:.12em .34em; }
+  pre:not(.mermaid) {
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r2);
+    padding:var(--s4) var(--s5); overflow-x:auto;
+    font-size:.92rem; line-height:1.6; margin:var(--s5) 0;
+    box-shadow:var(--shadow);
+  }
+  pre:not(.mermaid) code { background:none; padding:0; font-size:1em; color:var(--fg); }
+
+  /* ---- callouts ---------------------------------------------------------- */
+  .note {
+    border-left:3px solid var(--accent); background:var(--accent-wash);
+    padding:var(--s3) var(--s4); border-radius:0 var(--r1) var(--r1) 0;
+    color:var(--ink-2); margin:var(--s5) 0;
+  }
+  .note > :last-child { margin-bottom:0; }
+  .note.ok     { border-left-color:var(--ok);     background:var(--ok-wash); }
+  .note.warn   { border-left-color:var(--warn);   background:var(--warn-wash); }
+  .note.danger { border-left-color:var(--danger); background:var(--danger-wash); }
+
+  blockquote {
+    margin:var(--s5) 0; padding:.1rem 0 .1rem var(--s5);
+    border-left:2px solid var(--line-strong); color:var(--ink-2);
+    font:400 1.15rem/1.6 var(--display); font-style:italic;
+  }
+
+  /* ---- tags -------------------------------------------------------------- */
+  .tag {
+    display:inline-block; font:600 .7rem/1.6 var(--mono); letter-spacing:.07em;
+    text-transform:uppercase; padding:.05em .45em; border-radius:.28rem;
+    border:1px solid var(--line-strong); color:var(--muted); background:var(--surface);
+    vertical-align:.08em;
+  }
+  .tag.accent { color:var(--accent-ink); border-color:var(--accent); background:var(--accent-wash); }
+  .tag.ok     { color:var(--ok);     border-color:var(--ok);     background:var(--ok-wash); }
+  .tag.warn   { color:var(--warn);   border-color:var(--warn);   background:var(--warn-wash); }
+  .tag.danger { color:var(--danger); border-color:var(--danger); background:var(--danger-wash); }
+
+  /* ---- stats — only for counts the source actually states ---------------- */
+  .stats { display:flex; flex-wrap:wrap; gap:var(--s5) var(--s7); margin:var(--s6) 0; }
+  .stat b {
+    display:block; font:600 2.2rem/1 var(--display); letter-spacing:-.02em;
+    font-variant-numeric:tabular-nums; color:var(--fg);
+  }
+  .stat span {
+    display:block; margin-top:.3rem;
+    font:500 .72rem/1.4 var(--mono); letter-spacing:.1em; text-transform:uppercase;
+    color:var(--faint);
+  }
+
+  /* ---- cards ------------------------------------------------------------- */
+  .grid { display:grid; gap:var(--s4) var(--s5); margin:var(--s5) 0;
+          grid-template-columns:repeat(var(--cols,2),minmax(0,1fr)); }
+  .card {
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r2);
+    padding:var(--s4) var(--s5); box-shadow:var(--shadow);
+  }
+  .card h3 { margin:0 0 var(--s2); font:600 1.02rem/1.35 var(--sans); letter-spacing:0; }
+  .card p  { margin:0; color:var(--ink-2); font-size:.98rem; line-height:1.6; }
+  .card p + p { margin-top:var(--s2); }
+  /* a spine, not a ring — the colour reads at a glance without boxing the card in */
+  .card.accent, .card.ok, .card.warn, .card.danger {
+    padding-left:calc(var(--s5) - 3px); border-left:3px solid var(--spine);
+  }
+  .card.accent { --spine:var(--accent); }
+  .card.ok     { --spine:var(--ok); }
+  .card.warn   { --spine:var(--warn); }
+  .card.danger { --spine:var(--danger); }
+
+  /* ---- tables ------------------------------------------------------------ */
+  /* .scrollx wraps anything that could be wider than the column — a table that
+     overflows makes the whole PAGE scroll sideways, which the probe fails. */
+  .scrollx { overflow-x:auto; margin:var(--s5) 0; }
+  .scrollx > table { margin:0; }
+  table {
+    border-collapse:collapse; width:100%; margin:var(--s5) 0;
+    font-size:.98rem; font-variant-numeric:tabular-nums;
+  }
+  th,td { text-align:left; padding:.55rem .8rem; vertical-align:top;
+          border-bottom:1px solid var(--line); }
+  th {
+    color:var(--muted); font:600 .72rem/1.5 var(--mono); letter-spacing:.1em;
+    text-transform:uppercase; border-bottom:1px solid var(--line-strong);
+    padding-bottom:.5rem;
+  }
+  tbody tr:last-child td { border-bottom:0; }
+  td:first-child { color:var(--fg); }
+
+  /* ---- figures ----------------------------------------------------------- */
+  figure { margin:var(--s6) 0; }
+  figcaption {
+    font-size:.9rem; color:var(--muted); margin-top:var(--s3);
+    padding-left:var(--s3); border-left:2px solid var(--line);
+  }
+  pre.mermaid { background:none; border:0; box-shadow:none; padding:0;
+                margin:var(--s6) 0; text-align:center; }
+  pre.mermaid svg, figure svg { max-width:100%; height:auto; }
+  /* Hand-authored SVG is drawn at the COLUMN's scale: a full-width figure has a
+     viewBox around 660–816 units wide, so one unit is about one pixel and
+     font-size 15 lands on the deck's own body size. A drawing much narrower than
+     that gets upscaled by max-width:100% until its labels are larger than the
+     headings — put those in <figure class="narrow"> rather than redrawing them. */
+  figure.narrow { max-width:34rem; }
+
+  .split { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);
+           gap:var(--s6); align-items:center; margin:var(--s5) 0; }
+  .split > :is(p,ul,ol) { max-width:none; }
+
+  /* ====================================================================== */
+  /*  CSS BOX DIAGRAMS                                                      */
+  /*  The browser lays the text out, so a label can never overrun its box    */
+  /*  and "make that one wider" is a single property. Reach for these before */
+  /*  hand-SVG whenever the shape is a stack, a pipeline, a matrix or a      */
+  /*  before/after pair.                                                     */
+  /* ====================================================================== */
+  .bx {
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r2);
+    padding:.7rem .9rem; font-size:.96rem; line-height:1.4;
+    font-variant-numeric:tabular-nums;
+  }
+  .bx small { display:block; color:var(--muted); font-size:.78rem; line-height:1.35;
+              margin-top:.22rem; }
+  .bx strong { font-weight:600; }
+  .bx.accent { border-color:var(--accent); border-width:2px; background:var(--accent-wash);
+               padding:calc(.7rem - 1px) calc(.9rem - 1px); }
+  .bx.ok     { border-color:var(--ok);     border-width:2px; background:var(--ok-wash);
+               padding:calc(.7rem - 1px) calc(.9rem - 1px); }
+  .bx.danger { border-color:var(--danger); border-width:2px; background:var(--danger-wash);
+               padding:calc(.7rem - 1px) calc(.9rem - 1px); }
+  .bx.ghost  { background:none; border-style:dashed; color:var(--muted); }
+
+  /* pipeline — boxes in a row, arrows between; add .down to run it vertically.
+     An .arrow may carry a <small> label: what flows is usually the point. */
+  .boxflow { display:flex; flex-wrap:wrap; align-items:stretch; gap:.6rem; margin:var(--s6) 0; }
+  .boxflow > .bx { flex:1 1 0; min-width:8rem; }
+  .boxflow > .arrow {
+    flex:0 0 auto; align-self:center; color:var(--muted);
+    display:flex; flex-direction:column; align-items:center; gap:.1rem;
+    font-size:1.15rem; line-height:1;
+  }
+  .boxflow > .arrow small {
+    font:500 .7rem/1.25 var(--mono); color:var(--faint); text-align:center;
+    max-width:7rem; letter-spacing:.02em;
+  }
+  .boxflow > .arrow.accent { color:var(--accent); }
+  .boxflow.down { flex-direction:column; align-items:stretch; }
+  .boxflow.down > .bx { flex:0 0 auto; }
+
+  /* stack — layers butted together, top to bottom */
+  .boxstack { display:flex; flex-direction:column; margin:var(--s6) 0;
+              border:1px solid var(--line); border-radius:var(--r2); overflow:hidden;
+              box-shadow:var(--shadow); }
+  .boxstack > .bx { border:0; border-bottom:1px solid var(--line); border-radius:0;
+                    background:var(--surface); }
+  /* inside a stack the accent is a spine, not a ring — and must not re-add the
+     divider the :last-child rule below removes, hence the explicit colour */
+  .boxstack > .bx.accent, .boxstack > .bx.ok, .boxstack > .bx.danger {
+    border-width:0 0 1px; border-bottom-color:var(--line);
+    padding:.7rem .9rem .7rem 1.1rem;
+  }
+  .boxstack > .bx.accent { box-shadow:inset 3px 0 0 var(--accent); }
+  .boxstack > .bx.ok     { box-shadow:inset 3px 0 0 var(--ok); }
+  .boxstack > .bx.danger { box-shadow:inset 3px 0 0 var(--danger); }
+  .boxstack > .bx:last-child { border-bottom:0; }
+
+  /* matrix — set --cols to the column count */
+  .boxgrid { display:grid; gap:.6rem; margin:var(--s6) 0;
+             grid-template-columns:repeat(var(--cols,3),minmax(0,1fr)); }
+  .boxgrid > .head { color:var(--muted); font:600 .72rem/1.5 var(--mono);
+                     letter-spacing:.1em; text-transform:uppercase; padding:0 .2rem; }
+
+  /* before/after — identical geometry twice, so only the change stands out */
+  .beforeafter { display:grid; grid-template-columns:1fr 1fr; gap:var(--s6);
+                 margin:var(--s6) 0; }
+  .beforeafter h4 { margin:0 0 var(--s3); }
+  .beforeafter .boxflow, .beforeafter .boxstack, .beforeafter .boxgrid { margin:0; }
+
+  /* ---- narrow: TOC becomes a bar on top --------------------------------- */
+  @media (max-width:62rem) {
+    #toc { position:static; width:auto; height:auto; flex-direction:column;
+           border-right:0; border-bottom:1px solid var(--line); padding:var(--s5); }
+    #toc nav { flex-direction:row; flex-wrap:wrap; border-left:0; gap:.2rem; }
+    #toc a { border-left:0; border-bottom:2px solid transparent; margin-left:0;
+             grid-template-columns:auto auto; gap:.4rem; padding:.35rem .5rem; }
+    #toc a.active { border-left:0; border-bottom-color:var(--accent); }
+    #toc .spacer, #toc .hint { display:none; }
+    #toc button { margin-top:var(--s4); }
+    #progress { left:0; }
+    main { margin-left:0; padding:var(--s6) var(--s5) 6rem; }
+    .grid, .split, .beforeafter { grid-template-columns:1fr; }
+    .boxgrid { --cols:1; }
+    dl { grid-template-columns:1fr; gap:0; }
+    dd { border-top:0; padding-top:0; padding-bottom:var(--s3); }
+  }
+
+  /* ---- MOTION ------------------------------------------------------------ */
+  /* Deliberately confined to hover, focus and the active marker. No entrance
+     animations and no scroll reveals: anything that starts at opacity:0 is
+     invisible to a printed page and to a reader who lands mid-document via
+     Ctrl+F, which is exactly what this deck exists to support. */
+  @media (prefers-reduced-motion:reduce) {
+    html { scroll-behavior:auto; }
+    *, *::before, *::after { transition:none !important; animation:none !important; }
+  }
+
+  @media print {
+    /* Force paper — printing while the deck is in dark mode would otherwise put
+       dark cards and boxes on white paper. The selector list has to reach the
+       specificity of the palette blocks above (0,3,0) or their dark values
+       outrank this; it comes later in the file, so equal specificity wins. */
+    :root, :root[data-theme], :root[data-palette], :root[data-palette][data-theme],
+    :root:not([data-theme="light"]), :root[data-palette]:not([data-theme="light"]) {
+      --bg:#fff; --surface:#fff; --surface-2:#fff; --tint:#f2f2f2;
+      --fg:#000; --ink-2:#222; --muted:#555; --faint:#666;
+      --line:#bbb; --line-strong:#888;
+      --accent:#8f4108; --accent-ink:#8f4108; --accent-wash:transparent;
+      --ok:#2f5a32; --warn:#6f4d06; --danger:#8a2020;
+      --ok-wash:transparent; --warn-wash:transparent; --danger-wash:transparent;
+      --shadow:none;
+    }
+    body::before, #toc, #progress { display:none; }
+    main { margin-left:0; max-width:none; padding:0; }
+    body { background:#fff; color:#000; font-size:11pt; }
+    section { page-break-inside:avoid; }
+    h1,h2,h3 { page-break-after:avoid; }
+    .boxflow, .boxstack, .boxgrid, .beforeafter, figure, .card { page-break-inside:avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+
+<aside id="toc">
+  <p class="deck-title">Fondspreise · Tagesablauf</p>
+  <p class="deck-meta">2026-09-08 · Alt gegen Neu</p>
+  <nav></nav>
+  <div class="spacer"></div>
+  <p class="hint">← → jump between sections</p>
+  <div class="controls">
+    <button id="theme">Theme</button>
+    <button id="palette">Palette</button>
+  </div>
+</aside>
+
+<main>
+
+<section data-nav="Überblick">
+  <p class="eyebrow">Fondspreise · Zeitlicher Ablauf</p>
+  <h1>Der Tag im Altsystem und im Neusystem</h1>
+  <p class="lede">Wann eine einzelne Preismeldung wirkt, wann die Ausschüttungen gebucht werden,
+     und warum das Altsystem beides nicht gleichzeitig hinbekommt.</p>
+  <p class="meta">2026-09-08 · abgeleitet aus <code>docs/Tagesjob und Programmablauf/</code>
+     (Crontab, Tagesjob-Logik, Event-Logging), <code>docs/Fondspreise/fondspreise-legacy-analyse.md</code>
+     und dem Neuentwicklungs-Konzept · Grundlage für die Diskussion mit der Fachabteilung</p>
+  <div class="stats">
+    <div class="stat"><b>9</b><span>Schritte im Legacy-Tagesjob</span></div>
+    <div class="stat"><b>1</b><span>manueller Start davor</span></div>
+    <div class="stat"><b>2</b><span>Sammelläufe im Neusystem</span></div>
+    <div class="stat"><b>~4200</b><span>Preise je Tag</span></div>
+  </div>
+</section>
+
+<section>
+  <h2>Warum die Zeitachse eine eigene Frage ist</h2>
+  <p>Das Konzept beantwortet „brauchen wir doch einen Batch?" mit <em>nein</em> — und schiebt die
+     Begründung auf die Zeitachse: die Preise selbst wären ohne Sammelphase auskömmlich, die
+     <strong>Ausschüttungen</strong> sind es nicht. Deren Einspielung braucht den Preis des Tages,
+     und im Altsystem steht der zu diesem Zeitpunkt noch nirgends.</p>
+  <p>Dieses Dokument zeichnet deshalb nicht die Datenflüsse, sondern die <strong>Uhrzeiten</strong>:
+     welcher Lauf wann startet, worauf er wartet, und was daraus für die Reihenfolge von
+     Preis&shy;meldung, Ausschüttungs&shy;meldung, Batch-Job und Tagesjob folgt.</p>
+  <p class="note">Fest vorgegeben (User, 2026-09-08): die Ausschüttungsmeldungen bleiben ein
+     <strong>Batch mit drei Läufen</strong> täglich, und <strong>Sammellauf 1 muss vor
+     Ausschüttungs-Job 3 laufen</strong>. Alles andere an der Taktung ist Diskussionsstand.</p>
+</section>
+
+<section id="tagesachse">
+  <h2>Der Tag: Alt gegen Neu</h2>
+  <p>Beide Spalten laufen auf derselben Uhr. Links das Altsystem, wie Crontab und Tagesjob-Logik es
+     beschreiben; rechts das Zielbild aus dem Konzept. Was im Neusystem <em>entfällt</em>, steht
+     gestrichelt.</p>
+
+  <div class="boxgrid" style="--cols:2">
+    <div class="head">Altsystem — <code>sybprd02</code></div>
+    <div class="head">Neusystem — Zielbild</div>
+
+    <div class="bx">05:30 – 05:58 · Admin-Jobs
+      <small>Monitoring, <code>run_ifas_admin</code> (Statusfeld), <code>tmp_af_kurs</code> leeren,
+        Geschäftsjahr, vorläufige ISINs aktivieren</small></div>
+    <div class="bx">05:55 · Geschäftsjahre-Job
+      <small><code>scheduled-tasks.geschaeftsjahre-calc</code>, MON–FRI</small></div>
+
+    <div class="bx accent">06:05 → 17:55 · <code>run_preise</code>, alle 10 Minuten
+      <small><strong>ein</strong> Sammler für Preis-, Ausschüttungs- und Steuermeldungen —
+        <code>preis_ins.e</code> erkennt die Meldungsart selbst. Ziel: die Sammeltabelle
+        <code>tmp_if_kurs</code>. Rückmeldung als ZIP an den Lieferanten</small></div>
+    <div class="bx accent">durchgehend · Lieferkette je Datei
+      <small>nicht terminiert; die Work Queue zieht im 5-Sekunden-Takt, zwei Server aus einem Pool.
+        Der Preis steht <strong>Minuten nach Eingang</strong> in <code>kurs</code></small></div>
+
+    <div class="bx">07:30 · Ausschüttungsfiles 1
+      <small><code>run_aussch.csh 1</code> — <code>tmp_aussch → ASF</code>, Files, Verteilung.
+        Kein Tagesjob-Schritt, nur eine Cron-Zeit</small></div>
+    <div class="bx">07:30 · Ausschüttungs-Job 1
+      <small><code>ausschuettung.job.morning.cron</code> — bleibt Batch, unverändert</small></div>
+
+    <div class="bx">08:00 · Steuerdaten-Meldung 1
+      <small><code>run_stm.csh 1</code>, inklusive Mahnungen</small></div>
+    <div class="bx">08:00 · STM Lauf 1
+      <small><code>scheduled-tasks.steuerdaten-auswertungen.run1</code></small></div>
+
+    <div class="bx">11:45 · Steuerdaten-Meldung 2
+      <small><code>run_stm.csh 2</code></small></div>
+    <div class="bx">11:45 · STM Lauf 2</div>
+
+    <div class="bx">12:00 · Ausschüttungsfiles 2
+      <small><code>run_aussch.csh 2</code></small></div>
+    <div class="bx">12:00 · Ausschüttungs-Job 2</div>
+
+    <div class="bx">12:50 · ISIN-Sonderauswertung 1
+      <small>für die steuerlichen Vertreter</small></div>
+    <div class="bx">12:50 · ISIN-Anforderungslisten
+      <small><code>scheduled-tasks.isin-anforderungslisten</code>, 12:50 und 17:50</small></div>
+
+    <div class="bx">13:05 · Stammdatenfile Börse
+      <small><code>create_boe_st.csh</code> — läuft hier <em>und</em> als Tagesjob-Schritt 2</small></div>
+    <div class="bx ghost">kein Job
+      <small>Stammdatenfiles Börse/Vendoren sind nicht Teil des Fondspreis-Konzepts —
+        siehe <em>Was noch keinen Platz hat</em></small></div>
+
+    <div></div>
+    <div class="bx accent">~14:00 · Sammellauf 1 — Cutoff 1
+      <small>alle Lieferungen mit <code>sammelreport_job_id IS NULL</code>: Preisfile,
+        Plausi-Report, Publikationsprotokoll, Verteilung. Vollständig, inklusive
+        <code>letzte_preise</code>-Fallback</small></div>
+
+    <div class="bx warn">14:35 bzw. 14:50 · Fondspreis-Plausibilität
+      <small><code>create_plausibel</code> → <code>preis_dld.e -P</code> → <code>fplausib.txt</code>.
+        <strong>Kein</strong> Tagesjob-Schritt. Die Übersichts- und Wartungsdoku nennt 14:35, die
+        Crontab 14:50</small></div>
+    <div class="bx ghost">entfällt als eigener Lauf
+      <small>die Plausibilität ist Teil des Sammellaufs — ein Report je Lauf, über die Menge
+        dieses Laufs</small></div>
+
+    <div class="bx danger">≈14:50 → 15:00 · manuelle Datenwartung
+      <small>die Fachabteilung arbeitet den Plausi-Report ab. Erst danach wird der Tagesjob
+        <strong>von Hand</strong> aus <code>TAGESJOB.jam</code> gestartet — der Mensch ist die
+        Uhr für alles, was folgt</small></div>
+    <div class="bx ghost">kein Mensch im Pfad
+      <small>Cron plus Work Queue; nichts wartet auf eine Freigabe</small></div>
+
+    <div class="bx">15:00 · Tagesjob START
+      <small>Event <code>TAGESJOB | START</code>, läuft als Background-Job, Fortschritt über
+        Checkpoints <code>cp_tagesjob_01…09</code></small></div>
+    <div></div>
+
+    <div class="bx">15:00 – 15:05 · Schritte 1 – 6
+      <small>1 Preisfiles → MFT/T2S · 2 Börse/Vendoren · 3 WDBO-Notify ·
+        <strong>4 Preise → <code>kurs</code></strong> · 5 <code>run_asf_vorl</code> ·
+        6 Vendor STAMM → Event <code>ENDE Preise Stammdaten</code>. Erst in Schritt 4 steht der
+        Preis des Tages in <code>kurs</code> — nach dem Preisfile aus Schritt 1</small></div>
+    <div class="bx ghost">nichts davon liegt hier
+      <small>Preisfile: Sammellauf. <code>kurs</code>: Stufe 2 der Lieferkette, seit dem Morgen
+        erledigt. Vendoren, Börse, WDBO, <code>run_asf_vorl</code>: eigene Jobs</small></div>
+
+    <div class="bx danger">15:05 → 16:05 · Warten auf die EZB-Referenzkurse
+      <small><code>refkursVorhanden.e</code> gegen <code>zeas..adev</code>, Warteschleife
+        <strong>ohne Timeout</strong>. Notbremse: <code>CalcOhneReferenzkurs</code> in der
+        <code>CONFIG.INI</code>, einmalig wirksam. Der Tagesjob steht hier — die Cron-Läufe der
+        nächsten Zeilen laufen davon unabhängig weiter</small></div>
+    <div class="bx ghost">entfällt
+      <small>die Kennzahlen-Stufe rechnet, was rechenbar ist; nur die währungsbereinigte Variante
+        bei Fremdwährungsfonds braucht <code>adev</code>. Den Rest holt der Sweep</small></div>
+
+    <div class="bx">15:35 · <code>run_preise last</code>
+      <small>schreibt das Event <code>PREIS_INS_INL_LAST</code>; ab 16:05 verarbeitet der Sammler
+        <em>nur mehr</em> Fondspreise</small></div>
+    <div class="bx ghost">keine Torsteuerung
+      <small>kein Event, das einen anderen Lauf freigibt — der Jobstatus in der Work Queue ist
+        die Auskunft</small></div>
+
+    <div class="bx">15:40 · Steuerdaten-Meldung 3 — FINAL
+      <small><code>run_stm.csh 3</code> <strong>wartet</strong> auf <code>PREIS_INS_INL_LAST</code>
+        und <code>PREIS_INS_AUSL_LAST</code></small></div>
+    <div class="bx">15:40 · STM Lauf 3</div>
+
+    <div class="bx warn">16:00 · Ausschüttungsfiles 3
+      <small>der <strong>erste</strong> Lauf des Tages, der den heutigen Preis in <code>kurs</code>
+        findet — das Preisfile ist um diese Zeit längst verschickt</small></div>
+    <div class="bx ok">16:00 · Ausschüttungs-Job 3
+      <small>der heutige Preis liegt seit dem Morgen in <code>kurs</code>; die Vorbedingung war
+        schon bei Lauf 1 erfüllt</small></div>
+
+    <div class="bx">16:05 – 16:11 · Schritte 7 – 8
+      <small>7 Kennzahlen <code>run_calc -r2 -r3 [-r4 -U]</code> · 8 Vendor KENNZ →
+        Event <code>ENDE</code></small></div>
+    <div class="bx">Kennzahlen-Stufe je Lieferung
+      <small>plus periodischer Kennzahlen-Sweep: sucht Preise ohne Kennzahl, aus den
+        <em>Daten</em>, nicht aus Jobzuständen</small></div>
+
+    <div class="bx">16:11 · Schritt 9 — Plausi der täglichen Preise
+      <small><code>create_plausi_taegliche_preise.csh</code> → <code>-P2</code>, dann Event
+        <code>ENDE PREIS PLAUSI</code> und alle Checkpoints löschen</small></div>
+    <div class="bx accent">nach 16:00 · Sammellauf 2 — Cutoff 2
+      <small>nur die Lieferungen zwischen den Cutoffs: ein <strong>Delta</strong>, kein
+        Ersatzfile, ohne Fallback</small></div>
+
+    <div class="bx">16:15 / 16:30 · Kontrollen
+      <small><code>event_stm_finished.csh 3</code>, <code>event_aussch_finished.csh 3</code>,
+        <code>event_calc_finished.csh</code> — Mail, wenn ein Event fehlt</small></div>
+    <div class="bx ghost">keine Event-Kontrolle
+      <small>der Jobstatus und die Zähler am Job sind die Auskunft</small></div>
+
+    <div></div>
+    <div class="bx accent">~17:00 · Fehlmeldungs-Job
+      <small>erwartete gegen tatsächliche Lieferung: fehlende ISINs je Lieferant bzw. als
+        Sammelmail — deckt auch „Ausschüttung gebucht, kein Preis" ab</small></div>
+
+    <div class="bx">17:50 · ISIN-Sonderauswertung 2</div>
+    <div class="bx">17:50 · ISIN-Anforderungslisten 2</div>
+
+    <div class="bx">17:55 · letzter Sammellauf
+      <small>nur mehr Fondspreise; was jetzt kommt, wirkt erst im Tagesjob von morgen</small></div>
+    <div class="bx">Lieferungen laufen weiter ein
+      <small>was nach Cutoff 2 kommt, bleibt auf <code>sammelreport_job_id IS NULL</code> und geht
+        morgen in Lauf 1 — statt verloren zu sein</small></div>
+  </div>
+
+  <p class="note warn">Terminkonflikt, der zu entscheiden ist: der Diskussionsstand für die
+     Sammelläufe war „~14:00 und ~16:00" — 16:00 ist aber die Cron-Zeit von Ausschüttungs-Job 3.
+     Läuft Lauf 2 gleichzeitig, fehlt dessen Buchung im Delta. Lauf 2 muss <strong>nach</strong>
+     Ausschüttungs-Job 3 liegen.</p>
+</section>
+
+<section id="tagesablauf">
+  <h2>Derselbe Tag als Ablauf</h2>
+  <p>Die Zeitachse sagt <em>wann</em>, sie sagt nicht <em>warum in dieser Reihenfolge</em>.
+     Dieselben Bausteine als Ablauf, links und rechts auf demselben Raster: nur die zusätzlichen
+     Kanten unterscheiden die beiden.</p>
+
+  <div class="beforeafter">
+    <div>
+      <h4>Altsystem</h4>
+      <figure class="narrow">
+    <svg viewBox="0 0 390 626" role="img" xmlns="http://www.w3.org/2000/svg">
+      <title>Ablauf im Altsystem: eine Kette mit einem Menschen darin, einer Warteschleife ohne Timeout und einer Rückkante um ifas..ASF</title>
+      <rect x="100" y="12" width="250" height="44" rx="7" fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="225" y="31" text-anchor="middle" fill="currentColor" font-size="12.5">Lieferdatei im send/-Verzeichnis</text>
+      <text x="225" y="47" text-anchor="middle" fill="var(--muted)" font-size="11">je Lieferant ein FTP-Account</text>
+      <line x1="225" y1="56" x2="225" y2="64" stroke="var(--muted)" stroke-width="1.5"/>
+      <polygon points="225,74 220,64 230,64" fill="var(--muted)"/>
+      <rect x="100" y="74" width="250" height="44" rx="7" fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="225" y="93" text-anchor="middle" fill="currentColor" font-size="12.5">run_preise · alle 10 Min</text>
+      <text x="225" y="109" text-anchor="middle" fill="var(--muted)" font-size="11">erkennt Preis, Ausschüttung, STM</text>
+      <line x1="225" y1="118" x2="225" y2="126" stroke="var(--muted)" stroke-width="1.5"/>
+      <polygon points="225,136 220,126 230,126" fill="var(--muted)"/>
+      <rect x="100" y="136" width="250" height="44" rx="7" fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="225" y="155" text-anchor="middle" fill="currentColor" font-size="12.5">tmp_if_kurs</text>
+      <text x="225" y="171" text-anchor="middle" fill="var(--muted)" font-size="11">geteilte Sammeltabelle</text>
+      <line x1="225" y1="180" x2="225" y2="188" stroke="var(--muted)" stroke-width="1.5"/>
+      <polygon points="225,198 220,188 230,188" fill="var(--muted)"/>
+      <rect x="100" y="198" width="250" height="44" rx="7" fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="225" y="217" text-anchor="middle" fill="currentColor" font-size="12.5">create_plausibel · 14:35</text>
+      <text x="225" y="233" text-anchor="middle" fill="var(--muted)" font-size="11">fplausib.txt an die Fachabteilung</text>
+      <line x1="225" y1="242" x2="225" y2="250" stroke="var(--muted)" stroke-width="1.5"/>
+      <polygon points="225,260 220,250 230,250" fill="var(--muted)"/>
+      <rect x="100" y="260" width="250" height="44" rx="7" fill="var(--danger-wash)" stroke="var(--danger)" stroke-width="2"/>
+      <text x="225" y="279" text-anchor="middle" fill="currentColor" font-size="12.5">manuelle Datenwartung</text>
+      <text x="225" y="295" text-anchor="middle" fill="var(--muted)" font-size="11">der Mensch stellt die Uhr</text>
+      <line x1="225" y1="304" x2="225" y2="312" stroke="var(--muted)" stroke-width="1.5"/>
+      <polygon points="225,322 220,312 230,312" fill="var(--muted)"/>
+      <rect x="100" y="322" width="250" height="44" rx="7" fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="225" y="341" text-anchor="middle" fill="currentColor" font-size="12.5">Schritt 1 · Preisfile an MFT</text>
+      <text x="225" y="357" text-anchor="middle" fill="var(--muted)" font-size="11">liest ifas..ASF</text>
+      <line x1="225" y1="366" x2="225" y2="374" stroke="var(--muted)" stroke-width="1.5"/>
+      <polygon points="225,384 220,374 230,374" fill="var(--muted)"/>
+      <rect x="100" y="384" width="250" height="44" rx="7" fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="225" y="403" text-anchor="middle" fill="currentColor" font-size="12.5">Schritt 4 · Preise nach kurs</text>
+      <text x="225" y="419" text-anchor="middle" fill="var(--muted)" font-size="11">erst hier ist der Preis da</text>
+      <line x1="225" y1="428" x2="225" y2="436" stroke="var(--muted)" stroke-width="1.5"/>
+      <polygon points="225,446 220,436 230,436" fill="var(--muted)"/>
+      <rect x="100" y="446" width="250" height="44" rx="7" fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="225" y="465" text-anchor="middle" fill="currentColor" font-size="12.5">run_aussch · 7:30 · 12:00 · 16:00</text>
+      <text x="225" y="481" text-anchor="middle" fill="var(--muted)" font-size="11">bucht ifas..ASF, braucht kurs</text>
+      <line x1="225" y1="490" x2="225" y2="498" stroke="var(--muted)" stroke-width="1.5"/>
+      <polygon points="225,508 220,498 230,498" fill="var(--muted)"/>
+      <rect x="100" y="508" width="250" height="44" rx="7" fill="var(--danger-wash)" stroke="var(--danger)" stroke-width="2"/>
+      <text x="225" y="527" text-anchor="middle" fill="currentColor" font-size="12.5">warten auf EZB-Referenzkurse</text>
+      <text x="225" y="543" text-anchor="middle" fill="var(--muted)" font-size="11">Schleife ohne Timeout</text>
+      <line x1="225" y1="552" x2="225" y2="560" stroke="var(--muted)" stroke-width="1.5"/>
+      <polygon points="225,570 220,560 230,560" fill="var(--muted)"/>
+      <rect x="100" y="570" width="250" height="44" rx="7" fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="225" y="589" text-anchor="middle" fill="currentColor" font-size="12.5">Schritt 7 · Kennzahlen</text>
+      <text x="225" y="605" text-anchor="middle" fill="var(--muted)" font-size="11">run_calc, dann Vendorfiles</text>
+      <polyline points="100,468 62,468 62,344 90,344" fill="none" stroke="var(--danger)" stroke-width="1.5"/>
+      <polygon points="100,344 90,339 90,349" fill="var(--danger)"/>
+      <text transform="rotate(-90 52 406)" x="52" y="406" text-anchor="middle" fill="var(--danger)" font-size="11">Schritt 1 braucht das</text>
+      <polyline points="350,522 374,522 374,544 360,544" fill="none" stroke="var(--danger)" stroke-width="1.5"/>
+      <polygon points="350,544 360,539 360,549" fill="var(--danger)"/>
+    </svg>
+      </figure>
+    </div>
+    <div>
+      <h4>Neusystem</h4>
+      <figure class="narrow">
+    <svg viewBox="0 0 390 564" role="img" xmlns="http://www.w3.org/2000/svg">
+      <title>Ablauf im Neusystem: eine Kette je Lieferdatei, ein Prädikat als einzige Verzweigung, keine Rückkante</title>
+      <rect x="100" y="12" width="250" height="44" rx="7" fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="225" y="31" text-anchor="middle" fill="currentColor" font-size="12.5">Lieferdatei trifft ein</text>
+      <text x="225" y="47" text-anchor="middle" fill="var(--muted)" font-size="11">MFT-Eingang, keine Uhrzeit</text>
+      <line x1="225" y1="56" x2="225" y2="64" stroke="var(--muted)" stroke-width="1.5"/>
+      <polygon points="225,74 220,64 230,64" fill="var(--muted)"/>
+      <rect x="100" y="74" width="250" height="44" rx="7" fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="225" y="93" text-anchor="middle" fill="currentColor" font-size="12.5">Work Queue · Polling 5 s</text>
+      <text x="225" y="109" text-anchor="middle" fill="var(--muted)" font-size="11">zwei Server, ein Pool</text>
+      <line x1="225" y1="118" x2="225" y2="126" stroke="var(--muted)" stroke-width="1.5"/>
+      <polygon points="225,136 220,126 230,126" fill="var(--muted)"/>
+      <rect x="100" y="136" width="250" height="44" rx="7" fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="225" y="155" text-anchor="middle" fill="currentColor" font-size="12.5">Stufe 1 · Eingang</text>
+      <text x="225" y="171" text-anchor="middle" fill="var(--muted)" font-size="11">Inbox + Rückmeldungs-ZIP sofort</text>
+      <line x1="225" y1="180" x2="225" y2="188" stroke="var(--muted)" stroke-width="1.5"/>
+      <polygon points="225,198 220,188 230,188" fill="var(--muted)"/>
+      <rect x="100" y="198" width="250" height="44" rx="7" fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="225" y="217" text-anchor="middle" fill="currentColor" font-size="12.5">Guard · angekommen_am neuer?</text>
+      <text x="225" y="233" text-anchor="middle" fill="var(--muted)" font-size="11">verliert: still überspringen</text>
+      <line x1="225" y1="242" x2="225" y2="250" stroke="var(--muted)" stroke-width="1.5"/>
+      <polygon points="225,260 220,250 230,250" fill="var(--muted)"/>
+      <rect x="100" y="260" width="250" height="44" rx="7" fill="var(--accent-wash)" stroke="var(--accent)" stroke-width="2"/>
+      <text x="225" y="279" text-anchor="middle" fill="currentColor" font-size="12.5">Stufe 2 · Preis nach kurs</text>
+      <text x="225" y="295" text-anchor="middle" fill="var(--muted)" font-size="11">Minuten nach Eingang</text>
+      <line x1="225" y1="304" x2="225" y2="312" stroke="var(--muted)" stroke-width="1.5"/>
+      <polygon points="225,322 220,312 230,312" fill="var(--muted)"/>
+      <rect x="100" y="322" width="250" height="44" rx="7" fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="225" y="341" text-anchor="middle" fill="currentColor" font-size="12.5">Ausschüttungs-Job 1 · 2 · 3</text>
+      <text x="225" y="357" text-anchor="middle" fill="var(--muted)" font-size="11">7:30 · 12:00 · 16:00, bucht ASF</text>
+      <line x1="225" y1="366" x2="225" y2="374" stroke="var(--muted)" stroke-width="1.5"/>
+      <polygon points="225,384 220,374 230,374" fill="var(--muted)"/>
+      <rect x="100" y="384" width="250" height="44" rx="7" fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="225" y="403" text-anchor="middle" fill="currentColor" font-size="12.5">Stufe 3 · Kennzahlen</text>
+      <text x="225" y="419" text-anchor="middle" fill="var(--muted)" font-size="11">Versuch; darf unvollständig sein</text>
+      <line x1="225" y1="428" x2="225" y2="436" stroke="var(--muted)" stroke-width="1.5"/>
+      <polygon points="225,446 220,436 230,436" fill="var(--muted)"/>
+      <rect x="100" y="446" width="250" height="44" rx="7" fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="225" y="465" text-anchor="middle" fill="currentColor" font-size="12.5">Kennzahlen-Sweep</text>
+      <text x="225" y="481" text-anchor="middle" fill="var(--muted)" font-size="11">periodisch, holt den Rest</text>
+      <line x1="225" y1="490" x2="225" y2="498" stroke="var(--muted)" stroke-width="1.5"/>
+      <polygon points="225,508 220,498 230,498" fill="var(--muted)"/>
+      <rect x="100" y="508" width="250" height="44" rx="7" fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="225" y="527" text-anchor="middle" fill="currentColor" font-size="12.5">Sammellauf 1 + 2</text>
+      <text x="225" y="543" text-anchor="middle" fill="var(--muted)" font-size="11">liest ASF, Preisfile + Plausi</text>
+    </svg>
+      </figure>
+    </div>
+  </div>
+
+  <p>Links stehen drei Kanten, die rechts fehlen — und sie sind die drei Stellen, an denen der Tag
+     kippen kann:</p>
+  <ul>
+    <li><strong>Die Rückkante.</strong> Schritt 1 liest <code>ASF</code>,
+      <code>run_aussch</code> braucht dafür den Preis, und den schreibt erst Schritt 4 — nach
+      Schritt 1. Ein geschlossener Kreis, den kein Programm auflöst; verlassen wird er nur über den
+      fiktiven Preis-Code <code>X</code>.</li>
+    <li><strong>Die Selbstschleife.</strong> <code>refkursVorhanden.e</code> fragt im Minutentakt
+      nach den EZB-Referenzkursen, ohne Timeout. Rechts entfällt sie: die Kennzahlen-Stufe rechnet,
+      was rechenbar ist, und der Sweep holt den Rest.</li>
+    <li><strong>Der Mensch als Knoten.</strong> Die manuelle Datenwartung steht <em>im</em> Pfad —
+      alles darunter beginnt erst, wenn jemand den Tagesjob von Hand startet. Rechts existiert der
+      Knoten nicht.</li>
+  </ul>
+
+  <p>Rechts bleibt genau <strong>eine</strong> Verzweigung übrig, und die ist ein Prädikat auf
+     einem Zeitstempel: der Guard auf <code>preis_herkunft</code>. Wer verliert, überspringt still
+     — der Endzustand ist der der späteren Ankunft, unabhängig von der Reihenfolge.</p>
+
+  <p class="note">Die Kette rechts ist nicht kürzer, weil weniger passiert, sondern weil nichts
+     mehr auf den Abschluss von etwas anderem wartet. Die zwei Termine — Cutoff 1 und Cutoff 2 —
+     hängen nicht an der Kette, sie nehmen, was fertig ist.</p>
+
+  <p>Diese beiden Spuren sind die <em>Kurzfassung</em>: nur die Fondspreis-Kette, nur was für den
+     Vergleich nötig ist. Der vollständige Tag — alle Cron-Läufe auf einer Zeitachse, die
+     Ausschüttungs- und Steuerdaten-Batches mit ihrer Verzahnung, und der Tagesjob mit allen neun
+     Checkpoints — steht im Begleitblatt
+     <a href="2026-09-08-fondspreise-tagesablauf-diagramme.html">Tagesablauf, Diagramme in voller
+     Breite</a>: fünf Diagramme ohne Spaltenbreiten-Limit, jedes in einem eigenen Scroll-Panel.</p>
+</section>
+
+<section>
+  <h2>Ein Sammler gegen eine Kette je Datei</h2>
+  <p>Der auffälligste Unterschied ist nicht die Uhrzeit, sondern die <em>Körnung</em>. Im Altsystem
+     ist der Eingang ein Scan über alle Lieferantenverzeichnisse; im Neusystem ist er ein Job je
+     Datei.</p>
+
+  <div class="beforeafter">
+    <div>
+      <h4>Altsystem</h4>
+      <div class="boxstack">
+        <div class="bx">Scan alle 10 Minuten<small><code>run_preise</code> über alle
+          FTP-Accounts</small></div>
+        <div class="bx"><code>preis_ins.e</code><small>erkennt Preis-, Ausschüttungs- oder
+          Steuermeldung selbst</small></div>
+        <div class="bx"><code>tmp_if_kurs</code><small>geteilte, veränderliche
+          Sammeltabelle</small></div>
+        <div class="bx ghost">wirksam erst im Tagesjob<small>Filegenerierung Schritt 1,
+          Einspielung Schritt 4</small></div>
+      </div>
+    </div>
+    <div>
+      <h4>Neusystem</h4>
+      <div class="boxstack">
+        <div class="bx">Job je Lieferdatei<small>Work Queue, Polling 5 s, zwei Server</small></div>
+        <div class="bx">Stufe 1 — Eingang<small>Prüfung, Inbox <code>preismeldung_zeilen</code>,
+          Rückmeldungs-ZIP</small></div>
+        <div class="bx accent">Stufe 2 — Sync nach <code>kurs</code><small>Minuten nach Eingang,
+          Guard auf <code>preis_herkunft</code></small></div>
+        <div class="bx">Stufe 3 — Kennzahlen<small>optimistischer Versuch, darf unvollständig
+          bleiben</small></div>
+      </div>
+    </div>
+  </div>
+
+  <p>Die drei Stufen tragen <strong>keine eigenen Statuswerte</strong> — der Job ist
+     <code>PENDING → PROCESSING → COMPLETED</code>, und der Sammellauf nimmt nur
+     <code>COMPLETED</code>-Jobs mit. Eine Lieferung, die in der Sync-Stufe hängt, verpasst den
+     Cutoff und geht im nächsten Lauf. Das ist Latenz, kein Datenverlust.</p>
+
+  <p class="note">Dass die Sync-Stufe ohne Reihenfolge auskommt, leistet ein monotoner Guard:
+     <code>update preis_herkunft … where angekommen_am &lt; @arrival</code>. Wer verliert,
+     überspringt still — der Endzustand ist der der späteren Ankunft, unabhängig davon, welcher
+     Server zuerst fertig wird.</p>
+</section>
+
+<section>
+  <h2>Der Zirkel im Altsystem</h2>
+  <p>Drei Läufe greifen gegenläufig auf dieselbe Nahtstelle <code>ifas..ASF</code> zu, und keiner
+     von ihnen wartet auf den anderen. Zwischen <code>run_aussch.csh</code> und dem Tagesjob gibt es
+     <strong>keine erzwungene Reihenfolge</strong> — nur zwei Cron-Zeiten.</p>
+
+  <figure>
+    <svg viewBox="0 0 706 300" role="img" xmlns="http://www.w3.org/2000/svg">
+      <title>Zirkuläre zeitliche Abhängigkeit zwischen Filegenerierung, Ausschüttungs-Einspielung
+        und Preis-Einspielung im Altsystem</title>
+
+      <rect x="200" y="14" width="300" height="56" rx="8"
+            fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="350" y="40" text-anchor="middle" fill="currentColor" font-size="13">Tagesjob 1 · ~15:00</text>
+      <text x="350" y="59" text-anchor="middle" fill="var(--muted)" font-size="12">Filegenerierung liest ASF</text>
+
+      <rect x="200" y="122" width="300" height="56" rx="8"
+            fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="350" y="148" text-anchor="middle" fill="currentColor" font-size="13">run_aussch.csh 1 · 2 · 3</text>
+      <text x="350" y="167" text-anchor="middle" fill="var(--muted)" font-size="12">07:30 · 12:00 · 16:00, liest kurs</text>
+
+      <rect x="200" y="230" width="300" height="56" rx="8"
+            fill="var(--surface)" stroke="var(--line-strong)"/>
+      <text x="350" y="256" text-anchor="middle" fill="currentColor" font-size="13">Tagesjob 4 · ~15:03</text>
+      <text x="350" y="275" text-anchor="middle" fill="var(--muted)" font-size="12">Preise → kurs</text>
+
+      <line x1="350" y1="70" x2="350" y2="114" stroke="var(--danger)" stroke-width="2"/>
+      <polygon points="350,122 344,110 356,110" fill="var(--danger)"/>
+      <text x="366" y="100" fill="var(--danger)" font-size="12">braucht die Ausschüttung gebucht</text>
+
+      <line x1="350" y1="178" x2="350" y2="222" stroke="var(--danger)" stroke-width="2"/>
+      <polygon points="350,230 344,218 356,218" fill="var(--danger)"/>
+      <text x="366" y="208" fill="var(--danger)" font-size="12">braucht den Preis in kurs</text>
+
+      <polyline points="200,258 112,258 112,42 192,42" fill="none"
+                stroke="var(--danger)" stroke-width="2"/>
+      <polygon points="200,42 188,36 188,48" fill="var(--danger)"/>
+      <text x="120" y="202" fill="var(--danger)" font-size="12">läuft nach Schritt 1</text>
+    </svg>
+    <figcaption>Jeder Pfeil heißt „wartet inhaltlich auf". Der Kreis schließt sich, weil Schritt 4
+      des Tagesjobs nach Schritt 1 kommt.</figcaption>
+  </figure>
+
+  <p>Für inländische Fonds ist der Riegel absolut: <code>asfkennzahl.cpp:880-916</code> liest den
+     <code>R</code>-Kurs zum <code>ASF_DATUM</code>, und fehlt er, heißt es wörtlich
+     <em>„Inlaendische Fonds → es muss ein Preis vorhanden sein"</em> und <em>„→ Die Ausschuettung
+     kann nicht eingespielt werden."</em> Für ausländische Fonds gibt es einen Vortagskurs-Fallback,
+     für inländische nicht.</p>
+
+  <p>Praktische Folge: eine Ausschüttung landet im Preisfile nur, wenn sie an einem
+     <strong>früheren</strong> Tag gebucht wurde. Am Ausschüttungstag selbst ist die Bedingung ohne
+     Zusatzmaßnahme nicht erfüllbar.</p>
+
+  <p class="note danger">Der Notausgang ist der Preis-Code <code>X</code> — ein indikativer,
+     fiktiver errechneter Wert, nur zur Aktivierung, in keinem Ausgabefile enthalten. Seit 2008
+     insgesamt <strong>83</strong> solche Kurse, davon <strong>69</strong> an Ausschüttungstagen.
+     Der Zirkel ist also messbar, nicht theoretisch.</p>
+
+  <p class="note warn">Und er hat einen zweiten, unbeabsichtigten Ausweg:
+     <code>ReadAusschuettung</code> filtert <code>aussch_status</code> <strong>nicht</strong>.
+     Schritt 1 (Filegenerierung) läuft <em>vor</em> Schritt 5 (<code>run_asf_vorl</code>) — ein
+     Preis, der vor der Aktivierung eintrifft, zieht deshalb die noch <em>vorläufige</em>
+     Ausschüttung ins File. Der Datenabzug bestätigt es: 93 der 95 <code>V</code>-Zeilen liegen
+     unmittelbar vor ihrer Aktivierung. Das Neusystem filtert auf <code>'A'</code> — eine bekannte
+     Abweichung für den Parallelbetrieb.</p>
+</section>
+
+<section>
+  <h2>Aus dem Zirkel wird eine Ordnung</h2>
+  <p>Das Neusystem löst den Kreis nicht durch mehr Koordination, sondern durch <strong>Latenz</strong>:
+     der Preis ist in <code>kurs</code>, sobald die Lieferung durch ist. Damit ist die Vorbedingung
+     der Ausschüttungs-Einspielung am selben Tag <em>früh</em> erfüllt, und aus der zirkulären
+     Abhängigkeit wird eine gewöhnliche Reihenfolge.</p>
+
+  <div class="boxflow">
+    <div class="bx">Preislieferung<small>06:05 – 17:55, je Datei</small></div>
+    <div class="arrow accent">&rarr;<small>Minuten</small></div>
+    <div class="bx accent">Preis in <code>kurs</code><small>Sync-Stufe, Guard</small></div>
+    <div class="arrow">&rarr;<small>Vorbedingung erfüllt</small></div>
+    <div class="bx">Ausschüttungs-Job bucht ASF<small>07:30 · 12:00 · 16:00</small></div>
+    <div class="arrow">&rarr;<small>liest ASF</small></div>
+    <div class="bx">Sammellauf 1<small>Preisfile mit Ausschüttung</small></div>
+  </div>
+
+  <p>Drei Wege wären möglich, das auszudrücken; das Konzept empfiehlt zwei davon gemeinsam.</p>
+
+  <div class="grid">
+    <div class="card ok"><h3>O1 — Terminvereinbarung</h3>
+      <p>Die Ausschüttungs-Einspielung bleibt ein Batch und liegt vor Cutoff 1. Wie heute, aber mit
+        einer Vorbedingung, die jetzt tatsächlich erfüllt ist. <span class="tag ok">gewählt</span></p></div>
+    <div class="card"><h3>O2 — Ausschüttungen je Lieferung</h3>
+      <p>Die Ordnung löst sich von selbst, setzt aber voraus, dass die Ausschüttungs-Domäne genauso
+        umgebaut wird. <span class="tag">verworfen — Batch ist Vorgabe</span></p></div>
+    <div class="card ok"><h3>O3 — Der Lauf prüft und meldet</h3>
+      <p>Der Sammellauf stellt fest, ob für die heutigen <code>ASF_DATUM</code> die Buchung vorliegt,
+        und meldet, wenn nicht — statt still ein unvollständiges File zu verschicken.
+        <span class="tag ok">gewählt</span></p></div>
+  </div>
+
+  <p>O3 lebt an zwei Stellen: je Lauf leisten es die portierten Plausi-Abschnitte 18–20 im
+     Sammelreport, am Tagesende ergänzt der Fehlmeldungs-Job die Mail-Sicht. Damit ist erstmals
+     jemand für den Befund „Ausschüttung gebucht, aber kein Preis geliefert" zuständig — heute
+     verschickt das Altsystem das File einfach ohne Ausschüttungsangaben.</p>
+
+  <p class="note">Offen bleibt Punkt <strong>K</strong>: <code>ASF.r_faktor</code> wird von beiden
+     Domänen geschrieben — von der Ausschüttungs-Einspielung beim Buchen und von der
+     Preis-Einspielung bei einer Korrektur. Wem er gehört, entscheidet, ob die Kennzahlen-Stufe
+     überhaupt in <code>ASF</code> schreiben darf.</p>
+</section>
+
+<section>
+  <h2>Der Tagesjob, neun Schritte</h2>
+  <p>Der Tagesjob ist kein Fondspreis-Job, sondern eine Sammelklammer über alles Tägliche. Nur drei
+     seiner neun Schritte liegen in diesem Konzept.</p>
+
+  <div class="scrollx">
+    <table>
+      <thead>
+        <tr><th>#</th><th>Script → Programm</th><th>Inhalt</th><th>im Konzept</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td><code>create_preise.csh</code> → <code>preis_dld.e -fPREISE</code></td>
+            <td>Preis- und Solvafiles erstellen und verteilen</td>
+            <td><span class="tag accent">ja — Sammellauf</span></td></tr>
+        <tr><td>2</td><td><code>create_boe_st.csh</code> → <code>-B2</code></td>
+            <td>Stammdatenfile Börse und Vendoren</td>
+            <td><span class="tag">eigener Job nötig</span></td></tr>
+        <tr><td>3</td><td><code>create_notify_wdbo.csh</code></td>
+            <td>Benachrichtigung an WDBO (neue Fonds)</td>
+            <td><span class="tag">eigener Job nötig</span></td></tr>
+        <tr><td>4</td><td><code>run_preise_einspielen</code> → <code>preise.e -p0</code></td>
+            <td>Preise nach <code>kurs</code> einspielen</td>
+            <td><span class="tag accent">ja — als Stufe</span></td></tr>
+        <tr><td>5</td><td><code>run_asf_vorl</code></td>
+            <td>vorläufige Ausschüttungen und Splits aktivieren</td>
+            <td><span class="tag">Ausschüttungs-Domäne</span></td></tr>
+        <tr><td>6</td><td><code>run_vendor_stamm.csh</code></td>
+            <td>Vendorauswertung STAMMDATEN</td>
+            <td><span class="tag">eigener Job nötig</span></td></tr>
+        <tr><td>—</td><td><code>refkursVorhanden.e</code></td>
+            <td>Warteschleife auf die EZB-Referenzkurse</td>
+            <td><span class="tag ok">entfällt</span></td></tr>
+        <tr><td>7</td><td><code>run_calc -r2 -r3 [-r4 -U] -f0 -a</code></td>
+            <td>Kennzahlenberechnung; bei Ultimo auch Risikokennzahlen</td>
+            <td><span class="tag accent">ja — Stufe und Sweep</span></td></tr>
+        <tr><td>8</td><td><code>run_vendor_kennz.csh</code></td>
+            <td>Vendorauswertung KENNZAHLEN</td>
+            <td><span class="tag">eigener Job nötig</span></td></tr>
+        <tr><td>9</td><td><code>create_plausi_taegliche_preise.csh</code> → <code>-P2</code></td>
+            <td>Plausibilität der täglichen Preise</td>
+            <td><span class="tag accent">ja, erweitert</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Ordnungsauflagen für den Rest: 3 setzt 2 voraus, 8 setzt 7 voraus. 2 und 6 hängen
+     <strong>nicht</strong> an 1 — die Umstellung vom 2018-12-27 hat sie bewusst vor die
+     Warteschleife gezogen, damit die Stammdaten verteilt sind, bevor auf die EZB gewartet wird.</p>
+
+  <p class="note">Der große Plausi-Report <code>fplausib.txt</code> ist <strong>nicht</strong> Teil
+     des Tagesjobs — er kommt aus dem separaten Script <code>create_plausibel</code>. Im Tagesjob
+     läuft nur die <em>andere</em> Plausi-Variante <code>-P2</code> (Schritt 9). Die beiden prüfen
+     Verschiedenes und dürfen nicht verwechselt werden.</p>
+</section>
+
+<section>
+  <h2>Was heute die Reihenfolge erzwingt</h2>
+  <p>Das Altsystem hat kein Job-System, sondern zwei Mechanismen: <strong>Checkpoint-Dateien</strong>
+     für den Wiederanlauf und die <strong>Event-Log-Tabelle</strong> für alles, was auf einen anderen
+     Lauf warten muss.</p>
+
+  <div class="beforeafter">
+    <div>
+      <h4>Altsystem</h4>
+      <div class="boxstack">
+        <div class="bx"><code>cp_tagesjob_01…09</code><small>Dateien; ein Neustart setzt beim
+          nächsten Teil-Job fort. Am Ende alle löschen</small></div>
+        <div class="bx"><code>event_log</code> / <code>events</code><small>Schlüssel
+          <code>(datum, inland_ausland, event_id, event_nr)</code></small></div>
+        <div class="bx"><code>eventwriter.e</code> / <code>eventreader.e</code><small>Returncode =
+          Anzahl der Treffer; <code>-B1</code> sucht nur an Börsetagen</small></div>
+        <div class="bx danger">Tor: STM 3 wartet<small>auf <code>PREIS_INS_INL_LAST</code> und
+          <code>PREIS_INS_AUSL_LAST</code></small></div>
+        <div class="bx">Monitoring per Mail<small><code>event_stm_finished.csh</code>,
+          <code>event_aussch_finished.csh</code>, <code>event_calc_finished.csh</code></small></div>
+      </div>
+    </div>
+    <div>
+      <h4>Neusystem</h4>
+      <div class="boxstack">
+        <div class="bx accent">Work Queue<small><code>claimItem</code> als atomares
+          Compare-and-Set, <code>heartbeatAt</code>, Orphan-Recovery statt Checkpoints</small></div>
+        <div class="bx"><code>Job.keyDate</code> + <code>dailyRunNumber</code><small>Unique-Index
+          <code>ux_jobs_type_key_date_daily_run_number</code> — mehrere Läufe je Tag sind
+          geerbt</small></div>
+        <div class="bx"><code>Job.repeatedFromJob</code><small>ein Lauf mit gesetztem FK
+          <em>ist</em> die Wiederholung</small></div>
+        <div class="bx ok">kein Tor<small>der Sammellauf verarbeitet, was da ist:
+          <code>status = COMPLETED AND sammelreport_job_id IS NULL</code></small></div>
+        <div class="bx">Jobs und Zähler in der UI<small>statt Mail-Benachrichtigung bei fehlendem
+          Event</small></div>
+      </div>
+    </div>
+  </div>
+
+  <p>Das Checkpoint-Verfahren ist damit kein Feature, das portiert werden muss, sondern ein
+     Symptom: es kompensiert ein fehlendes Job-System.</p>
+
+  <p class="note">Die Event-Tabelle dient nicht nur der Protokollierung. Sie steuert auch die
+     <strong>inkrementelle</strong> Fileerstellung — „alles, was seit dem letzten Programmlauf
+     eingetragen wurde". Legacy hat den Mechanismus für die Preise sogar schon
+     (<code>szEintragezeit</code> schränkt auf <code>eintragezeit &gt; '&lt;zeitpunkt&gt;'</code> ein),
+     nutzt ihn im Fondspreis-Pfad aber nicht — genau das leistet im Neusystem das Delta von Lauf 2.</p>
+</section>
+
+<section>
+  <h2>Belege: zwei echte Tage</h2>
+  <p>Die Uhrzeiten oben sind Cron-Einträge — was tatsächlich passiert, steht in
+     <code>event_log</code>. Zwei Abzüge aus der Dokumentation.</p>
+
+  <h3>12.06.2023 — der Tagesjob selbst</h3>
+  <div class="scrollx">
+    <table>
+      <thead><tr><th>Event-Nr</th><th>Zeit</th><th>Parameter</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>15:00:41</td><td><code>START</code></td></tr>
+        <tr><td>2</td><td>15:05:50</td><td><code>ENDE - Preise Stammdaten</code></td></tr>
+        <tr><td>3</td><td>16:05:55</td><td><code>START - Kennzahlen</code></td></tr>
+        <tr><td>4</td><td>16:11:35</td><td><code>ENDE</code></td></tr>
+        <tr><td>5</td><td>16:11:38</td><td><code>ENDE PREIS PLAUSI</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Die Schritte 1–6 — inklusive Preisfile und Einspielung nach <code>kurs</code> — brauchen
+     <strong>fünf Minuten</strong>. Die Wartezeit auf die EZB-Referenzkurse dauert
+     <strong>eine Stunde</strong>, die Kennzahlen danach sechs Minuten.</p>
+
+  <h3>31.08.2023 — die Verzahnung mit den Nachbarn</h3>
+  <div class="scrollx">
+    <table>
+      <thead><tr><th>Zeit</th><th>Event</th><th>Anmerkung</th></tr></thead>
+      <tbody>
+        <tr><td>15:03</td><td><code>TAGESJOB</code> #2</td><td>ENDE — Preise Stammdaten: die Preise
+          stehen jetzt in <code>kurs</code></td></tr>
+        <tr><td>15:31</td><td><code>PREIS_INS_AUSL_LAST</code></td><td><code>run_af_lieferung last</code></td></tr>
+        <tr><td>15:36</td><td><code>PREIS_INS_INL_LAST</code></td><td><code>run_preise last</code> —
+          „Letzter Lauf"</td></tr>
+        <tr><td>15:41</td><td><code>PREIS_DLD_STM_CHECK</code> 3</td><td>1 min 47 s,
+          Fonds2Check: 64081</td></tr>
+        <tr><td>15:44</td><td><code>STM_FINISHED</code> 3</td><td>STM-Job 3 fertig</td></tr>
+        <tr><td>16:00</td><td><code>PREIS_DLD_AUSSCH_INSERT</code> / <code>_FILES</code> 3</td>
+            <td>Ausschüttungslauf 3 — <em>nach</em> dem Preisfile</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Der Tag liest sich als Beweis der Ordnungsauflage: STM 3 startet um 15:41, also nach beiden
+     <code>*_LAST</code>-Events — und der Ausschüttungslauf, der als einziger den heutigen Preis
+     vorfindet, läuft 57 Minuten nachdem das Preisfile das Haus verlassen hat.</p>
+</section>
+
+<section>
+  <h2>Was daraus für das Zielbild folgt</h2>
+  <ul>
+    <li><strong>Der Preis wird vom Tagesjob-Artefakt zum Nebenprodukt der Lieferung.</strong>
+      Zwischen Eingang und <code>kurs</code> liegen Minuten statt Stunden — das ist der einzige
+      Grund, warum der Zirkel verschwindet.</li>
+    <li><strong>Der Mensch verlässt die Zeitachse.</strong> Die manuelle Datenwartung und der
+      manuelle Start entfallen; die Plausibilität wird zum Report eines Laufs, nicht zur
+      Vorbedingung eines Laufs.</li>
+    <li><strong>Zwei Veröffentlichungen bleiben terminiert</strong> — weil der Bezieherkreis
+      Reports und nicht Einzelmeldungen erwartet. Die Rückmeldung an den Lieferanten ist davon
+      getrennt und geht sofort raus.</li>
+    <li><strong>Der Ausschüttungs-Batch bleibt, wie er ist.</strong> Die Vorgabe ist nicht der
+      Preis der Lösung, sondern ihre einfachste Form: O1 braucht nur eine Terminvereinbarung.</li>
+    <li><strong>Was heute ein Event-Tor war, wird ein Prädikat.</strong> Kein Lauf wartet mehr auf
+      einen anderen; jeder verarbeitet, was zu seiner Zeit da ist, und der Rest geht in den
+      nächsten Lauf.</li>
+  </ul>
+  <p class="note ok">Das manuelle <em>Stoppen</em> des Batchs bei einer gemeldeten Verspätung
+     entfällt damit ebenfalls: eine um 15:30 eingelangte Lieferung bleibt einfach auf
+     <code>sammelreport_job_id IS NULL</code>. Fällt Lauf 2 aus, ist sie morgen dran.</p>
+</section>
+
+<section>
+  <h2>Was an der Taktung noch zu entscheiden ist</h2>
+  <ul class="todo">
+    <li><strong>Cutoff 1 und Cutoff 2</strong> festlegen. Vorgabe: Lauf 1 vor Ausschüttungs-Job 3.
+      Zusätzlich nötig: Lauf 2 <em>nach</em> Ausschüttungs-Job 3, sonst fehlt dessen Buchung im
+      Delta. Diskussionsstand ~14:00 / ~16:00 löst das zweite nicht.</li>
+    <li><strong>Punkt L</strong> — die Vorrangregel Preis gegen Ausschüttung: Empfehlung O1 + O3
+      bestätigen.</li>
+    <li><strong>Punkt H</strong> — soll „Ausschüttung gebucht, kein Preis" schon zur
+      <em>Eingangszeit</em> gemeldet werden, oder erst im Lauf und im Fehlmeldungs-Job?</li>
+    <li><strong>Punkt E</strong> — das Ausschüttungs-Veto bei <code>R</code>-Löschungen: wie heute
+      still, oder mit Rückmeldung aus der Sync-Stufe?</li>
+    <li><strong>Punkt K</strong> — wem gehört <code>ASF.r_faktor</code>? Blockiert die
+      Kennzahlen-Stufe.</li>
+    <li><strong>Zeitpunkt des Fehlmeldungs-Jobs</strong> (Vorschlag 17:00) und Empfänger —
+      Punkt <strong>J</strong>. Die Datenlage ist erhoben: ein maschinenlesbarer Preis-Lieferant je
+      KAG existiert nicht.</li>
+    <li><strong>Statusfilter auf <code>ASF</code></strong>: bewusst nur <code>'A'</code>, oder
+      <code>'V'</code> wie Legacy mitlesen? Entscheidet über eine bekannte Abweichung im
+      Parallelbetrieb.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Was noch keinen Platz hat</h2>
+  <p>Fünf Schritte des Legacy-Tagesjobs sind in keinem Konzept untergebracht. Sie hängen zeitlich
+     an der Preiskette, gehören ihr aber nicht — und ohne sie ist der Tagesjob nicht abgelöst.</p>
+
+  <div class="boxgrid" style="--cols:2">
+    <div class="bx ghost">Stammdatenfile Börse und Vendoren
+      <small>Legacy: <code>create_boe_st.csh</code> → <code>-B2</code>, doppelt terminiert (13:05
+        und Tagesjob-Schritt 2)</small></div>
+    <div class="bx ghost">WDBO-Notify
+      <small><code>create_notify_wdbo.csh</code>; setzt Schritt 2 voraus</small></div>
+    <div class="bx ghost">Vendor-Job STAMMDATEN
+      <small><code>run_vendor_stamm.csh</code> plus Archivierung; hängt nicht an Schritt 1</small></div>
+    <div class="bx ghost">Vendor-Job KENNZAHLEN
+      <small><code>run_vendor_kennz.csh</code>; setzt die Kennzahlenberechnung voraus</small></div>
+    <div class="bx ghost">Vorläufige Ausschüttungen und Splits aktivieren
+      <small><code>run_asf_vorl</code> — Ausschüttungs-Domäne, aber die Fondspreise sehen das
+        Ergebnis (Statusfilter auf <code>ASF</code>)</small></div>
+    <div class="bx ghost">MFT-TEST-Verteilung
+      <small><code>run_tagesjob_1/2_verteilung_test2bg.csh</code>, als Background-Job ausgelagert,
+        damit der Tagesjob nicht darauf wartet</small></div>
+  </div>
+
+  <p class="note">Ebenfalls nicht enthalten: die ausländische Kette (<code>-R1</code>) mit
+     <code>liefer_status</code> und den Mahnungen, die Meldefonds-Listen und die Fristenprüfung —
+     und die Formeln der Kennzahlenberechnung selbst, für die noch eine eigene Ist-Analyse
+     fehlt.</p>
+</section>
+</main>
+
+<script src="_deck/mermaid.min.js"></script>
+<script>
+(function () {
+  var sections = Array.prototype.slice.call(document.querySelectorAll('main > section'));
+  var mNodes   = Array.prototype.slice.call(document.querySelectorAll('pre.mermaid'));
+  var mSrc     = mNodes.map(function (n) { return n.textContent; });
+  var root     = document.documentElement;
+
+  /* ---- keep the reader's place across a reload -------------------------- */
+  /* The deck is refined interactively — edit, reload, look. Being thrown back to
+     the top on every reload is the real latency in that loop. Keyed on the file
+     path so two decks never share a position. Restored after mermaid has drawn,
+     because rendering the diagrams changes the page height. */
+  var POS = 'deck-scroll:' + location.pathname;
+  var savedY = null;
+  try { savedY = sessionStorage.getItem(POS); } catch (e) {}
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  addEventListener('beforeunload', function () {
+    try { sessionStorage.setItem(POS, String(scrollY)); } catch (e) {}
+  });
+
+  function restoreScroll() {
+    var y = parseInt(savedY, 10);
+    if (!(y > 0)) return;
+    var prev = root.style.scrollBehavior;
+    root.style.scrollBehavior = 'auto';        /* land, do not animate the whole page */
+    scrollTo(0, y);
+    root.style.scrollBehavior = prev;
+    tick();
+  }
+
+  /* ---- build the menu from the headings -------------------------------- */
+  var nav = document.querySelector('#toc nav');
+  var links = [];
+  function slug(s) {
+    return s.toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-').slice(0, 40);
+  }
+  sections.forEach(function (sec, i) {
+    var head = sec.querySelector('h1, h2');
+    if (!head) return;
+    if (!sec.id) sec.id = slug(head.textContent) || ('section-' + (i + 1));
+    /* data-nav="Short label" overrides the menu text — use it when the heading is
+       too long to read in a 17rem column, e.g. the title section. */
+    var a = document.createElement('a');
+    a.href = '#' + sec.id;
+    a.textContent = sec.dataset.nav || head.textContent;
+    /* .lvl1 marks the title entry so the CSS counter skips it and the numbers in
+       the menu line up with the ones above each <h2>. */
+    if (head.tagName === 'H1') a.className = 'lvl1';
+    nav.appendChild(a);
+    links.push({ a: a, sec: sec });
+  });
+
+  /* ---- scrollspy -------------------------------------------------------- */
+  /* Read from geometry on every scroll frame, not from an IntersectionObserver.
+     `section` carries scroll-margin-top, so a jump lands with the boundary a few
+     px BELOW the viewport top and the previous section still overlaps any band
+     anchored there. An observer that marks the topmost intersecting section then
+     names the section above the one the reader just landed on — and the arrow
+     keys, which read the marked entry, target where they already are and stop
+     moving. The menu entries are the spine: `current` indexes links, so a
+     section without a heading cannot strand the keyboard on an unlisted one. */
+  var SPY_LINE = 0.28;         /* a section top at or above here owns the menu */
+  var current  = 0;            /* index into links */
+
+  /* Held while a jump is in flight: the mark is already on the target, and the
+     positions the page passes through on the way must not drag it back. Every
+     scroll event re-arms it, so it releases once the motion stops, however long
+     the smooth scroll takes. */
+  var hold = 0, holdTimer = null;
+
+  function mark(i) {
+    current = i;
+    links.forEach(function (l, k) { l.a.classList.toggle('active', k === i); });
+  }
+
+  function spy() {
+    if (hold || !links.length) return;
+    var line = Math.max(48, innerHeight * SPY_LINE), i = 0;
+    for (var k = 0; k < links.length; k++) {
+      if (links[k].sec.getBoundingClientRect().top <= line) i = k;
+    }
+    /* the last section is usually too short to ever reach the line, so the
+       bottom of the document hands it the mark — but only on a page that
+       actually scrolls, or a one-screen deck would open on its last entry */
+    var max = root.scrollHeight - innerHeight;
+    if (max > 4 && scrollY >= max - 2) i = links.length - 1;
+    mark(i);
+  }
+
+  function holdSpy() {
+    hold = 1;
+    clearTimeout(holdTimer);
+    holdTimer = setTimeout(function () { hold = 0; spy(); }, 400);
+  }
+
+  /* One jump, from the keyboard. The menu marks the target immediately, so a
+     second keypress mid-scroll moves on instead of bouncing back. */
+  function go(i) {
+    if (!links.length) return;
+    i = Math.max(0, Math.min(i, links.length - 1));
+    mark(i);
+    holdSpy();
+    links[i].sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  /* A menu click keeps the native anchor jump — that is what updates the hash
+     and feeds the back button — and only pins the mark. */
+  links.forEach(function (l, i) {
+    l.a.addEventListener('click', function () { mark(i); holdSpy(); });
+  });
+
+  /* ---- reading progress ------------------------------------------------- */
+  var bar = document.getElementById('progress'), queued = false;
+  function tick() {
+    queued = false;
+    var max = root.scrollHeight - innerHeight;
+    var p = max > 0 ? Math.min(1, Math.max(0, scrollY / max)) : 0;
+    bar.style.transform = 'scaleX(' + p.toFixed(4) + ')';
+    spy();
+  }
+  addEventListener('scroll', function () {
+    if (hold) holdSpy();       /* still moving: keep the mark on the target */
+    if (!queued) { queued = true; requestAnimationFrame(tick); }
+  }, { passive: true });
+  addEventListener('resize', tick);
+
+  /* ---- theme ----------------------------------------------------------- */
+  function stored() { try { return localStorage.getItem('deck-theme'); } catch (e) { return null; } }
+  function save(v)  { try { localStorage.setItem('deck-theme', v); } catch (e) {} }
+
+  var override = stored();
+  if (override) root.setAttribute('data-theme', override);
+
+  function isDark() {
+    var o = root.getAttribute('data-theme');
+    if (o === 'dark')  return true;
+    if (o === 'light') return false;
+    return matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+
+  /* ---- mermaid, themed from the deck's own tokens ----------------------- */
+  /* Read every colour back out of CSS so a diagram is made of the same palette
+     as the page around it. Without this, mermaid's stock themes drop a grey-blue
+     diagram into a warm document and it reads as a screenshot from elsewhere. */
+  function tok(n) { return getComputedStyle(root).getPropertyValue(n).trim(); }
+
+  function draw() {
+    if (typeof mermaid === 'undefined' || !mNodes.length) return null;
+    mNodes.forEach(function (n, i) {
+      n.innerHTML = mSrc[i];
+      n.removeAttribute('data-processed');
+    });
+    var fg = tok('--fg'), muted = tok('--muted'), line = tok('--line-strong');
+    var surface = tok('--surface'), surface2 = tok('--surface-2'), bg = tok('--bg');
+    var accent = tok('--accent'), tint = tok('--tint');
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'base',
+      themeVariables: {
+        darkMode: isDark(),
+        fontFamily: tok('--sans'), fontSize: '15px',
+        background: bg,
+        primaryColor: surface, primaryTextColor: fg, primaryBorderColor: line,
+        secondaryColor: surface2, secondaryTextColor: fg, secondaryBorderColor: line,
+        tertiaryColor: tint, tertiaryTextColor: fg, tertiaryBorderColor: line,
+        mainBkg: surface, nodeBorder: line, nodeTextColor: fg, textColor: fg,
+        lineColor: muted, titleColor: fg,
+        edgeLabelBackground: bg, labelBackground: bg,
+        clusterBkg: surface2, clusterBorder: line,
+        /* sequence */
+        actorBkg: surface, actorBorder: line, actorTextColor: fg, actorLineColor: line,
+        signalColor: muted, signalTextColor: fg,
+        labelBoxBkgColor: surface, labelBoxBorderColor: line, labelTextColor: fg,
+        loopTextColor: fg, activationBkgColor: tint, activationBorderColor: accent,
+        noteBkgColor: tint, noteTextColor: fg, noteBorderColor: accent,
+        sequenceNumberColor: bg,
+        /* state + class */
+        transitionColor: muted, transitionLabelColor: fg,
+        stateBkg: surface, stateLabelColor: fg, altBackground: surface2,
+        compositeBackground: surface2, compositeBorder: line, compositeTitleBackground: surface2,
+        specialStateColor: accent, innerEndBackground: accent,
+        classText: fg,
+        /* er */
+        attributeBackgroundColorOdd: surface, attributeBackgroundColorEven: surface2
+      },
+      flowchart: { curve: 'basis', useMaxWidth: true, htmlLabels: true, padding: 10 },
+      sequence:  { useMaxWidth: true, actorMargin: 60 },
+      state:     { useMaxWidth: true },
+      er:        { useMaxWidth: true }
+    });
+    try {
+      var p = mermaid.run({ nodes: mNodes });
+      return p && p.catch ? p.catch(function (e) { console.error('mermaid', e); }) : null;
+    } catch (e) { console.error('mermaid', e); return null; }
+  }
+
+  document.getElementById('theme').addEventListener('click', function () {
+    var next = isDark() ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    save(next);
+    draw();
+  });
+
+  /* ---- palette --------------------------------------------------------- */
+  /* Keyed on the file, NOT globally like the theme: the point of having three
+     palettes is that different decks look different, and one global override
+     would flatten them all back to whichever the reader last clicked. */
+  var PALETTES = ['ink', 'ember', 'iris'];
+  var PKEY = 'deck-palette:' + location.pathname;
+  var pbtn = document.getElementById('palette');
+
+  function paletteName() { return root.getAttribute('data-palette') || 'ink'; }
+  function label() { var p = paletteName(); pbtn.textContent = p.charAt(0).toUpperCase() + p.slice(1); }
+
+  try {
+    var storedP = localStorage.getItem(PKEY);
+    if (storedP && PALETTES.indexOf(storedP) !== -1) root.setAttribute('data-palette', storedP);
+  } catch (e) {}
+  label();
+
+  pbtn.addEventListener('click', function () {
+    var next = PALETTES[(PALETTES.indexOf(paletteName()) + 1) % PALETTES.length];
+    root.setAttribute('data-palette', next);
+    try { localStorage.setItem(PKEY, next); } catch (e) {}
+    label();
+    draw();                      /* mermaid is built from the tokens, so re-run it */
+  });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+    if (!root.getAttribute('data-theme')) draw();
+  });
+
+  /* ---- jump between sections with the arrow keys ------------------------ */
+  addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;          // leave Ctrl+F alone
+    var t = e.target.tagName;
+    if (t === 'INPUT' || t === 'TEXTAREA') return;
+    var dir = (e.key === 'ArrowRight' || e.key === 'PageDown') ? 1
+            : (e.key === 'ArrowLeft'  || e.key === 'PageUp')   ? -1 : 0;
+    if (!dir) return;
+    e.preventDefault();
+    go(current + dir);
+  });
+
+  tick();
+  var drawn = draw();
+  if (drawn && drawn.then) drawn.then(restoreScroll); else restoreScroll();
+})();
+</script>
+</body>
+</html>

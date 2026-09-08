@@ -16,13 +16,13 @@ Verweise. Zu diesem File gibt es bewusst **kein Deck** — es darf täglich chur
 | **I** | Sweep bei fehlendem Referenzkurs: Voreinstellung I1 bestätigen (I2 konfigurierbar) | Fachabteilung | — (Voreinstellung blockiert nicht) | offen |
 | **J** | Fehlmeldung: Zuordnung Lieferant↔ISIN, Empfänger, Zeitpunkt. **Befund 2026-09-02 (TEST-Abzug):** die F-Typisierung ist tot (alle 29 `fp_*`-Konten inaktiv). F3 = 0: über die **aktiven** Lieferanten hat zwar jeder meldepflichtige Fonds einen Adressaten — aber F4 zeigt, dass `KAG_lieferanten` STM-Steuerberater und Preis-Lieferanten **mischt** (alle Typ `A`; nur `db_spard` heißt „AT-Fonds Preise"). Wer je KAG der *Preis*-Lieferant ist, steht nirgends maschinenlesbar; und selbst `db_spard` hat als Rückmeldeadresse intern abi@oekb.at (F5). Zu klären: Preis-Lieferant je KAG identifizieren (Datenpflege? aus der Lieferhistorie?) und echte Adressdaten beschaffen | Markus / Fachabteilung | Schnitt 7 | Datenlage vollständig — Frage verschärft |
 | **K** | Wem gehört `ASF.r_faktor`? (K1/K2/K3) | Markus | Schnitt 6 | offen |
-| **L** | Vorrangregel Preis-/Ausschüttungs-Einspielung — Empfehlung O1+O3 bestätigen | Markus / Fachabteilung | — | offen |
+| **L** | Vorrangregel Preis-/Ausschüttungs-Einspielung — Empfehlung O1+O3 bestätigen. **Befund 2026-09-08 (Zeitachse):** der Diskussionsstand „Cutoff 1 ~14:00 / Cutoff 2 ~16:00" kollidiert mit der Cron-Zeit von Ausschüttungs-Job 3 (16:00) — **Lauf 2 muss nach ihm liegen**, sonst fehlt dessen Buchung im Delta. Lauf 1 vor Job 3 ist damit erfüllt (14:00 < 16:00) | Markus / Fachabteilung | — | offen, Terminfrage präzisiert |
 | **N** | Zweck des `tmp_if_last`-Fallbacks (N1/N2) — N2 würde Entscheidung 6 kippen | Fachabteilung / Bezieher | Schnitt 5 | offen |
 | 13. | `ERR_DATE04` nur für Code `R` — gilt Kommentar oder Code? | Fachabteilung | Schnitt-1-Detail | offen |
 | 14. | Bestätigen, dass nur Plausi-Abschnitt 15 entfällt (nicht 17, `makeCorrelationERZ`) | Markus | Schnitt-4-Detail | offen |
 | — | „LMT = Liquidity Management Tools" für Außendokumente bestätigen | Fachabteilung | — | offen |
 | — | `PreisHerkunft` vs. `KursHerkunft` (Vorauswahl `PreisHerkunft`) | intern | — | offen |
-| — | `pool_if_kurs` ist **tot seit 2012-03-30** (V2a: 4767 Zeilen, seither kein Schreiber) — überhaupt portieren, oder unbekannte ISINs nur im Report melden? | Markus | Schnitt-2-Detail | offen |
+| — | ~~`pool_if_kurs` portieren?~~ | — | — | **geschlossen 2026-09-08: nein.** Kein Leser im Legacy; beide Schreibpfade unerreichbar (unbekannte ISIN verwirft schon der Eingang; der Vorl-Fonds-Zweig prüft `nRet` statt `nRet2`, `preisekennzahl.cpp:2760`). Läuft nur als Kontrolltabelle in Diff-Ebene 3 mit |
 
 ## 2. Datenbeschaffung
 
@@ -53,8 +53,14 @@ Quelle: Konzept, Abschnitt *Datenbeschaffung*. Q-Nummern siehe Warnung unten.
       praktisch null. **F7**: 706 der Lücken haben `ausschuettung > 0` (**echte** Lücken, brechen
       die `r_faktor_ges`-Kaskade), nur 106 sind Null-Ausschüttungen (harmlos) — verschärft K und
       bestätigt den Sweep-Bedarf
-- [ ] `CONFIG.INI`: `Referenzkurs_Tage`, `CalcOhneReferenzkurs`, `Del_Protokoll`, `Nachrechnung`;
-      `PREIS_DLD.INI`: `Preis_MinTage4Meldung` / `Preis_MaxTage4Meldung`
+- [ ] **Produktive INI-Werte** — die Defaults stehen alle im Quelltext (dritter `GetIniString`-Parameter),
+      offen ist nur, ob der Betrieb einen überschreibt. Im Repo liegt weder `PREIS_DLD.INI` noch die
+      Fondspreis-`CONFIG.INI` (die eingecheckte unter `Ifas/scripts_mft/at/` ist die MFT-Variante ohne
+      Fondspreis-Keys). Schnitt 2: `Tage_TmpIfLast` (65), `Tage_TmpIfLast_Beendete` (35),
+      `InsPreise{CPlan,AIF,FondsInLiquidation}` (je 1). Schnitt 6: `Referenzkurs_Tage` (0),
+      `CalcOhneReferenzkurs`, `Nachrechnung`/`PreiseNachrechnung` (je 1). Fürs Ausliefern:
+      `Preis_MinTage4Meldung` / `Preis_MaxTage4Meldung`. **`Del_Protokoll` ist entschärft** — die
+      Fondspreis-Kette schreibt `del_protokoll` gar nicht mehr (siehe *Erledigt*)
 - [ ] `AllowOldPreisFormat`, `AllowTxtExt4PreisFile` — muss das alte Format 1 bedient werden?
 - [ ] `MFT_*.INI` — Zielverzeichnisse und Accounts
 - [x] `pool_if_kurs`-Semantik (V2) — **tot seit 2012-03-30** (4767 Zeilen, keine Duplikate,
@@ -83,17 +89,35 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
 | # | Schnitt | blockiert durch | Detail-Plan | Status |
 |---|---|---|---|---|
 | 1 | Lieferkette Stufe 1 — Eingang, Inbox, Rückmeldung | ~~`tax_code`~~ (erhoben, V1) | [2026-09-02-fondspreise-schnitt1-eingang-inbox-rueckmeldung.md](2026-09-02-fondspreise-schnitt1-eingang-inbox-rueckmeldung.md) | **umgesetzt + gepusht** (ifas13 `1f3d9f393`/`0dbd47271`; Byte-Verifikation des Rückmelde-Formats wartet auf echte Antwort-ZIPs) |
-| 2 | Stufe 2 — Sync, Guard (Klammer-Transaktion), `letzte_preise` inkl. Seed + Rebuild | — | — | offen |
+| 2 | Stufe 2 — Sync, Guard (Klammer-Transaktion), `letzte_preise` inkl. Seed + Rebuild | — | [2026-09-08-fondspreise-schnitt2-sync-guard-letzte-preise.md](2026-09-08-fondspreise-schnitt2-sync-guard-letzte-preise.md) | **in Arbeit** — AP1–AP3 fertig (Stammdaten, Properties, Persistenz + Flyway V065), AP4–AP10 offen; committet als `4e9bc49e6` auf Branch `feat/fondspreise-sync-stage-foundation`, nicht gepusht |
 | 3 | `WirksamePreismeldungen` als Komponente, isoliert getestet | — | — | offen |
 | 4 | Sammelreport Lauf 1 — Plausi, Files, Publikationsprotokoll, Verteilung | — | — | offen |
 | 5 | Lauf 2 als Delta, inkl. `I3` gegen das Publikationsprotokoll | N, F | — | offen |
 | 6 | Stufe 3 + Kennzahlen-Sweep | K, Kennzahlen-Ist-Analyse | — | offen |
 | 7 | Fehlmeldungs-Job | J | — | offen |
 | 8 | Lieferketten-Transparenz im Report | — | — | offen |
-| quer | `PreisMeldungDiffJob` (Parallelbetrieb) — ersetzt den BadInput-Stub, wächst mit 1/2/4/5 | — | mit Schnitt 1 | **Ebene 1 umgesetzt** (Rückmeldungs-Diff mit Normalisierung + bekannten Abweichungen; DB-Stand/Files folgen mit Schnitt 2/4/5) |
+| quer | `PreisMeldungDiffJob` (Parallelbetrieb) — ersetzt den BadInput-Stub, wächst mit 1/2/4/5 | — | mit Schnitt 1 + 2 | **Ebene 1 umgesetzt** (Rückmeldungs-Diff mit Normalisierung + bekannten Abweichungen; DB-Stand/Files folgen mit Schnitt 2/4/5) |
 
 ## 4. Weitere Schritte
 
+- [x] **Zeitlicher Ablauf als eigener Schritt** (User 2026-09-08) — erledigt:
+      [2026-09-08-fondspreise-tagesablauf-alt-vs-neu.deck.html](2026-09-08-fondspreise-tagesablauf-alt-vs-neu.deck.html),
+      die Tages-Zeitachse Alt gegen Neu als Gegenüberstellung, plus dieselben Bausteine als
+      **Ablaufdiagramm nebeneinander** — gleiches Raster, sodass nur die drei Kanten auffallen, die
+      links stehen und rechts fehlen (Rückkante um `ASF`, EZB-Selbstschleife, der Mensch als
+      Knoten). Für die Diskussion mit der Fachabteilung. Dazu das Begleitblatt
+      [2026-09-08-fondspreise-tagesablauf-diagramme.html](2026-09-08-fondspreise-tagesablauf-diagramme.html)
+      mit dem **vollständigen** Bild ohne Spaltenbreiten-Limit: Gantt je System über alle
+      Cron-Läufe, der Altsystem-Ablauf mit beiden Batches und ihrer Verzahnung, und der Tagesjob
+      mit allen neun Checkpoints. Quellen dafür neu im Repo: `docs/Tagesjob und Programmablauf/` (Crontab,
+      Tagesjob-Logik mit den Checkpoints `cp_tagesjob_01…09`, Event-Logging, Wartungsbildschirm).
+      Die feste Vorgabe (Ausschüttungen bleiben Batch 3×/Tag, Sammellauf 1 vor Ausschüttungsjob 3)
+      ist eingearbeitet; Punkt **L** ist dort analysiert und um den Terminbefund zu Lauf 2
+      geschärft (siehe Klärungen). Verbleibende Terminfragen stehen im Deck als eigener Abschnitt
+- [ ] **Veto-Befunde persistent auswerten** — Schnitt 2 sammelt Ausschüttungs-Vetos und übersprungene
+      Zeilen im `sync-report.txt` des Jobs plus Zählern am Job. Das reicht *vorerst* (User
+      2026-09-08); eine eigene Befundtabelle („wie oft passiert das?" ohne Filedurchsicht) bleibt als
+      spätere Optimierung offen, ebenso die Veto-Zeile im Sammelreport (Schnitt 4)
 - [ ] **Echte Preis-Antwort-ZIPs anfordern** (Fachabteilung/Betrieb): idealerweise die
       Altsystem-Antworten zu den 4 Beispielfiles vom 12.05.2026 (`docs/Fondspreise/beispiele/`,
       passend zu `fplausib.txt`) — nötig für die Byte-Verifikation des Rückmeldungs-Diffs
@@ -115,6 +139,63 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
       zeigt noch `I4`, 26 Sektionen gegen 53 Abschnitte)
 
 ## Erledigt
+
+- 2026-09-08 — **Zeitachse Alt gegen Neu** als Deck
+  ([2026-09-08-fondspreise-tagesablauf-alt-vs-neu.deck.html](2026-09-08-fondspreise-tagesablauf-alt-vs-neu.deck.html)),
+  aus der neuen Doku unter `docs/Tagesjob und Programmablauf/` plus Ist-Analyse und Konzept.
+  Drei Befunde, die vorher nur implizit waren: (a) **ein** Sammler (`run_preise`, alle 10 Min)
+  trägt Preis-, Ausschüttungs- **und** Steuermeldungen, weil `preis_ins.e` die Meldungsart selbst
+  erkennt; (b) die zwei echten Sperren auf der Legacy-Zeitachse sind die **manuelle Datenwartung**
+  vor dem Tagesjob-Start (~15:00, aus `TAGESJOB.jam`) und die **Warteschleife ohne Timeout** auf
+  die EZB-Referenzkurse (Beleg 12.06.2023: Schritte 1–6 dauern 5 Minuten, das Warten eine Stunde);
+  (c) `run_aussch.csh 3` um 16:00 ist der **erste** Lauf des Tages, der den heutigen Preis in
+  `kurs` findet — 57 Minuten nachdem das Preisfile draußen ist. Neuer Terminbefund zu **L** siehe
+  Klärungen
+
+- 2026-09-08 — **`run_stm.csh` schreibt nach `tmp_aussch`.** Beim Aufarbeiten des vollständigen
+  Ablaufs gefunden und im Quelltext belegt: bei einer FINAL-Meldung liest die
+  Steuerdaten-Verarbeitung die Ausschüttungsinformationen nach und legt einen Satz in
+  `tmp_aussch` an — „Damit die FINAL Ausschüttung auch in ASF und den Ausschüttungsfiles landet"
+  (`c_st_meldung.cpp:3060-3066`, Funktion `ProcessAusschuettung4aussch`; ausländische
+  Ausschüttungen sind ausgenommen). Damit ist die **Reihenfolge STM → Ausschüttung** eine echte
+  fachliche Kopplung und nicht bloß Cron-Kosmetik: Ausschüttungslauf 2 liegt 15 Minuten nach
+  STM-Lauf 2 (11:45 → 12:00), Lauf 3 zwanzig Minuten nach STM-Lauf 3 (15:40 → 16:00). Nur Lauf 1
+  (07:30) liegt vor seinem STM-Lauf — er räumt auf, was der Vortag geschrieben hat. Relevant für
+  die Ausschüttungs-Domäne, wenn die STM-Seite im Neusystem nicht mehr nach `tmp_aussch` schreibt
+
+- 2026-09-08 — **Schnitt 2 begonnen**, Detail-Plan
+  [2026-09-08-fondspreise-schnitt2-sync-guard-letzte-preise.md](2026-09-08-fondspreise-schnitt2-sync-guard-letzte-preise.md).
+  AP1–AP3 umgesetzt: `FondsStammdaten` um `numWfsKu`/`codArtF`/`status` erweitert (eine gebündelte
+  Query statt zweier Lookups), `FondspreiseProperties` (`ifas.fondspreise`), Entities `Kurs`,
+  `PreisHerkunft` und `LetzterPreis` samt Guard-Repositories, Flyway `V065__fondspreise_sync.sql`
+  je Baum. Neue Tests: `PreismeldungSyncGuardTest` (beide Guards, H2 + Postgres),
+  `KursRepositoryTest` (alle drei DBMS). Committet als `4e9bc49e6` auf dem Branch
+  `feat/fondspreise-sync-stage-foundation` (nicht gepusht)
+
+- 2026-09-08 — **`del_protokoll` wird für die Fondspreise nicht geschrieben.** Kein Leser im
+  Legacy-Code (alle vier Fundstellen sind Schreiber); die einzige lesende Stelle ist die Stored
+  Procedure `s_exp_del`, die nirgends aufgerufen wird; IFASNXT zieht die Preise per SSIS direkt aus
+  `kurs` (`run_ifasnxt_update` → `CallSSIS/api/Call/kurs`), und der im Kopfkommentar erwähnte
+  Parameter `DEL` ist im `switch` nicht implementiert. Da `Del_Protokoll` per Default `0` ist, wäre
+  Schreiben ohnehin **neues Verhalten** und erzeugte eine Diff-Abweichung je Löschung. Rückweg
+  dokumentiert im Schnitt-2-Plan unter D6
+
+- 2026-09-08 — **Sybase-`char`-Padding**: `kurs.cod_fliesscode char(2)` liefert `"R "` statt `"R"`,
+  `wp_art_f.cod_art_f char(4)` liefert `"AIF "`. Ungefixt hätte Diff-Ebene 3 auf jeder Zeile eine
+  Abweichung gemeldet und `isAif()` wäre auf Sybase nie wahr geworden. Gelöst über trimmende Getter
+  auf der `Kurs`-Entity (ein `@Convert` greift auf `@Id`-Attributen nicht) und Normalisierung von
+  `cod_art_f` an der DB-Grenze. `INV.status` ist `varchar(5)` — dort kein Problem
+
+- 2026-09-08 — **Eingangs-Code in drei Klassen geschnitten**: `PreismeldungEingangProcessor`
+  (Instanzklasse, Provider im Konstruktor, Ablauf und Ergebnisbau), `PreismeldungFileChecks`
+  (`@UtilityClass`: Fileformat und Zeilenstruktur), `PreismeldungLineValidations`
+  (`@UtilityClass`: Regeln B3–B20, gibt ein `LineCheckResult` zurück statt in eine übergebene
+  Liste zu schreiben — damit fällt `@SuppressWarnings("NullAway")` weg). `Candidate` eigenständig
+  package-private. Bezeichner auf Englisch, Deutsch nur noch für Fachbegriffe.
+  Konventionsbefunde: `-Processor` heißt im Repo „Objekt mit Verarbeitungsrolle", nie
+  `@UtilityClass`; Utility-Klassen stehen im Plural und tragen `@UtilityClass`; `ofStatic` **im**
+  Produktions-Interface ist Hausmuster (24 Verwendungen im STM-Bereich) und gibt einen benannten
+  nested `record Static` zurück — `PreismeldungStammdatenProvider` folgt dem jetzt
 
 - 2026-09-03 — **`tax_code`-Stammdaten als YAML im Testdatenmodul**: `standard_TAX_CODE_data.yaml`
   (57 Zeilen, Abzug von sybase-gast) unter `at/oekb/ifas/testdata/fondspreise/`, dazu
