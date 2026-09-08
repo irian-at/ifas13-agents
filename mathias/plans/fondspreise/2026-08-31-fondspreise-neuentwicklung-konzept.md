@@ -52,7 +52,7 @@ Lieferprotokoll lebt für STM bereits im Job. Das Konzept setzt das fort.
 
 | Was | vorher | jetzt |
 |---|---|---|
-| „Ingest" | Anglizismus für die erste Stufe | **Eingang** — Klassen `PreismeldungEingang` / `PreismeldungEingangService` / `PreismeldungEingangResult`, Package `.eingang`; die Prüfung heißt durchgängig **Eingangsprüfung** |
+| „Ingest" | Anglizismus für die erste Stufe | **Eingang** — Klassen `PreismeldungEingangProcessor` / `PreismeldungEingangService` / `PreismeldungEingangResult`, Package `.eingang`; die Prüfung heißt durchgängig **Eingangsprüfung** |
 | „Landezone" | Metapher für den Zeilen-Behälter | **(Preismeldung-)Inbox** — nur in der Prosa; Entity `PreismeldungZeile` und Tabelle `kurs.preismeldung_zeilen` bleiben (eine Zeile der Inbox) |
 
 ### Runde 8 — 2026-09-02, Business-Tabellen nicht nach `infra`
