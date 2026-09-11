@@ -10,8 +10,8 @@ metadata:
 
 Methodennamen sind englisch — `write` statt `schreibe`, `process` statt `verarbeite`, `compare`
 statt `vergleiche`, `isEmptyLine` statt `istLeerzeile`. Deutsch bleiben nur **Fachbegriffe**, und
-die stehen in Typ-, Feld- und Record-Komponenten-Namen (`PreismeldungEingang`, `Meldekategorie`,
-`zeilenNr`, `anzahlJeCode`) oder als Substantiv im englischen Methodennamen
+die stehen in Typ-, Feld- und Record-Komponenten-Namen (`PreismeldungEingangProcessor`, `Meldekategorie`,
+`lineNumber`, `countByCode`) oder als Substantiv im englischen Methodennamen
 (`isHandelswaehrung`, `findReferenzpreis`, `getInboxZeilen`).
 
 **Why:** User-Vorgabe 2026-09-02 nach Schnitt 1 Fondspreise; deckt sich mit der

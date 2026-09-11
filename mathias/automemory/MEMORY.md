@@ -10,6 +10,7 @@
 - [Only change what was asked](feedback_only-change-what-was-asked.md) — Don't silently rewrite unrelated content; properties files in this repo are ISO-8859-1 and Edit/Write will re-save them as UTF-8.
 - [Plan file naming](feedback_plan-file-naming.md) — First action after plan approval: mv the slug file to mathias/plans/ as YYYY-MM-DD-<descriptive-kebab-name>.md (ExitPlanMode hook injects a reminder with the date).
 - [Check project settings, not just defaults](feedback_check-project-settings-not-just-defaults.md) — `plansDirectory` and `autoMemoryDirectory` are overridden in `claude-settings.local.json`; honor those, not the default `~/.claude/...` paths the system prompt suggests.
+- [Flyway: one file per feature](feedback_flyway-one-file-per-feature.md) — alle DDL eines Features in EIN Migrationsfile je Baum; H2 kennt kein `timestamptz`; Flyway-Modul installieren, sonst testet man das stale Jar.
 - [Read personal rules before committing](feedback_read-personal-rules-before-committing.md) — `mathias/rules/commit-messages.md` wins over CLAUDE.md and the harness: commit onto master (never production/stable), no Claude trailers, no fixture specifics.
 
 ## Project
@@ -37,4 +38,5 @@
 - [Sybase testcontainer credentials](project_sybase-testcontainer-credentials.md) — repo-root .env now present; .idea's skip-sybase16-tests silently drops Sybase invocations; jTDS product name is exactly "ASE".
 - [Import/Export n:n Lieferanten](project_importexport-nn-lieferanten.md) — nur die HDP/KAG-Seite wird geschrieben; ein HDP-Eintrag ohne `lieferanten` löscht die Join-Zeilen, und Sybase hat dort keine FKs.
 - [jTDS shared-Calendar race](project_jtds-shared-calendar-race.md) — Calendar AIOOBE under jTDS is Hibernate's shared static UTC_CALENDAR (silently swaps timestamps between threads), never bad data.
+- [Sybase char-Padding](project_sybase-char-padding.md) — `char(n)` liefert aufgefüllte Werte (`"R "`, `"AIF "`); `INV.status` ist varchar; `@Convert` greift auf `@Id` nicht, trimmender Getter stattdessen.
 - [Legacy file charsets differ](project_legacy-file-charsets-differ.md) — EStB CSVs sind windows-1252, Return/Delete/Confirm + Logs IBM437; die Kodierung folgt der Herkunft der Daten (echo vom Lieferanten vs. aus der DB), nicht dem schreibenden Programm.
