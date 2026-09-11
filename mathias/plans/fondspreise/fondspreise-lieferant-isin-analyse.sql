@@ -1078,3 +1078,98 @@ group by case when a.ausschuettung = 0 then 'aussch = 0' else 'aussch > 0' end;
 +------------+-----+
 
 2 Zeile(n) zurückgegeben
+
+
+-- ============================================================================
+-- V6 (2026-09-11): tmp_if_last gegen kurs klassifizieren — Grundlage für die
+-- Fachabteilungsfragen O/P (Währung ≠ Fondswährung, gelöschte Preise im
+-- Fallback) und für Plan D14. ISIN-Auflösung wie im Altsystem über wkn_hist
+-- (cod_quelle = 'ISIN', aktuell gültig), Fondswährung aus ifas..INV.
+--
+-- Eine erste Fassung mit korreliertem max(k2.dat_kurs) je Zeile lief zu lange:
+-- der Clustered Index kurs_1_index ist (num_wfs_ku, dat_kurs, cod_fliesscode,
+-- waehrung), das Datum steht also vor dem Code — das Maximum je Code liest die
+-- gesamte Kurshistorie des Fonds, 30.000 mal. Deshalb schrittweise über eine
+-- Zwischentabelle und exists mit dat_kurs > (Range-Scan, Abbruch beim ersten
+-- Treffer). Nur lesend; #lp lebt in tempdb.
+-- ============================================================================
+
+-- V6a: ISIN auflösen, Fondswährung holen (~30.000 Zeilen, über wkn_hist_pk)
+select l.num_okb, l.dat_kurs, l.cod_waehrung, l.cod_preiscode, l.num_kurs,
+       l.liefer_id, l.eintragezeit,
+       h.num_wfs_ku,
+       i.WAEHRUNG as fondswaehrung,
+       i.status, i.fonds_ende,
+       convert(int, 0) as in_kurs,
+       convert(int, 0) as juengerer_kurs
+  into #lp
+  from kurs..tmp_if_last l
+  left join vwkn..wkn_hist h
+         on h.cod_quelle = 'ISIN'
+        and h.num_wkn = l.num_okb
+        and h.dat_gueltig_ab <= getdate()
+        and isnull(h.dat_gueltig_bis, '21000101') >= getdate()
+  left join ifas..INV i
+         on i.WFS_WKN = h.num_wfs
+go
+
+-- V6b: Kurs zum selben Datum vorhanden? (Punktzugriff auf kurs_1_index)
+update #lp
+   set in_kurs = 1
+  from #lp, kurs..kurs k
+ where k.num_wfs_ku     = #lp.num_wfs_ku
+   and k.dat_kurs       = #lp.dat_kurs
+   and k.cod_fliesscode = #lp.cod_preiscode
+   and k.waehrung       = #lp.cod_waehrung
+go
+
+-- V6c: gibt es einen jüngeren Kurs? (Range-Scan ab dem Datum)
+update #lp
+   set juengerer_kurs = 1
+ where exists (select 1
+                 from kurs..kurs k
+                where k.num_wfs_ku     = #lp.num_wfs_ku
+                  and k.dat_kurs       > #lp.dat_kurs
+                  and k.cod_fliesscode = #lp.cod_preiscode
+                  and k.waehrung       = #lp.cod_waehrung)
+go
+
+-- V6d: Verteilung nach Fall
+--   2 = der Währungsfall (Frage P), 3 = Kandidaten „gelöscht, aber im Fallback",
+--   4 = Reihenfolge-Semantik (Ableitung aus kurs ergäbe einen anderen Preis)
+select f.fall,
+       count(*)                  as zeilen,
+       count(distinct f.num_okb) as fonds,
+       sum(case when f.dat_kurs > dateadd(dd, -65, getdate()) then 1 else 0 end) as im_65_tage_fenster
+  from (select num_okb, dat_kurs,
+               case
+                   when num_wfs_ku is null              then '1 ISIN nicht aufloesbar'
+                   when cod_waehrung <> fondswaehrung   then '2 Waehrung <> Fondswaehrung'
+                   when in_kurs = 0                     then '3 kein Kurs zu diesem Datum in kurs'
+                   when juengerer_kurs = 1              then '4 in kurs, aber dort schon juengerer Kurs'
+                   else                                      '5 in kurs, aktuell'
+               end as fall
+          from #lp) f
+ group by f.fall
+ order by f.fall
+go
+
+-- Kontrolle: muss der Zeilensumme von V6d entsprechen, sonst doppelte
+-- wkn_hist-Treffer (mehrere aktuell gültige ISIN-Zeilen)
+select count(*) from kurs..tmp_if_last
+go
+
+-- V6e: Einzelzeilen der Fälle 2 und 3 zur Sichtung
+select top 200
+       num_okb, cod_preiscode, cod_waehrung, fondswaehrung, dat_kurs, num_kurs,
+       liefer_id, eintragezeit, in_kurs, juengerer_kurs, status, fonds_ende
+  from #lp
+ where num_wfs_ku is not null
+   and (cod_waehrung <> fondswaehrung or in_kurs = 0)
+ order by dat_kurs desc
+go
+
+drop table #lp
+go
+
+-- todo auf GAST ausführen, Ergebnis hier eintragen (Tracker Datenbeschaffung V6)

@@ -13,6 +13,11 @@ Neusystem-Sybase, geordnet über einen monotonen Guard statt über Serialisierun
 `letzte_preise` ersetzt `kurs..tmp_if_last`. Der `PreisMeldungDiffJob` wächst dabei um die
 Diff-Ebenen 3 (DB-Stand) und 4 (Projektion).
 
+> **Revidiert 2026-09-11 (Designreview, D11–D14):** Die Projektion bleibt in `kurs..tmp_if_last` der
+> Neusystem-Sybase und wird Legacy-getreu geschrieben; `letzte_preise` bleibt als Guard und Spiegel.
+> Die Diff-Ebenen 3 und 4 kommen wieder aus dem Job heraus, der DB-Vergleich wird ein eigener,
+> generischer Tabellenvergleich Sybase alt gegen Sybase neu. Umbau in AP11.
+
 Der fachliche Wert der Stufe: der Preis steht **Minuten nach der Lieferung** in `kurs` statt am
 Tagesende. Damit ist die Vorbedingung der Ausschüttungs-Einspielung erstmals am selben Vormittag
 erfüllt, und der Legacy-Zirkel (Filegenerierung braucht die Ausschüttung, Ausschüttung braucht den
@@ -35,10 +40,29 @@ ist logische UUID-Referenz ohne FK.
    Anforderung „Sammellauf 1 **vor** Ausschüttungsjob 3" und der Analyse von Punkt L. **Nicht Teil
    dieses Schnitts**; Schnitt 2 liefert nur die Vorbedingung dafür.
 
+**Entscheidungen des Users vom 2026-09-11 (Designreview), in diesen Plan eingearbeitet:**
+
+1. **DB-Setup bestätigt.** Im Parallelbetrieb gibt es zwei Sybase-Instanzen: die alte schreibt nur
+   das Altsystem, die neue nur das Neusystem; beide Schemata sind eingefroren. Postgres schreibt nur
+   das Neusystem und ist frei änderbar. Zum Go-live ein einmaliger Voll-Sync der Datenbank, danach
+   werden **alle vom Neusystem geschriebenen Tabellen** auf Divergenz zum Altsystem beobachtet.
+2. **Diff-Ebenen 3 und 4 kommen aus dem `PreisMeldungDiffJob` heraus.** Der DB-Vergleich wird ein
+   eigener, generischer und geplanter Tabellenvergleich Sybase alt gegen Sybase neu (D13). Ebene 1
+   bleibt im Job.
+3. **`kurs..tmp_if_last` bleibt vorerst** und wird vom Neusystem in der Neusystem-Sybase
+   Legacy-getreu geschrieben (D11). Grund: möglicherweise lesen KUPL/KMS direkt aus der Tabelle. Ob
+   sie überhaupt gebraucht wird, klärt der User mit der Fachabteilung (Tracker O/P).
+4. **`letzte_preise` bleibt ganz erhalten** — Werte, `job_id`, `angekommen_am` — und wird zur
+   Klammer für den `tmp_if_last`-Write (D12). Aufräumen auf einen reinen Guard ist später möglich.
+5. **Verhalten vorerst Legacy-getreu** bei Preiswährung ≠ Fondswährung und bei Löschungen (D14);
+   einzige bewusste Abweichung bleibt die strengere Reihenfolge über `(preisdatum, angekommen_am)`.
+6. **Kein Guard-Seed** (nach dem Umbau AP11): `letzte_preise` startet leer, der erste Write je
+   Schlüssel nach dem Go-live verhält sich wie Legacy, ab dem zweiten greift unsere Regel (D12).
+
 ## Stand 2026-09-08
 
-**AP1–AP3 umgesetzt und verifiziert**, committet als `4e9bc49e6` auf dem Branch
-`feat/fondspreise-sync-stage-foundation` (nicht gepusht). Gesamtbuild grün; 95 Domain-Tests,
+**AP1–AP3 umgesetzt und verifiziert**, committet als `30b6adec8` auf dem Branch
+`feat/fondspreis` (nicht gepusht). Gesamtbuild grün; 95 Domain-Tests,
 `PreismeldungSyncGuardTest` 14 (7 Fälle × H2 + Postgres), `KursRepositoryTest` 9 (alle drei DBMS),
 `PreisMeldungDiffJobTest` 2.
 
@@ -47,7 +71,168 @@ ist logische UUID-Referenz ohne FK.
 | AP1 Stammdaten | fertig — `FondsStammdaten` um `numWfsKu`/`codArtF`/`status` + Prädikate erweitert, eine gebündelte `InvRepository#findFondsStammdatenByIsin` ersetzt die zwei bisherigen Lookups |
 | AP2 Properties | fertig — `FondspreiseProperties` (`ifas.fondspreise`) |
 | AP3 Persistenz + Flyway | fertig — `Kurs`/`KursId`/`KursRepository`, `PreisHerkunft`(+Id/Repo), `LetzterPreis`(+Id/Repo), `V065__fondspreise_sync.sql` je Baum |
-| AP4–AP10 | offen |
+| AP4 Entscheidungslogik | fertig — `PreismeldungSyncDecisions` + `SyncDecision`/`SyncOperation`/`SyncSkipReason`, `PriceGroup`, `PreismeldungSyncOptions`, `AusschuettungProvider`; 20 Unit-Tests; Review-Fixes vom 2026-09-10 eingearbeitet (siehe unten) |
+| AP5 Sync-Service | fertig — `PreismeldungSyncService` (Inbox→`PriceGroup`, Entscheidung im Business-Kontext, Klammer je Preisschlüssel, `kurs`-Write, Projektion fortschreiben), Ausschüttungs-Veto über `AsfRepository`; `PreismeldungSyncServiceTest` 5 (H2) |
+| AP6 Projektion/Rebuild/Seed | fertig — `LetztePreiseService` (Fortschreiben aus AP5 hierher extrahiert, `cleanupEndedFunds`, `seed`), `PreismeldungSyncService.rebuildProjection`; +4 Tests. **Seed-Leser** aus `tmp_if_last` offen (Cross-DB, siehe unten). **→ AP11 (2026-09-11):** Projektion wandert nach `kurs..tmp_if_last`, `letzte_preise` bleibt Guard + Spiegel, Seed-Leser hinfällig |
+| AP7 Job-Erweiterung | fertig — `PreisMeldungDiffJob` um `angekommen_am` (DB-Uhr bei Submission) + Zähler `synced/skipped/veto/db_diff`; Execution-Service ruft Stufe 2, schreibt `sync-report.txt` und die Zähler; Flyway V066. `PreisMeldungDiffJobTest` prüft Stufe 2 mit |
+| AP8 Diff-Ebenen 3+4 | fertig — `PreismeldungDbDiff` (Domain) + `PreismeldungDbDiffService` (kurs neu↔alt, letzte_preise↔tmp_if_last im legacyBusiness-Kontext); `db-diff.txt` + `db_diff_count`; read-only `TmpIfLast` + Flyway V067. 6 Domain-Tests + Selbstvergleich-E2E. **`pool_if_kurs`-Kontrolle verschoben**. **→ AP11 (2026-09-11): wieder ausgebaut** — DB-Vergleich wird generischer Job (D13) |
+| AP9–AP10 | offen |
+| AP11 Umbau nach Designreview | fertig — Projektion nach `tmp_if_last`, `letzte_preise`-Klammer, Diff-Ebenen 3/4 ausgebaut, Guard-Seed-Leser; siehe *Stand 2026-09-11 — AP11* |
+
+**Stand 2026-09-10 — AP4 und Code-Review.** `/code-review-ifas` über AP4 fand zwei echte
+Logikfehler gegen Legacy, beide behoben und mit Tests gepinnt:
+
+- `D` in Fremdwährung hätte die Projektion mit dem zurückgezogenen Wert fortgeschrieben — Legacy
+  ruft `WriteLastKurse` nur im Nicht-`D`-Zweig (`preisekennzahl.cpp:2735/:2850`). Jetzt: `D` in
+  Fremdwährung ist ein vollständiger No-op. Verschärfend: `D`-Zeilen durchlaufen im Eingang keine
+  Wertprüfung, ihr `wert` kann leer sein.
+- Die Aktivierungs-Flag ignorierte das `fondsBeginn`-Gate (`fondsbasis.cpp:3882`) — behoben,
+  dann mit AP5 **ganz entfernt**: die Fondsaktivierung ist kein Preis-Thema (D10).
+
+Dazu zwei Kontraktkorrekturen unter der Schwelle, trotzdem genommen: `marksKorrektur` gilt bei `D`
+nur noch für `R`-Löschungen *eines früheren Tages* (Javadoc und Legacy `:2915` stimmen jetzt überein),
+und ein `NOT_FONDSWAEHRUNG`-Skip, der die Projektion fortschreibt, trägt die betroffenen Codes.
+Plus Formatierungsregel (schließende Klammer) an sieben Stellen und `@NullMarked` am Test.
+Detail-Plan: `2026-09-10-fondspreise-schnitt2-ap4-review-fixes.md`.
+
+**Stand 2026-09-10 — AP5.** Die Klammer ist so gebaut, wie *Zwei Server, ein Pool* sie
+beschreibt, mit drei Festlegungen, die erst am Code sichtbar wurden:
+
+- **Entscheiden vor Schalten.** Stammdaten- und ASF-Abfragen laufen im Business-Kontext, *bevor*
+  irgendein Kontextwechsel passiert; erst die fertigen Entscheidungen werden in sortierter
+  Reihenfolge ausgeführt. Der Provider cached je ISIN — ein Lookup aus der offenen
+  Postgres-Transaktion heraus würde sonst auf die falsche Datenbank routen.
+- **Klammer = zwei `REQUIRES_NEW`.** Außen `withFondspreiseDbContextIsolatedTransactional`
+  (Guard-Claim, Zeile bleibt gesperrt), innen das neue
+  `withDatabaseContextIsolatedTransactional(businessKey, …)` für den `kurs`-Write. Ein
+  `PlatformTransactionManager`, Routing über den Kontext zum Zeitpunkt des ersten Statements —
+  dasselbe Muster, das der Diff-Job schon für jobSystem/fondspreise nutzt.
+- **Erstanspruch-Rennen.** `claimIfNewer` = 0 und kein Guard-Satz → Insert + `flush` in derselben
+  Transaktion; kollidiert er mit einem parallelen Erstanspruch, wirft die Klammer eine
+  `DataIntegrityViolationException` und wird genau einmal wiederholt — beim zweiten Mal
+  entscheidet `claimIfNewer` regulär.
+
+`KursRepository` löscht jetzt per JPQL-Bulk statt abgeleiteter Methode: Hibernate flusht Inserts
+vor Deletes, der Re-Insert desselben Schlüssels hätte das Delete sonst überholt — auf Sybase mit
+`ignore_dup_key` still, auf Postgres/H2 mit PK-Verstoß.
+
+**Entscheidung User 2026-09-10: keine Fondsaktivierung im Preispfad** (D10). Ein zunächst gebauter
+`FondsAktivierungService` ist wieder entfernt; an der Stelle steht ein TODO.
+
+**Stand 2026-09-10 — AP6.** Die Projektion hat mit `LetztePreiseService` einen eigenen Besitzer;
+das Fortschreiben aus AP5 ist dorthin gewandert (Sync-Service und Rebuild rufen dieselbe `advance`).
+
+- **Rebuild** (`PreismeldungSyncService.rebuildProjection`) läuft denselben Entscheidungspfad wie
+  `sync` — genau das macht ihn zum Konsistenzcheck: die neu hergeleitete Projektion ist die, die die
+  inkrementelle halten müsste. Er fasst nur die Projektion an, nie `kurs`.
+- **Ankunftsreihenfolge:** der Rebuild nimmt die Lieferungen als bereits sortierte `DeliveryRef`-Liste
+  entgegen, weil die Ankunftszeit am Job hängt — den persistiert erst AP7. Bis dahin ist der Rebuild
+  voll testbar (Test übergibt die Reihenfolge), die Job-Verdrahtung ist die Naht zu AP7.
+- **Seed:** die Schreibhälfte (`LetztePreiseService.seed(rows, seedTime)`) ist da, idempotent (ein
+  Schlüssel, den die Kette schon hält, bleibt unberührt) und getestet. Der **Leser** aus
+  `kurs..tmp_if_last` ist bewusst **nicht** gebaut: dev-tools laufen single-DB
+  (`DatabaseContextKey.SINGLE`), der Seed spannt aber Sybase (lesen) und Postgres (schreiben) — das
+  braucht Cross-DB-Routing und gehört dorthin, wo es das gibt (Migrationsläufer / Parallelbetrieb),
+  nicht in ein single-DB-Tool. Als offener Punkt im Tracker.
+
+**Stand 2026-09-10 — AP7.** Die Klammer läuft jetzt end-to-end im Diff-Job: der Execution-Service
+hängt Stufe 2 zwischen Inbox-Schreiben und Result-Bundle, im Business-Kontext des Jobs.
+
+- **`angekommen_am`** liegt am Job und wird bei der Submission aus der **Job-DB-Uhr**
+  (`SELECT CURRENT_TIMESTAMP` über den jobSystem-Kontext) gesetzt — eine Uhr für beide Server,
+  stabil über Retries (der Wert steht am Job, jeder Retry liest denselben). Zusätzlich trägt die
+  Spalte `default now()`: das backfillt Bestandszeilen und ist der Fallback. Ein **Repeat** würde
+  hier den Wert des Originals durchreichen (Builder kann es) — einen Repeat-Pfad gibt es für diesen
+  Job-Typ noch nicht, daher nur vorbereitet, nicht verdrahtet.
+- **Zähler** `synced/skipped/veto` schreibt `updateResult` mit; `db_diff` bleibt null bis AP8.
+- **`sync-report.txt`** kommt ins Result-ZIP: Kopfzahlen plus je auffälligem Preisschlüssel eine
+  Zeile (Veto, Skip, von späterer Lieferung überholt). Das ist der sichtbare Ort für den
+  Ausschüttungs-Veto-Befund aus D6.
+
+**Stand 2026-09-10 — AP8.** Diff-Ebenen 3 (DB-Stand `kurs`) und 4 (Projektion `letzte_preise`
+gegen `kurs..tmp_if_last`) laufen nach dem Sync im Execution-Service; das Ergebnis geht als
+`db-diff.txt` ins Result-ZIP und als `db_diff_count` an den Job.
+
+- **`PreismeldungDbDiff`** (Domain, rein) vergleicht zwei Schlüssel→Wert-Maps; der Service flacht
+  beide Seiten ab und lässt bekannte Abweichungen aus dem Vergleichswert: `guelt` fehlt (D8), und
+  Preise werden **numerisch** verglichen, damit der gelieferte String der Projektion zum
+  Legacy-Float von `tmp_if_last` passt.
+- **Testrealität:** `business` und `legacyBusiness` zeigen im Test auf dieselbe H2 — Ebene 3 ist
+  damit ein echter Selbstvergleich (0). Ebene 4 vergleicht zwei verschiedene Tabellen; der E2E-Test
+  seedet `tmp_if_last` passend, sodass auch dort 0 herauskommt. Der belastbare Beweis der
+  Diff-Logik sind die reinen Domain-Tests (identisch→0, abweichend→N, nur-eine-Seite→N). Ein echter
+  Unterschied Neu↔Alt braucht das Dual-DB-Profil (AP9).
+- **`pool_if_kurs`-Kontrolle verschoben:** eine Kontrolle für eine tote Tabelle (D2), die im
+  Selbstvergleich trivial 0 ist — Aufwand (eigene read-only Entity) ohne Aussage bis der echte
+  Dual-DB-Parallelbetrieb steht. Im Tracker vermerkt.
+
+**Stand 2026-09-11 — Designreview mit dem User.** Drei Fragen standen an: warum eine eigene Tabelle
+`letzte_preise` statt `tmp_if_last`, das DB-Setup im Parallelbetrieb, und was der Diff-Job
+eigentlich vergleicht. Ergebnis sind die Entscheidungen oben und D11–D14; die Befunde aus dem
+Legacy-Code, die dabei herausgekommen sind:
+
+- **Der einzige lebende Unterschied zwischen `tmp_if_last` und `kurs` ist die Preiswährung.** Ein
+  Preis in einer Währung ≠ Fondswährung passiert den Eingang (`tax_code.isinwaehrung` ist auf GAST
+  für `R`/`E`/`Z`/`S`/`S2`/`S3` `N`, nur LMT- und Steuercodes haben `J`), wird im Preisfile mit der
+  gelieferten Währung veröffentlicht, aber nicht nach `kurs` geschrieben
+  (`preisekennzahl.cpp:2843-2848`); `WriteLastKurse` läuft trotzdem. Die Fileerstellung prüft die
+  Fondswährung nirgends.
+- **Der `R`-Löschpfad nach `tmp_if_last` ist toter Code.** `DeleteLastKurse`
+  (`preisekennzahl.cpp:1849`) ist nur im Header deklariert und wird nirgends aufgerufen; das SQL in
+  `DeleteLastKurs` (`:1939`) referenziert obendrein die Spalten `waehrung`/`cod_fliesscode`, die
+  `tmp_if_last` nicht hat. Eine `D`-Lieferung löscht also aus `kurs`, lässt `tmp_if_last` stehen —
+  der zurückgezogene Preis wird im Lauf-1-Fallback erneut veröffentlicht. Unser „Löschung lässt die
+  Zeile unberührt" trifft das effektive Legacy-Verhalten, aber aus dem falschen Grund. Die
+  Konzept-Schreiberliste (Entscheidung 9) ist an dieser Stelle falsch.
+- **Unbekannte ISIN** als Ableitbarkeitsgrund ist tot (D2); die **Reihenfolge-Semantik** („zuletzt
+  verarbeitet" statt „jüngstes Datum") ist der zweite echte Unterschied — den unser Guard ohnehin
+  in Richtung `kurs`-Semantik verschiebt.
+- **Alle Spalten des `I2`-Preissatzes stehen in `kurs`** (plus `ASF` und `wkn_desc`). `txt_bez`,
+  `liefer_id`, `eintragezeit`, `intervall` aus `tmp_if_last` werden gelesen, erreichen das
+  Preisfile aber nicht.
+- **`kurs` hat außer der Einspielung keinen regulären Schreiber**: `s_ins_kurs_direct` (2005, ohne
+  Aufrufer im Repo), `WAEHR_UM` (Euro-Umstellung), der Trigger auf `wkn_desc` (löscht Kurse bei
+  Fondslöschung) und `einmal`-Programme. Auf `tmp_if_last` gibt es keine Trigger.
+- **Diff-Ebenen 3/4 saßen am falschen Zeitpunkt**: Legacy schreibt `kurs`/`tmp_if_last` im
+  Tagesjob-Schritt 4 am Tagesende, wir Minuten nach der Lieferung. Ein Vergleich im Lieferjob am
+  selben Tag ist per Konstruktion rot, und „nur berührte Schlüssel" sieht keine Drift.
+- **`preis_herkunft` kann nicht Guard der Projektion sein** (Schlüssel enthält `dat_kurs`, D12).
+
+Dazu zwei Punkte, an denen das Konzept sich selbst widerspricht: Entscheidung B wählte die geführte
+Tabelle *wegen* der Parallelbetrieb-Vergleichbarkeit und legte sie dann in das DBMS, in dem der
+Vergleich am schwersten ist; und Entscheidung M („neue Tabellen nach Postgres") wurde auf eine Tabelle
+angewendet, die nicht neu ist. Korrekturen in AP10.
+
+Die Fragen an die Fachabteilung (Währung ≠ Fondswährung, gelöschte Preise, Zweck des Fallbacks)
+stehen in `2026-09-11-fondspreise-fachabteilung-fragen-fallback-waehrung.md`; die Kontrollabfragen für
+GAST als **V6** im SQL-File.
+
+**Stand 2026-09-11 — AP11 umgesetzt.** Gesamtbuild grün; `PreismeldungSyncServiceTest` 13 (H2),
+`PreisMeldungDiffJobTest` 3, `PreismeldungSyncGuardTest` 14 (H2 + Postgres), neu
+`TmpIfLastRepositoryTest` 3 × alle drei DBMS (Sybase-Testcontainer inklusive, `char`-Padding
+geprüft). Drei Festlegungen, die erst am Code fielen:
+
+- **`db_diff_count` ist aus V066 gestrichen**, keine Folge-Migration: die Flyway-Skripte des
+  Feature-Branch sind nirgends ausgerollt (User 2026-09-11). Entity, Repository und Execution-Service
+  kennen den Zähler nicht mehr; `PreismeldungDbDiffService` ist gelöscht, `PreismeldungDbDiff` +
+  Result bleiben im Domain-Modul für den generischen Vergleich.
+- **Rebuild = Replay durch den Guard, ohne vorheriges Löschen** (Abweichung vom AP11-Wortlaut
+  „Schlüssel ersetzen"). Eine gespeicherte Zeile, die ihren Schlüssel schon gewinnt, kann nur von
+  einem legitimen Gewinner stammen; sie vorher zu löschen würde eine Seed-Zeile, deren Preisdatum
+  alle Inbox-Lieferungen schlägt, durch eine ältere Korrektur ersetzen. Der Replay repariert
+  fehlende oder zurückhängende Zeilen auf beiden Seiten und lässt Vor-Go-live-Zeilen stehen
+  (Tests `givenDeliveryNeverSynced…`, `givenProjectionRowFromBeforeGoLive…`).
+- **Guard-Seed-Leser gebaut**: `LetztePreiseService.seedGuardFromTmpIfLast(businessDbKey, seedTime)`
+  liest `tmp_if_last` im business-Kontext und spiegelt nach `letzte_preise` (idempotent, `job_id`
+  null). Entscheidung User 2026-09-11, nach dem Umbau: **der Seed wird nicht ausgeführt** (D12);
+  der Code bleibt vorerst liegen.
+
+Weiter: die Projektions-Klammer sitzt in `LetztePreiseService.recordLastPrice` (außen
+`letzte_preise`-Update/Insert + `flush`, innen `tmp_if_last` delete-then-insert im business-Kontext,
+Erstanspruch-Wiederholung bei `DataIntegrityViolationException`); `eintragezeit` beider Seiten ist die
+Ankunftszeit der Lieferung in Wiener Zeit; `cleanupEndedFunds` löscht beidseitig und fragt die
+Fondsenden in 1000er-Blöcken ab, damit die IN-Liste auf Sybase auch für die volle Projektion trägt.
+`TmpIfLast` trägt jetzt `liefer_id`, `eintragezeit`, `intervall` und trimmt `cod_ex`/`txt_bez`.
 
 **Abweichungen vom Plan, bewusst:**
 
@@ -94,8 +279,8 @@ Vorbild ist `cPreiseKennzahlen::MakeTmpPreise` (`preisekennzahl.cpp:2656-2935`),
 | 2 | TEST-ISIN (`cod_art_f='TEST'`) → verwerfen | `:2702` | portieren |
 | 3 | C-Plan (`cod_art_f='C-PL'`), AIF (`'AIF'`), Liquidation (`status='L'`) → je Property | `:2710-2731` | portieren, Properties D7 |
 | 4 | ISIN unauflösbar → `pool_if_kurs` | `:2925-2934` | **entfällt** (D2) |
-| 5 | Preiswährung ≠ Fondswährung → **nicht** nach `kurs`, aber in die Projektion | `:2843-2848` | portieren |
-| 6 | vorläufiger Fonds (`status='V'`) mit `R` → Aktivierungsversuch | `:2747-2782` | portieren, Pool-Ausgang entfällt |
+| 5 | Preiswährung ≠ Fondswährung → **nicht** nach `kurs`, aber in die Projektion; bei `D` gar nichts (`WriteLastKurse` nur im Nicht-`D`-Zweig) | `:2843-2850`, `:2862/:2879` | portieren |
+| 6 | vorläufiger Fonds (`status='V'`) mit `R` → `VorlFondsAktivieren` | `:2747-2782`, `fondsbasis.cpp:3882` | **entfällt** — Fondsaktivierung ist ein eigenes Feature der Stammdaten (siehe D10); die Preise eines `V`-Fonds werden geschrieben wie alle anderen |
 | 7 | `N`/`U`: je Preiscode delete-then-insert in `kurs`, `guelt = getdate()` | `WriteKurse:719-800` | portieren |
 | 8 | `D`: löschen; ist `R` dabei → Ausschüttungs-Veto, sonst löschen (Legacy zusätzlich `del_protokoll`) | `:2519-2560`, `DeleteKurseReally:1443` | portieren **ohne** `del_protokoll` (D6) |
 | 9 | Korrektur-Erkennung: `Stichtag > Preisdatum` **und** Kurse betroffen (Solva allein zählt nicht) | `CheckKorrektur:2990` | erkennen und **vormerken**; die Nachrechnung selbst ist Schnitt 6 |
@@ -138,7 +323,8 @@ Produktivlast und kostet eine Zeile Konfiguration.
 |---|---|---|---|
 | `kurs..kurs` | Sybase, **business** | `ifas-persistence-inv` | dort liegen bereits die `catalog="kurs"`-Sybase-Business-Entities (`Kest98`, `Absicht`, `LieferStatus`, `CheckCode`) |
 | `kurs.preis_herkunft` | Postgres, **fondspreise** | `ifas-persistence-fondspreise` | neue Business-Tabelle |
-| `kurs.letzte_preise` | Postgres, **fondspreise** | `ifas-persistence-fondspreise` | neue Business-Tabelle |
+| `kurs.letzte_preise` | Postgres, **fondspreise** | `ifas-persistence-fondspreise` | seit 2026-09-11 **Guard + Spiegel** der Projektion (D12), nicht mehr die Projektion selbst |
+| `kurs..tmp_if_last` | Sybase, **business** | `ifas-persistence-inv` | Legacy-Tabelle, vom Neusystem Legacy-getreu geschrieben (D11); die read-only Entity `TmpIfLast` (AP8) wird schreibend |
 
 Ausdrücklich **nicht** nach `ifas-persistence-fondspreise` gehört `Kurs`: dessen Invariante ist
 „eigene DB, der Aufrufer setzt den Fondspreise-Kontext" (so dokumentiert seit dem
@@ -176,6 +362,13 @@ Servern). Ein wiederholter Job erbt die Ankunftszeit seines Originals; Gleichsta
 über `job_id` brechen.
 
 ### D5 — `letzte_preise` (Projektion, B3)
+
+> **Geändert 2026-09-11:** Die Projektion selbst liegt wieder in `kurs..tmp_if_last` (D11);
+> `letzte_preise` ist Guard und Spiegel (D12). Die Legacy-Fakten unten gelten unverändert. Der
+> **Seed** aus dem Altsystem entfällt (Voll-Sync zum Go-live), ebenso der Guard-Seed (D12,
+> entschieden 2026-09-11).
+> Ergänzung zur Schreiberliste: der `R`-Löschpfad (`DeleteLastKurse`) ist toter Code — Löschungen
+> erreichen `tmp_if_last` nie, siehe *Stand 2026-09-11*.
 
 Legacy-Fakten, im Code nachgelesen (`WriteLastKurse`, `preisekennzahl.cpp:1226-1330`):
 
@@ -286,6 +479,9 @@ Betrieb einen überschreibt, bleibt offen (Tracker).
 
 ### D8 — Diff-Ebenen 3 und 4
 
+> **Aufgehoben 2026-09-11 (D13):** Die Ebenen 3 und 4 werden aus dem Job wieder ausgebaut. Der Text
+> unten beschreibt den Stand AP8 und bleibt als Begründung für den generischen Tabellenvergleich stehen.
+
 `DatabaseCompareService` ist **kein** generischer Tabellenvergleich — er vergleicht STM-Ids
 (`dbcompare/DatabaseCompareService.java:41`). Für Schnitt 2 also schlüsselgenau statt
 Tabellen-Dump:
@@ -313,7 +509,136 @@ Bekannte Abweichungen ins `PreisMeldungDiffSetting` (Muster: die bestehenden
 | Stammdaten (INV, WKN, HWA, tax_code) | business | Aufrufer-Kontext |
 | Guard + Projektion | fondspreise (Postgres) | `withFondspreiseDbContextTransactional` |
 | `kurs` | business (Neusystem-Sybase) | `withDatabaseContextTransactional(setting.databaseContext())` |
-| Diff-Gegenseite | legacyBusiness, **nur lesend** | `withDatabaseContext(getLegacyBusinessDbKey(), …)` |
+| Projektion `tmp_if_last` | business (Neusystem-Sybase), **innerhalb** der `letzte_preise`-Klammer | `withDatabaseContextIsolatedTransactional(businessKey, …)` (D12) |
+| ~~Diff-Gegenseite~~ | ~~legacyBusiness, nur lesend~~ | entfällt mit D13 — der Job liest das Altsystem nicht mehr |
+
+### D10 — Fondsaktivierung ist kein Preis-Thema
+
+Legacy aktiviert einen vorläufigen Fonds (`INV.status='V'`) auf **zwei** Wegen: im Preispfad
+(`VorlFondsAktivieren` aus `MakeTmpPreise`, `preisekennzahl.cpp:2759`) und über die Aktion
+`isin_aktivieren` (`aktionen.e -Aisin_aktivieren`, `run_isins_aktivieren.csh`, seit 2018-12-12),
+die täglich alle `V`-Fonds mit erreichtem `fonds_beginn` aktiviert. Seit 2018 ist die Aktion der
+maßgebliche Pfad; der Preispfad feuert nur noch, wenn ein Preis vor der Aktion desselben Tages
+eingespielt wird — bei Einspielung als Tagesjob-Schritt 4 praktisch nie. Die beiden Kopien sind
+auseinandergedriftet (Weihnachtsregel 24.12.–1.1. → 2.1., `liefer_status` ja/nein, Idempotenz,
+WDBO-Notify).
+
+Die Sync-Stufe schreibt darum **keine Stammdaten**: die Preise eines `V`-Fonds landen in `kurs` und
+`letzte_preise` wie alle anderen, der Status bleibt unberührt. Die Fondsaktivierung wird ein eigenes
+Feature der Stammdaten-Domäne, das seine Arbeit unabhängig von Preismeldungen korrekt abliefert —
+mit der Klärung, welche Legacy-Variante gilt und wem `INV.status`/`fonds_beginn` gehören (Tracker).
+Parallelbetrieb-Folge in Schnitt 2: keine; `INV` ist keine Diff-Tabelle der Ebenen 3/4.
+
+### D11 — Die Projektion bleibt `kurs..tmp_if_last` (Neusystem-Sybase), Legacy-getreu
+
+Entscheidung User 2026-09-11. Auslöser: KUPL und/oder KMS lesen möglicherweise direkt aus der Tabelle
+— dann muss sie dort aktuell sein, wo diese Anwendungen sie nach dem Umstieg finden, in Legacy-Form.
+Dazu drei Gründe aus dem Parallelbetrieb-Setup: der Voll-Sync zum Go-live bringt die Tabelle gefüllt
+mit (kein Seed), die Divergenz-Beobachtung „alle vom Neusystem geschriebenen Sybase-Tabellen" erfasst
+sie ohne eigenen Adapter, und die Sybase-Migration 2027 nimmt sie ohnehin mit. Ob die Tabelle
+überhaupt gebraucht wird, klärt die Fachabteilung (Tracker O/P); bis dahin gilt:
+
+| Regel | Legacy | im Neusystem |
+|---|---|---|
+| Schlüssel des Ersetzens | delete `(num_okb, cod_waehrung, cod_preiscode, cod_ex='N')`, dann insert — **ohne** `dat_kurs` | identisch: delete-then-insert je Code. **Kein** Upsert über den PK, der enthält `dat_kurs` — ein neues Datum ergäbe eine zweite Zeile |
+| `cod_ex` | hart `'N'` | hart `'N'` |
+| `num_kurs` | `float` | Float aus dem gelieferten Wert; die exakte Dezimaldarstellung bleibt im Spiegel `letzte_preise.wert` |
+| `txt_bez` | gelieferte Fondsbezeichnung | gelieferte Fondsbezeichnung |
+| `liefer_id`, `eintragezeit` | aus dem Lieferdatensatz | Lieferant und Eingangszeitpunkt der Zeile |
+| `intervall` | aus dem Lieferfeld, seit 2017 leer | `null` |
+| `D`-Lieferung | Zeile bleibt (Löschpfad toter Code) | Zeile bleibt |
+| Preiswährung ≠ Fondswährung | geschrieben (nicht nach `kurs`) | geschrieben (nicht nach `kurs`) |
+| C-Plan / AIF / Liquidation | drei `continue` im Aufrufer, vor beiden Writes | identisch, über die Properties aus D7 |
+| Aufräumen | 35 Tage nach Fondsende; Zeilen ohne ISIN | 35 Tage nach Fondsende, auf **beiden** Seiten (Sybase-Zeile und Spiegel) |
+
+Konsequenzen: die read-only Entity `TmpIfLast` (AP8) wird schreibend, bleibt in `ifas-persistence-inv`
+neben `Kurs` (D3-Logik: Sybase-Business-Tabelle im Katalog `kurs`); trimmende Getter wie bei `Kurs`
+(`char`-Padding). Der **Rebuild** darf die Sybase-Tabelle nicht leeren — sie enthält die Zeilen von
+vor dem Go-live, die die Inbox nicht kennt — sondern ersetzt nur die Schlüssel, die er aus der Inbox
+herleitet. Flyway: nichts Neues in Sybase; `V067` provisioniert `tmp_if_last` bereits für die Docker-
+und H2/PG-Testdatenbanken.
+
+### D12 — Guard der Projektion: die `letzte_preise`-Zeile als Klammer
+
+**`preis_herkunft` scheidet aus.** Sein Schlüssel enthält `dat_kurs`, der Projektionsschlüssel nicht.
+Zwei Lieferungen für denselben Fonds mit verschiedenen Preisdaten treffen zwei verschiedene
+Guard-Zeilen, beide gewinnen, und für die Projektionszeile gibt es keinen Punkt, an dem sie sich
+begegnen. Ein Nachsehen „steht in `preis_herkunft` schon ein jüngeres Datum?" hilft nicht: die Zeile
+der parallel laufenden Lieferung ist noch nicht committet und damit unsichtbar; die ältere Lieferung
+hielte sich für die neueste. Nur ein bedingtes Update auf **einer** Zeile serialisiert. Außerdem hat
+ein Preis in abweichender Währung gar keine `preis_herkunft`-Zeile (kein `kurs`-Write).
+
+**Die Zeile in `letzte_preise` ist dieser Guard bereits** — `updateIfNewer` mit dem Prädikat über
+`(preisdatum, angekommen_am)`. Entscheidung User 2026-09-11: die Zeile bleibt **ganz**, mit Werten,
+`job_id` und `angekommen_am`; Postgres führt damit einen Spiegel der Projektion, den niemand liest.
+Abmagern auf einen reinen Guard ist später möglich.
+
+Ablauf je (ISIN, Währung, Code), Schlüssel sortiert, Muster identisch zur `kurs`-Klammer aus D4:
+
+1. Außen (fondspreise, `REQUIRES_NEW`): bedingtes Update auf `letzte_preise`. Trefferzahl 1 → wir
+   sind die Neueste, Zeile bleibt gesperrt. 0 und keine Zeile → Insert + `flush` (Erstanspruch);
+   kollidiert er, `DataIntegrityViolationException`, genau eine Wiederholung. 0 und Zeile vorhanden →
+   eine Neuere hat gewonnen → überspringen, nichts in Sybase anfassen.
+2. Innen (business, `REQUIRES_NEW`): delete-then-insert in `kurs..tmp_if_last` für diesen Code.
+3. Innen committen, dann außen.
+
+Fehlerfenster wie bei `kurs`: Absturz zwischen Sybase- und Postgres-Commit lässt `tmp_if_last`
+geschrieben und den Guard unmarkiert zurück; der Retry wiederholt den idempotenten Write. Für Preise in
+abweichender Währung ist dies die **einzige** Klammer. `kurs`-Klammer und Projektions-Klammer bleiben
+getrennt (verschiedene Schlüssel); Reihenfolge je Gruppe: erst alle `kurs`-Schlüssel, dann die
+Projektionsschlüssel.
+
+**Guard-Seed — entschieden 2026-09-11: entfällt.** `letzte_preise` startet leer. Der erste Write je
+Schlüssel nach dem Go-live verhält sich damit wie Legacy, ab dem zweiten greift unsere Regel; der
+Postgres-Spiegel bleibt für nie mehr gelieferte Schlüssel lückenhaft, was niemand liest. Der Code
+(`seedGuardFromTmpIfLast`, `importLegacyLastPrices`) bleibt vorerst liegen. Die Abwägung dahinter:
+
+Ohne Postgres-Zeile entscheidet beim ersten Write je Schlüssel nach dem Go-live
+niemand über die Reihenfolge — eine Korrektur zu einem älteren Datum überschriebe die vom Altsystem
+per Voll-Sync mitgebrachte jüngere Zeile. Das ist exakt Legacy-Verhalten („zuletzt verarbeitet
+gewinnt"), aber nicht unsere Regel. Deshalb einmalig nach dem Voll-Sync: `tmp_if_last` der
+**Neusystem**-Sybase (business-Kontext) in `letzte_preise` spiegeln, synthetisches `angekommen_am` =
+Seed-Zeitpunkt, `job_id` null. Die Schreibhälfte existiert (`importLegacyLastPrices`); der Leser
+braucht keinen legacyBusiness-Kontext mehr, nur business + fondspreise — beides Neusystem-Routing.
+
+### D13 — Diff-Ebenen 3 und 4 kommen aus dem Job heraus
+
+Entscheidung User 2026-09-11. Zwei Gründe:
+
+- **Zeitpunkt.** Legacy schreibt `kurs` und `tmp_if_last` im Tagesjob-Schritt 4 am Tagesende, das
+  Neusystem Minuten nach der Lieferung. Die Rückmeldungs-Logs des Altsystems liegen dagegen sofort
+  vor, der Job kann also am selben Tag laufen — und vergleicht dann unseren frischen Stand mit einem
+  Legacy-Stand, der noch nicht existiert. Rot per Konstruktion.
+- **Granularität.** „Nur die berührten Schlüssel" sieht weder, was Legacy schrieb und wir nicht, noch
+  Drift, die sich über Tage aufbaut.
+
+Stattdessen ein **generischer, geplanter Tabellenvergleich Sybase alt gegen Sybase neu** nach dem
+Legacy-Tagesjob, je Szenario konfigurierbar (Tabelle, Schlüsselfenster, bekannte Abweichungen), für
+alle Tabellen, die das Neusystem schreibt — `kurs`, `tmp_if_last`, später ASF und Kennzahlen. Keim
+dafür ist `DatabaseCompareService` (old/new-Kontext aus Properties, Vergleich noch `todo`);
+Vergleichskern kann `PreismeldungDbDiff` (Domain, Schlüssel→Wert) bleiben. Das ist ein eigener Schritt
+außerhalb von Schnitt 2 (Tracker, *Weitere Schritte*). `pool_if_kurs` als Kontrolltabelle (D2) wandert
+mit dorthin.
+
+Im Job bleibt Ebene 1 (Rückmeldung). Ausgebaut werden der Aufruf von `PreismeldungDbDiffService`,
+`db-diff.txt` und die Befüllung von `db_diff_count`; ob die Spalte (V066) per Migration fällt oder
+`null` bleibt, ist ein Detail für AP11. `PreismeldungDbDiffService` entfällt, `PreismeldungDbDiff`
+bleibt für den generischen Job.
+
+### D14 — Ableitbarkeit aus `kurs`, und warum wir trotzdem Legacy-getreu bleiben
+
+Befund (Details unter *Stand 2026-09-11*): `tmp_if_last` unterscheidet sich von `kurs` in genau zwei
+lebenden Punkten — Preise in Währung ≠ Fondswährung stehen nur dort, und „zuletzt verarbeitet gewinnt"
+statt „jüngstes Datum". Dazu kommt, dass gelöschte Preise dort stehen bleiben, weil der Löschpfad
+toter Code ist. Alles, was der `I2`-Preissatz braucht, steht in `kurs`.
+
+Ob ein Preis, der nie in `kurs` ankam, Fallback-Kandidat sein soll, und ob ein zurückgezogener Preis
+erneut veröffentlicht werden darf, sind **fachliche Fragen** an die Fachabteilung (Fragen-File vom
+2026-09-11, Tracker O/P). Bis sie beantwortet sind, gilt: **Legacy-getreu** — der Währungsfall wird in
+die Projektion geschrieben, `D` lässt die Zeile stehen. Die einzige bewusste Abweichung bleibt der
+strengere Guard über `(preisdatum, angekommen_am)`, der im generischen Tabellenvergleich als bekannte
+Abweichung zu führen ist. Fällt die Antwort „Fallback aus `kurs` genügt" oder „Fallback wird nicht
+gebraucht" (N), verschwinden Projektion, Spiegel, Guard-Seed, Rebuild und Aufräumjob zusammen.
 
 ## Arbeitspakete
 
@@ -344,7 +669,7 @@ Bekannte Abweichungen ins `PreisMeldungDiffSetting` (Muster: die bestehenden
   der Sybase-Baum nur `kurs`, mit Kopfzeile, welche Hälfte dort fehlt und warum. H2 kennt kein
   `timestamptz` — `timestamp(6) with time zone` schreiben (wie V013/V014).
 
-### AP4 — Domain: die Entscheidungslogik (nach AP1)
+### AP4 — Domain: die Entscheidungslogik — **erledigt**
 - `ifas-domain-fondspreise/.../sync/PreismeldungSyncDecisions.java`: reine Funktion je Gruppe →
   `SyncEntscheidung` (Operation `UPSERT` / `DELETE` / `SKIP`, Grund, betroffene Preiscodes,
   `korrekturVorgemerkt`, `vetoGrund`). Kein Persistenzzugriff, Reihenfolge exakt nach D1.
@@ -359,13 +684,13 @@ Regelklassen sind `@UtilityClass` **im Plural** (`…Decisions`, `…Validations
 Konstruktor halten. Gibt eine Prüfung Meldungen zurück, dann als Ergebnis-Record — nie über eine
 übergebene Liste.
 
-### AP5 — Sync-Service mit Guard und Klammer (nach AP3/AP4)
+### AP5 — Sync-Service mit Guard und Klammer — **erledigt**
 - `service/preismeldung/PreismeldungSyncService`: liest die Inbox-Zeilen des Jobs, gruppiert nach
   Preisschlüssel, sortiert, ruft je Schlüssel die Domain-Entscheidung und führt sie in der Klammer
   aus (D4/D9). Wiederverwendbar für den späteren Live-Job — wie `PreismeldungEingangService`.
 - `AusschuettungVetoProvider`-Impl gegen `ifas..ASF` (Filter `aussch_status='A'`, Fonds/Datum/Währung).
 
-### AP6 — Projektion, Rebuild, Seed (nach AP3/AP5)
+### AP6 — Projektion, Rebuild, Seed — **erledigt**; Seed-Leser durch D11 hinfällig, Umbau in AP11
 - `LetztePreiseService`: Fortschreiben aus dem Sync-Ergebnis mit dem Guard aus D5;
   `rebuildFromInbox(zeitraum)` in Ankunftsreihenfolge; Aufräumen nach
   `tage-letzte-preise-beendete`.
@@ -373,7 +698,7 @@ Konstruktor halten. Gibt eine Prüfung Meldungen zurück, dann als Ergebnis-Reco
   `kurs..tmp_if_last` aus dem legacyBusiness-Kontext liest und `letzte_preise` befüllt. Einmalig,
   idempotent, mit Trockenlauf-Ausgabe.
 
-### AP7 — Job-Erweiterung (nach AP5/AP6)
+### AP7 — Job-Erweiterung — **erledigt**
 - `PreisMeldungDiffJob`: Feld `angekommen_am` (DB-seitig `now()` beim Insert, D4) sowie Zähler
   `syncedCount`, `skippedCount`, `vetoCount`, `dbDiffCount`; Flyway-Migration dazu
   (`postgres15/V068__preis_meldung_diff_jobs__sync.sql`).
@@ -382,7 +707,7 @@ Konstruktor halten. Gibt eine Prüfung Meldungen zurück, dann als Ergebnis-Reco
   `db-diff.txt` ins Result-ZIP, Zähler in `updateResult` mitschreiben.
 - Wiederholte Jobs erben `angekommen_am` vom Original (`repeatedFromJob`).
 
-### AP8 — Diff-Ebenen 3 und 4 (nach AP7)
+### AP8 — Diff-Ebenen 3 und 4 — **erledigt, am 2026-09-11 zurückgenommen** (D13; Ausbau in AP11)
 - `PreismeldungDbDiff` (Domain) + Service-Teil, der die Gegenseite im legacyBusiness-Kontext liest;
   bekannte Abweichungen über `PreisMeldungDiffSetting` (D8), Textreport ins Result-ZIP.
 
@@ -408,8 +733,40 @@ Konstruktor halten. Gibt eine Prüfung Meldungen zurück, dann als Ergebnis-Reco
   produktive INI-Werte, **zeitlicher Ablauf als eigener Schritt** (Ablaufdiagramm, „Sammellauf 1 vor
   Ausschüttungsjob 3", Punkt L).
 - `docs/Technische Konzepte/ifas13-jobs.md`: Stufe 2 ergänzen.
+- **Konzept-Korrekturen aus dem Designreview 2026-09-11** (als neue Runde ins Änderungsprotokoll):
+  Entscheidung 9 — Schreiberliste: `R`-Löschpfad ist toter Code, „unbekannte ISIN" ist tot (D2), der
+  einzige lebende Grund für „nicht aus `kurs` ableitbar" ist die Preiswährung; Entscheidung B —
+  Verortung: geführte Tabelle bleibt B3, liegt aber als `kurs..tmp_if_last` in der Neusystem-Sybase,
+  `letzte_preise` ist Guard + Spiegel; Abschnitt *Parallelbetrieb* — Tabelle der vier Diff-Ebenen:
+  Ebenen 3/4 aus dem Job in den generischen Tabellenvergleich; Entscheidung M bleibt, gilt aber nur
+  für **neue** Tabellen.
 
-**Reihenfolge:** AP1 → (AP2 ∥ AP3) → AP4 → AP5 → AP6 → AP7 → AP8 → AP9 → AP10.
+### AP11 — Umbau nach dem Designreview 2026-09-11 (D11–D13) — **erledigt**
+
+- **Ausbau Diff-Ebenen 3/4** (D13): `PreisMeldungDiffJobExecutionService` ohne `dbDiffService`,
+  ohne `db-diff.txt`, `db_diff_count` nicht mehr befüllt; `PreismeldungDbDiffService` entfernen,
+  `PreismeldungDbDiff` (Domain) behalten; `PreisMeldungDiffJobTest` entsprechend. Spalte
+  `db_diff_count` (V066): fallen lassen oder `null` — entscheiden.
+- **`TmpIfLast` schreibend** (D11): Entity in `ifas-persistence-inv` um den Write, Repository um
+  delete-by-`(num_okb, cod_waehrung, cod_preiscode, cod_ex)` als JPQL-Bulk (wie `KursRepository` —
+  Hibernate flusht Inserts vor Deletes) und `save`; trimmende Getter für die `char`-Spalten.
+- **Klammer** (D12): `LetztePreiseService.recordLastPriceIfNewer` wird zur Klammer — außen
+  `letzte_preise`-Update/Insert im fondspreise-Kontext, innen der Sybase-Write im business-Kontext;
+  Erstanspruch-Wiederholung wie bei der `kurs`-Klammer in `PreismeldungSyncService`. Der Aufrufer
+  übergibt den business-Key.
+- **Rebuild** (D11): nur die aus der Inbox hergeleiteten Schlüssel ersetzen, auf beiden Seiten; kein
+  Leeren der Sybase-Tabelle, `letzte_preise` nur für diese Schlüssel.
+- **Aufräumen** (D11): `cleanupEndedFunds` löscht in `tmp_if_last` **und** `letzte_preise`.
+- **Guard-Seed** (D12): `importLegacyLastPrices` behalten; Leser gegen `tmp_if_last` im
+  **business**-Kontext (Neusystem-Sybase), kein legacyBusiness. Gebaut, aber **nicht ausgeführt** —
+  entschieden 2026-09-11, siehe D12.
+- **Tests**: `tmp_if_last`-Write und -Delete auf allen drei DBMS (`@TestTemplate`, wie
+  `KursRepositoryTest`); Klammer in beiden Reihenfolgen und mit verlorenem Guard (kein Sybase-Write);
+  Rebuild lässt Vor-Go-live-Zeilen stehen; Cleanup beidseitig. `PreismeldungSyncGuardTest` bleibt
+  gültig.
+
+**Reihenfolge (aktualisiert 2026-09-11):** AP1 → (AP2 ∥ AP3) → AP4 → AP5 → AP6 → AP7 → AP8 →
+**AP11** → AP9 → AP10.
 Kritischer Pfad: AP1 → AP4 → AP5 → AP7.
 
 ## Verifikation
@@ -421,6 +778,8 @@ Kritischer Pfad: AP1 → AP4 → AP5 → AP7.
   `kurs`- und `letzte_preise`-Zeilen über die H2-Konsole prüfen.
 - Reihenfolge-Test bewusst zweimal laufen lassen (Guard ist ein Nebenläufigkeitsmechanismus —
   ein einzelner grüner Lauf beweist wenig).
+- `tmp_if_last`-Write gegen den Sybase-Testcontainer laufen lassen, nicht nur H2/PG — `char`-Padding
+  und `ignore_dup_key`-Verhalten zeigen sich nur dort (AP11).
 
 ## Risiken / offene Punkte
 
@@ -431,19 +790,30 @@ Kritischer Pfad: AP1 → AP4 → AP5 → AP7.
    Provisionierungsskript nötig ist, entscheidet sich beim Bau von AP3 (Muster V041/V062).
 3. **`num_wfs_ku` vs. `num_wfs`** sind zwei verschiedene Nummern (`kurs` nutzt `num_wfs_ku` aus
    `vwkn..wkn_hist`, das ASF-Veto `WFS_WKN`). Verwechslung wäre still und falsch.
-4. **Seed-Zeitpunkt:** `letzte_preise` muss vor dem ersten Parallelbetrieb-Lauf gefüllt sein, sonst
-   ist Diff-Ebene 4 von Tag 1 an rot.
+4. ~~**Seed-Zeitpunkt**~~ — **entfallen 2026-09-11 (D11):** die Daten kommen mit dem Voll-Sync. Der
+   **Guard-Seed** (D12) entfällt ebenfalls (User 2026-09-11): beim ersten Write je Schlüssel nach dem
+   Go-live gilt Legacy-Semantik, ab dem zweiten unsere Reihenfolgeregel — akzeptiert.
 5. **Kennzahlen bleiben außen vor** (Schnitt 6): Korrekturen und `R`-Löschungen werden nur
    *vorgemerkt*, nicht nachgerechnet. In der Sybase heißt das vorübergehend: `kurs` aktuell,
    abhängige Kennzahlen veraltet. Als bekannte Abweichung führen.
-6. **Flyway-Nummern** beim Merge erneut prüfen (heute frei ab V065).
+6. **Flyway-Nummern** beim Merge erneut prüfen (heute frei ab V065). **Geprüft 2026-09-11 beim Merge
+   von `origin/master` (`1ba887699`):** master, stable und production enden bei V064, V065–V067
+   bleiben. `origin/ausschuettung` belegt V065/V066 eigenständig — wer von beiden später nach master
+   mergt, nummeriert um; Vorgehen in `mathias/rules/flyway-versions-after-merge.md`.
+7. **Fremdleser von `tmp_if_last`** (KUPL/KMS, Tracker O): welche Spalten sie lesen, entscheidet, wie
+   exakt `txt_bez`, `liefer_id`, `eintragezeit` dem Legacy entsprechen müssen. Bis zur Antwort
+   Legacy-getreu füllen (D11).
+8. **Zweite Cross-DB-Klammer** (D12): dieselbe Fehlerfenster-Analyse wie für `kurs`, aber je Gruppe
+   nun zwei Klammerarten hintereinander. Deadlockfrei bleibt es nur mit fester Reihenfolge (erst
+   `kurs`-Schlüssel, dann Projektionsschlüssel) und sortierten Schlüsseln.
 
 ## Nicht in Schnitt 2
 
 Kennzahlen-Nachrechnung und der `ASF.r_faktor`-Pfad (Schnitt 6, blockiert durch K);
 `WirksamePreismeldungen` (Schnitt 3); Filegenerierung, Publikationsprotokoll und der
 ASF-Statusfilter-Befund aus Q9–Q11/F6 (Schnitt 4); Fehlmeldung (Schnitt 7); Web-UI; die
-Zeitablauf-Analyse inkl. Punkt L (eigener Schritt, siehe Context).
+Zeitablauf-Analyse inkl. Punkt L (eigener Schritt, siehe Context); der generische Tabellenvergleich
+Sybase alt gegen Sybase neu (D13, eigener Schritt).
 
 ---
 
