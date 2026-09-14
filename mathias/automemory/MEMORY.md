@@ -14,6 +14,7 @@
 - [Read personal rules before committing](feedback_read-personal-rules-before-committing.md) — `mathias/rules/commit-messages.md` wins over CLAUDE.md and the harness: commit onto master (never production/stable), no Claude trailers, no fixture specifics.
 
 ## Project
+- [DB-Kontext-Blindfleck in Tests](project_db-context-blind-spot-in-tests.md) — alle `database-context.*.db-key` zeigen im Test auf dieselbe h2-test; falscher Seed-/Lesekontext fällt erst im Deployment auf.
 - [Sybase schema freeze](project_sybase-schema-freeze.md) — Keine neuen Tabellen/Spalten in Sybase (Alt wie Neu); Neues nach Postgres, Business-Tabellen NICHT nach infra (Muster ausschuettung_tmp); Sybase-Migration 2027. Parallelbetrieb = eigene Neusystem-Sybase + Diff-Job-Muster.
 - [Recalc historical fidelity](project_recalc-historical-fidelity.md) — Recalc of old SteuerMeldung versions must match legacy's behavior at that time, not current legacy; don't "clean up" version gates that mirror dated OeKBSD changes.
 - [Recalc fixture data recovery](project_recalc-fixture-data-recovery.md) — Missing meldung/ISIN in a grossfile fixture? Recover from a LATER grossfile's export-AFTER snapshot, undoing that grossfile's mutations (exclude what it created; re-source pre-T any OPE predecessor it ended — FIN ones stay null).
@@ -39,4 +40,5 @@
 - [Import/Export n:n Lieferanten](project_importexport-nn-lieferanten.md) — nur die HDP/KAG-Seite wird geschrieben; ein HDP-Eintrag ohne `lieferanten` löscht die Join-Zeilen, und Sybase hat dort keine FKs.
 - [jTDS shared-Calendar race](project_jtds-shared-calendar-race.md) — Calendar AIOOBE under jTDS is Hibernate's shared static UTC_CALENDAR (silently swaps timestamps between threads), never bad data.
 - [Sybase char-Padding](project_sybase-char-padding.md) — `char(n)` liefert aufgefüllte Werte (`"R "`, `"AIF "`); `INV.status` ist varchar; `@Convert` greift auf `@Id` nicht, trimmender Getter stattdessen.
+- [Preismeldung Rückmeldung log format](project_preismeldung-rueckmeldung-log-format.md) — Logs sind LF + ISO-8859-1 (nicht CRLF), Labels aus `txt_bez_e`; verifiziert gegen `testdaten_september.zip`, gepinnt von `PreismeldungRueckmeldungGoldenFileTest`.
 - [Legacy file charsets differ](project_legacy-file-charsets-differ.md) — EStB CSVs sind windows-1252, Return/Delete/Confirm + Logs IBM437; die Kodierung folgt der Herkunft der Daten (echo vom Lieferanten vs. aus der DB), nicht dem schreibenden Programm.

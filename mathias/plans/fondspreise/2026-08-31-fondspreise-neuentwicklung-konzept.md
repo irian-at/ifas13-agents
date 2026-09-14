@@ -48,6 +48,27 @@ Lieferprotokoll lebt für STM bereits im Job. Das Konzept setzt das fort.
 
 ## Änderungsprotokoll
 
+### Runde 10 — 2026-09-11, Designreview Schnitt 2
+
+Drei Fragen aus dem Review, alle am Legacy-Code nachgeprüft:
+
+- **Verortung der Projektion.** Die geführte Tabelle aus B3 bleibt `kurs..tmp_if_last` und wird in
+  der Neusystem-Sybase Legacy-getreu geschrieben; `letzte_preise` in Postgres wird Guard und
+  Spiegel. Entscheidung M gilt nur für **neue** Tabellen (B, M, 9.).
+- **Die Diff-Ebenen 3 und 4 kommen aus dem Lieferjob heraus** und werden ein generischer, geplanter
+  Tabellenvergleich Sybase alt gegen Sybase neu (*Parallelbetrieb*).
+- **Die Schreiberliste in 9. war falsch:** der `R`-Löschpfad nach `tmp_if_last` ist toter Code, und
+  der einzige lebende Grund, warum die Projektion nicht aus `kurs` ableitbar ist, ist die
+  Preiswährung. `pool_if_kurs` und `del_protokoll` werden nicht portiert, die Fondsaktivierung wird
+  ein eigenes Stammdaten-Feature (8.).
+- **Der Seed entfällt** — der Voll-Sync zum Go-live bringt die Projektion mit, der Guard startet
+  leer (9.).
+- Korrigiert: Legacy schreibt `tmp_if_last` **ohne jeden Datumsvergleich**, nicht „nur wenn
+  Preisdatum neuer" (*Zwei Server, ein Pool*, *Reproduzierbarkeit*).
+
+Offen daraus: **O** (lesen KUPL/KMS `tmp_if_last` direkt?) und **P** (Währung ≠ Fondswährung,
+gelöschte Preise im Fallback) — bis zur Antwort bleibt das Verhalten Legacy-getreu.
+
 ### Runde 9 — 2026-09-02, Begriffe: Eingang und Inbox
 
 | Was | vorher | jetzt |
@@ -309,7 +330,7 @@ Statuswerte** (siehe unten):
 | Stufe | tut | Nebenläufigkeit |
 |---|---|---|
 | parsen, prüfen, antworten | Eingangsprüfung (Entscheidung 2), Inbox-Zeilen schreiben, ZIP an den Lieferanten | **parallel** über alle Lieferungen |
-| nach `kurs` | Berechtigungsfilter, `kurs` / `pool_if_kurs`, Löschungen, `tmp_if_last` | **parallel** — der Guard ordnet je Preisschlüssel (siehe *Zwei Server, ein Pool*) |
+| nach `kurs` | Berechtigungsfilter, `kurs`, Löschungen, Projektion `tmp_if_last` | **parallel** — der Guard ordnet je Preisschlüssel (siehe *Zwei Server, ein Pool*) |
 | Kennzahlen | die betroffenen Kennzahlen des Fonds nachrechnen | Versuch; darf unvollständig bleiben |
 
 ### 2. + 3. Sammelreport Lauf 1 und Lauf 2 — Cron, zwei Cutoffs
@@ -374,7 +395,7 @@ sagt nicht, welche gemeint ist:
 
 | | wohin | Wirkung |
 |---|---|---|
-| Sync-Stufe | `kurs`, `del_protokoll` → IFASNXT | der interne Bestand wird aktuell |
+| Sync-Stufe | `kurs` → IFASNXT (per SSIS) | der interne Bestand wird aktuell |
 | Sammelreport-Lauf | `preis.csv` / `solva.csv` → MFT, T2S | der Bestand **beim Bezieher** ändert sich |
 
 Der Sammelreport ist also nicht „nur ein Protokoll": die Bezieher wenden `I2`/`I3` auf ihren eigenen
@@ -497,10 +518,12 @@ Transaktion — ohne dass sich am Prädikat oder an der Schlüssel-Sortierung et
 
 #### `tmp_if_last` braucht dieselbe Behandlung
 
-Legacy schreibt dort „nur wenn Preisdatum neuer" — das ist schon ein monotoner Guard, aber der
-falsche: zwei Lieferungen zum **gleichen** Preisdatum (eine Korrektur) würden am Prädikat
-`preisdatum <` scheitern. Der Guard muss lexikografisch über `(preisdatum, angekommen_am)` gehen.
-Weil `tmp_if_last` unsere eigene Projektion ist, kann die Zeile `angekommen_am` einfach mitführen.
+Legacy vergleicht dort **gar kein Datum**: `WriteLastKurse` löscht über
+`(num_okb, cod_waehrung, cod_preiscode, cod_ex)` und fügt neu ein — der zuletzt verarbeitete Satz
+gewinnt, auch mit älterem Preisdatum (`preisekennzahl.cpp:1226-1330`). Unser Guard geht
+lexikografisch über `(preisdatum, angekommen_am)`: das jüngste Preisdatum gewinnt, bei gleichem
+Preisdatum die später angekommene Lieferung (die Korrektur). Weil die Projektion in der Sybase des
+Neusystems liegt und der Guard in Postgres, ist auch das eine Klammer-Transaktion (Entscheidung 9).
 
 Damit fällt auch das Serialisierungsargument bei **offenem Punkt B** weg: B1 (geführte Tabelle) und
 B2 (Abfrage) sind nebenläufigkeitsseitig beide unbedenklich. B entscheidet sich wieder allein an
@@ -524,7 +547,7 @@ Die Datenseite ja, die Außenwirkung nein.
 | parsen, prüfen | rein, beliebig wiederholbar | — |
 | Inbox schreiben | idempotent **nur wenn** auf `job_id` gescoped. PK ist `(job_id, zeilen_nr)`, ein naives Re-Insert knallt → `delete by job_id` + insert, oder Upsert | — |
 | Rückmeldung | — | **nicht idempotent** — zweite Mail beim Lieferanten. Guard: `rueckmeldung_gesendet_at` |
-| nach `kurs` | Upsert idempotent; `D` auf eine gelöschte Zeile ist No-op; `tmp_if_last` schreibt „nur wenn Preisdatum neuer" → No-op | `del_protokoll` bekommt einen zweiten Eintrag (`CONFIG.INI/Del_Protokoll` Default `0`) |
+| nach `kurs` | Upsert idempotent; `D` auf eine gelöschte Zeile ist No-op; die Projektion verliert am Guard-Prädikat, weil die Wiederholung dieselbe Ankunftszeit trägt → No-op | keine — `del_protokoll` wird nicht geschrieben (8.) |
 | Kennzahlen | deterministisch, gleiche Eingaben → gleiche Werte | `ASF.r_faktor` identisch — **aber** `r_faktor_ges` muss vorwärts kaskadieren (`MakeNextReinvestFaktor`), sonst bleiben die Folge-Ausschüttungen stale |
 
 Daraus die allgemeine Regel: **idempotente Datenarbeit von nicht-idempotenter Außenwirkung trennen
@@ -933,12 +956,23 @@ neben Inbox und Publikationsprotokoll, und das kleinste: vier Schlüsselspalten 
 
 Der Berechtigungsfilter — diese Logik gehört in die Stufe, nicht in die Tabelle:
 
-- ISIN in IFAS nicht auflösbar → `pool_if_kurs`, `kurs` unberührt
-- Preiswährung ≠ Fondswährung → nicht nach `kurs`
+- Preiswährung ≠ Fondswährung → nicht nach `kurs`, aber in die Projektion
 - TEST-ISIN, C-Plan, AIF, Fonds in Liquidation → Ausschlüsse (`InsPreise*`-Schalter)
-- vorläufiger Fonds mit `R`-Wert → Aktivierungsversuch, bei Misserfolg `pool_if_kurs`
-- Löschungen: `DeleteKurseReally` in `kurs`, bei `R` zusätzlich die abhängigen Kennzahlen,
-  `del_protokoll`
+- Löschungen: `DeleteKurseReally` in `kurs`, bei `R` zusätzlich die abhängigen Kennzahlen
+
+Drei Zweige dieser Liste werden **nicht** portiert:
+
+- **`pool_if_kurs`** — die Dead-Letter-Tabelle für nicht auflösbare ISINs hat keinen Leser, und
+  beide Schreibpfade sind zu: eine unbekannte ISIN verwirft schon der Eingang (`ERR_ISIN06`), und
+  der Vorl-Fonds-Zweig prüft `nRet` statt `nRet2` (`preisekennzahl.cpp:2760-2762`), feuert also nie.
+  Empirisch kein Schreiber seit 2012-03-30 (Voranalyse V2). Im Parallelbetrieb läuft die Tabelle als
+  Kontrolle mit: beide Seiten müssen unverändert bleiben.
+- **Fondsaktivierung** (`VorlFondsAktivieren` für einen vorläufigen Fonds mit `R`-Wert) — seit
+  2018-12-12 erledigt das die tägliche Aktion `isin_aktivieren`; die Sync-Stufe lässt `INV.status`
+  unberührt. Eigenes Stammdaten-Feature, siehe Tracker.
+- **`del_protokoll`** — kein Leser im Legacy (alle vier Fundstellen sind Schreiber; die einzige
+  lesende Stored Procedure `s_exp_del` wird nirgends aufgerufen), IFASNXT zieht die Preise per SSIS
+  direkt aus `kurs`, und `Del_Protokoll` ist per Default `0`. Schreiben wäre neues Verhalten.
 
 **Legacy tut hier schon dasselbe.** `cPreiseKennzahlen::MakePreiseEinzel` (`preisekennzahl.cpp`,
 gehört zu `preise.e`) läuft über die Preissätze und ruft inline `PreiseNachrechnung()` und danach
@@ -971,10 +1005,10 @@ Eine Zeile Spezifikation, aber sie entscheidet über ein stilles Auseinanderlauf
 
 Zwei Kosten der Verlagerung:
 
-- **`del_protokoll`-Rauschen.** Bei „`N` um 08:00, `D` um 09:00" schreibt Legacy nie nach `kurs`;
-  wir schreiben und löschen wieder. Endzustand identisch, aber IFASNXT bekommt eine Löschung für
-  etwas, das es nie gesehen hat. Relativiert: `CONFIG.INI/Del_Protokoll` ist per Default `0`
-  (Ist-Analyse 5.3) — produktiven Wert prüfen.
+- **Vorübergehende Zustände in `kurs`.** Bei „`N` um 08:00, `D` um 09:00" schreibt Legacy nie nach
+  `kurs`; wir schreiben und löschen wieder. Endzustand identisch, aber ein Leser dazwischen sieht
+  einen Preis, den es bei Legacy nie gab. Bewusst akzeptiert (User 2026-09-08) und als bekannte
+  Abweichung im Tabellenvergleich geführt.
 - **Mehrfachnachrechnung.** Drei Korrekturen an einem Fonds an einem Tag heißen dreimal
   `Nachrechnung(daTag, daEndTag)`, und `daEndTag` ist „heute". Legacy hat dasselbe Verhalten, es ist
   keine Regression, aber verschwenderisch.
@@ -985,8 +1019,9 @@ Nicht durch eine Transaktion abgedeckt: die Verteilung. MFT-Upload, NetApp-Archi
 ### 9. `tmp_if_last` ist eine Projektion, kein Eingang
 
 Die einzige tmp-Tabelle, die fachlich überlebt — aber nicht auf dem Weg nach `kurs`. Je
-`(ISIN, Währung, Code)` die Zeile mit dem höchsten `preisdatum`, ohne Löschsätze und ohne die drei
-Fondsklassen-Ausschlüsse (siehe unten).
+`(ISIN, Währung, Code)` **eine** Zeile, ohne Löschsätze und ohne die drei Fondsklassen-Ausschlüsse
+(siehe unten). Welche Zeile das ist, entscheidet bei Legacy die Verarbeitungsreihenfolge, bei uns
+der Guard über `(preisdatum, angekommen_am)`.
 
 #### Genau ein Leser
 
@@ -1005,7 +1040,11 @@ nicht die Einspielung.
 Vollständig, damit die Portierung nichts übersieht:
 
 - **schreiben:** `WriteLastKurse` (`preisekennzahl.cpp:1218ff`), Variante `WriteLastKurse2`
-  (`:1025ff`), Löschen im `R`-Löschpfad (`:1939`)
+  (`:1025ff`). Der `R`-Löschpfad (`DeleteLastKurse`, `:1849`) ist **toter Code**: nur im Header
+  deklariert, nirgends aufgerufen, und sein SQL (`:1939`) nennt Spalten (`waehrung`,
+  `cod_fliesscode`), die `tmp_if_last` gar nicht hat. Eine `D`-Lieferung löscht aus `kurs` und lässt
+  die Projektion stehen — der zurückgezogene Preis wird im Lauf-1-Fallback erneut veröffentlicht
+  (offener Punkt P)
 - **aufräumen, zwei Pfade:** `CleanUpTmpIfLast` (`m_fp_rec.CPP:5555ff`, nur Inland) und ein zweiter
   in der Einspielung (`c_preise.cpp:250,450-472`)
 - **ISIN-Umbenennung:** `ISIN_UPD.CPP:228` pflegt `txt_bez` mit — Wartungswerkzeug, kein Verbraucher
@@ -1028,9 +1067,10 @@ hinter `InsPreiseCPlan` / `InsPreiseAIF` / `InsPreiseFondsInLiquidation`. Alle d
 **Stammdaten**.
 
 Und `WriteLastKurse` liegt **außerhalb** von `if (nRet == 1)`, hängt also nicht am Erfolg des
-`kurs`-Writes. Genau deshalb trägt `tmp_if_last` Werte, die `kurs` nie sieht (unbekannte ISIN,
-Währungsabweichung) — und ist **nicht** aus `kurs` ableitbar. Dieselbe Einsicht trägt 11.: `kurs`
-sieht nicht alles, was geliefert wurde.
+`kurs`-Writes. Genau deshalb trägt `tmp_if_last` Werte, die `kurs` nie sieht — und ist **nicht** aus
+`kurs` ableitbar. Lebend ist davon nur noch ein Grund: die **Preiswährung ≠ Fondswährung**. Die
+unbekannte ISIN ist tot (der Eingang verwirft sie), und der Reihenfolge-Unterschied verschwindet mit
+unserem Guard. Dieselbe Einsicht trägt 11.: `kurs` sieht nicht alles, was geliefert wurde.
 
 #### Warum es die Inbox nicht sein kann
 
@@ -1042,18 +1082,22 @@ auf `'N'` — Löschsätze wären strukturell unsichtbar.
 #### Nebenläufigkeit
 
 Der Guard aus **Zwei Server, ein Pool** gilt auch hier, und zwar lexikografisch über
-`(preisdatum, angekommen_am)`: Legacys „nur wenn Preisdatum neuer" würde eine Korrektur zum
-*gleichen* Preisdatum verwerfen. Weil `tmp_if_last` unsere eigene Projektion ist, kann die Zeile
-`angekommen_am` mitführen. Und weil `letzte_preise` in Postgres liegt, ist der Guard hier ein
-einzelnes bedingtes Update in der eigenen Zeile — keine Klammer-Transaktion nötig.
+`(preisdatum, angekommen_am)`: Legacy vergleicht gar kein Datum, unser Guard lässt das jüngste
+Preisdatum gewinnen und bei gleichem Preisdatum die später angekommene Lieferung. Weil die
+Projektion in `kurs..tmp_if_last` liegt und der Guard in Postgres, ist auch das eine
+**Klammer-Transaktion**: die bedingte Aktualisierung von `letzte_preise` beansprucht den Schlüssel
+und hält die Zeile, während der `tmp_if_last`-Write in seiner eigenen Transaktion committet.
+`preis_herkunft` kann den Guard nicht übernehmen — sein Schlüssel enthält `dat_kurs`, die Projektion
+hat je (ISIN, Währung, Code) nur einen Platz.
 
-#### Initialbefüllung
+#### Initialbefüllung — entfällt
 
-Beim Start — des Parallelbetriebs wie später des Echtbetriebs — ist `letzte_preise` leer. Ohne Seed
-verfehlt der Lauf-1-Fallback 65 Tage lang fast alle Fonds, und der B3-Diff gegen die Legacy-Tabelle
-wäre von Tag 1 an rot. Deshalb ein einmaliger Migrationsschritt: Seed aus `kurs..tmp_if_last` des
-Altsystems, mit synthetischem `angekommen_am` (Seed-Zeitpunkt); ab dann führt die Kette die Tabelle
-selbst.
+Die Projektion kommt mit dem einmaligen Voll-Sync der Datenbank zum Go-live in die Neusystem-Sybase
+und ist von Tag 1 an vollständig. Der Guard `letzte_preise` startet leer, und das bleibt so (User
+2026-09-11): der erste Write je Schlüssel findet keine Guard-Zeile und verhält sich damit wie Legacy
+(„zuletzt verarbeitet gewinnt"), ab dem zweiten greift unsere Regel. Ein Seed hätte die strengere
+Regel auch gegen die mitgebrachten Altbestände durchgesetzt und eine Korrektur zu einem älteren
+Datum abgelehnt, die Legacy annimmt — ein Unterschied im Parallelbetrieb ohne Gegenwert.
 
 #### Wozu der Fallback da ist, steht nirgends
 
@@ -1239,6 +1283,16 @@ diffen, und das ist B1. Schlimmer, B2 würde die Legacy-Tabelle systematisch *ni
 sich Stammdaten geändert haben. Für die Vergleichbarkeit ist B2 also nicht neutral, sondern
 schlechter.
 
+**Verortung, korrigiert 2026-09-11 (Designreview).** Die geführte Tabelle *ist*
+`kurs..tmp_if_last`: sie liegt in der Sybase des Neusystems und wird dort Legacy-getreu geschrieben,
+statt als neue Postgres-Tabelle nachgebaut zu werden. Der frühere Zuschnitt widersprach sich selbst
+— B wurde wegen der Parallelbetrieb-Vergleichbarkeit gewählt und dann in das DBMS gelegt, in dem der
+Vergleich am schwersten ist; und Entscheidung M („neue Tabellen nach Postgres") wurde auf eine
+Tabelle angewandt, die nicht neu ist. `kurs.letzte_preise` in Postgres bleibt, jetzt als Guard
+**und** Spiegel: es trägt `(preisdatum, angekommen_am)` für die Reihenfolge und spiegelt den Wert,
+damit die Kette den Stand ohne Sybase-Zugriff kennt. Ob `tmp_if_last` überhaupt gebraucht wird,
+hängt an O und P — mögliche Fremdleser sind KUPL und KMS; bis zur Antwort wird sie geführt.
+
 ### C. Kennzahlen — Invalidierung oder Auftragsübergabe? — **C1 faktisch gesetzt**
 
 Mit der Zweiteilung aus 10. (Stufe plus Sweep) braucht der Sweep ein Kriterium, an dem er erkennt,
@@ -1400,6 +1454,10 @@ Klammer-Transaktion über zwei DBMS samt Fehlerfenster-Analyse — beschreibt *Z
 und mit der Sybase-Migration 2027 entfällt er. `kurs.guelt` umzudeuten bleibt ebenso
 ausgeschlossen (C3 sieht `guelt` als Reparatursignal vor).
 
+**Präzisierung 2026-09-11:** M gilt für **neue** Tabellen. Eine Legacy-Tabelle, die das Neusystem
+weiterführt, bleibt, wo sie ist — `kurs..tmp_if_last` wird in der Neusystem-Sybase geschrieben
+(Entscheidung B), nicht nach Postgres kopiert.
+
 ### N. Wozu dient der `tmp_if_last`-Fallback?
 
 Aus Entscheidung 9. Der Mechanismus ist im Legacy-Code dokumentiert, der Zweck nicht. Weil `I2` ein
@@ -1434,9 +1492,8 @@ Entscheidung 6 wieder aufwerfen würde — deshalb vor der Filegenerierung klär
 - **`AllowOldPreisFormat`, `AllowTxtExt4PreisFile`** — davon hängt ab, ob das alte Format 1
   bedient werden muss.
 - **`MFT_*.INI`** — Zielverzeichnisse und Accounts sind nicht im Repo.
-- **`pool_if_kurs`-Semantik** — Upsert oder Append, welcher Schlüssel? Davon hängt ab, ob der
-  monotone Guard auch dort gilt (zwei Lieferungen zur selben unbekannten ISIN, außer der Reihe
-  verarbeitet).
+- ~~**`pool_if_kurs`-Semantik**~~ — erledigt (V2): kein Schreiber seit 2012-03-30, die Tabelle wird
+  nicht portiert (8.).
 - **Vollständiger `fplausib.txt`** mit Treffern in allen Abschnitten, für die Meldungstexte.
 - **Aktuelle `preis.dtd`**, wie sie tatsächlich ausgeliefert wird.
 - **`datum_min`-Vergleichsrichtung** (`M_INSERT.CPP:2020,2906` vergleichen mit `> daDatumMin`,
@@ -1448,7 +1505,7 @@ Entscheidung 6 wieder aufwerfen würde — deshalb vor der Filegenerierung klär
 ## Abgrenzung
 
 **Enthalten:** die inländische Kette — Eingang, Plausibilität, Filegenerierung, Verteilung,
-Einspielung nach `kurs`, `tmp_if_last`, `pool_if_kurs`; die Fehlmeldung (11.); die
+Einspielung nach `kurs` und `tmp_if_last`; die Fehlmeldung (11.); die
 Kennzahlenberechnung als Stufe plus Sweep (10. legt die Naht fest, nicht die Formeln).
 
 **Nicht enthalten:** die Formeln der Kennzahlen-/Performance-/Volatilitätsnachrechnung
@@ -1505,25 +1562,37 @@ Träger ist ein **`PreisMeldungDiffJob`** nach dem Muster `IsinAnforderungsliste
 `ParallelbetriebJobSubmissionService` erkennt Preismeldungs-Files und ruft den heutigen Stub
 `PreisMeldungDiffJobSubmissionService` (derzeit BadInput).
 
-Vier Diff-Ebenen:
+Vier Diff-Ebenen, aber nicht alle im selben Job:
 
-| Ebene | Neusystem | gegen |
-|---|---|---|
-| Rückmeldung | das erzeugte ZIP (`data.log`/`error.log`/`info.log`) | das Rückmelde-ZIP des Altsystems |
-| Ausgabefiles | `preis.csv`/`solva.csv`, Reports | die Files des Altsystems |
-| DB-Stand | `kurs`, `pool_if_kurs`, `del_protokoll` in der Neusystem-Sybase | dieselben Tabellen im Altsystem (`DatabaseCompareService`) |
-| Projektion | `kurs.letzte_preise` (Postgres) | `kurs..tmp_if_last` im Altsystem — der B3-Diff |
+| Ebene | Neusystem | gegen | Träger |
+|---|---|---|---|
+| Rückmeldung | das erzeugte ZIP (`data.log`/`error.log`/`info.log`) | das Rückmelde-ZIP des Altsystems | `PreisMeldungDiffJob` |
+| Ausgabefiles | `preis.csv`/`solva.csv`, Reports | die Files des Altsystems | `PreisMeldungDiffJob` |
+| DB-Stand | `kurs`, `pool_if_kurs` in der Neusystem-Sybase | dieselben Tabellen im Altsystem | generischer Tabellenvergleich |
+| Projektion | `kurs..tmp_if_last` in der Neusystem-Sybase | dieselbe Tabelle im Altsystem | generischer Tabellenvergleich |
+
+**Die beiden DB-Ebenen gehören nicht in den Lieferjob** (Designreview 2026-09-11). Legacy schreibt
+`kurs` und `tmp_if_last` im Tagesjob-Schritt 4 am Tagesende, das Neusystem Minuten nach der
+Lieferung; ein Vergleich im Lieferjob am selben Tag ist per Konstruktion rot, und „nur berührte
+Schlüssel" sieht keine Drift. Sie werden ein eigener, **geplanter und generischer Tabellenvergleich
+Sybase alt gegen Sybase neu**, der nach dem Legacy-Tagesjob läuft und je Szenario konfiguriert wird
+(Tabelle, Schlüsselfenster, bekannte Abweichungen). Er gilt für alle Tabellen, die das Neusystem
+schreibt — später auch `ASF` und die Kennzahlen — und macht den Sonderfall „Preismeldung"
+überflüssig. `pool_if_kurs` läuft darin als Kontrolle „beidseitig unverändert" (8.).
 
 **Außenwirkungen sind unterdrückt:** keine Rückmeldungs-Mails an Lieferanten, kein MFT/T2S-Upload,
 keine Fehlmeldungs-Mails. Die Rückmeldung wird als File erzeugt und gedifft statt versandt; die
 Ergebnisartefakte hängen am Diff-Job (Muster `resultBundleFile`).
 
-**Bekannte Abweichungen** müssen im Diff konfigurierbar geführt werden — dasselbe Muster wie die
-`ValidationSettings` der STM-Return-File-Diffs. Von Anfang an bekannt: das explizite `I3` aus D und
-das `del_protokoll`-Rauschen aus 8.
+**Bekannte Abweichungen** müssen konfigurierbar geführt werden — dasselbe Muster wie die
+`ValidationSettings` der STM-Return-File-Diffs. Von Anfang an bekannt: das explizite `I3` aus D;
+`kurs.guelt` (bei uns die Lieferzeit, bei Legacy das Tagesende); die vorübergehenden
+`N`-dann-`D`-Zustände aus 8.; und die Projektion bei fallendem Preisdatum, wo unser Guard strenger
+ist als Legacy.
 
-Der Diff-Job wächst mit den Schnitten: nach Schnitt 1 difft er die Rückmeldung, nach Schnitt 2 den
-DB-Stand und die Projektion, nach den Schnitten 4/5 die Ausgabefiles.
+Der Diff-Job wächst mit den Schnitten: nach Schnitt 1 difft er die Rückmeldung, nach den
+Schnitten 4/5 die Ausgabefiles. DB-Stand und Projektion kommen aus dem generischen
+Tabellenvergleich.
 
 ---
 

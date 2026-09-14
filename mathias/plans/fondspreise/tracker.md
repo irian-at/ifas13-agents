@@ -98,8 +98,8 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
 
 | # | Schnitt | blockiert durch | Detail-Plan | Status |
 |---|---|---|---|---|
-| 1 | Lieferkette Stufe 1 — Eingang, Inbox, Rückmeldung | ~~`tax_code`~~ (erhoben, V1) | [2026-09-02-fondspreise-schnitt1-eingang-inbox-rueckmeldung.md](2026-09-02-fondspreise-schnitt1-eingang-inbox-rueckmeldung.md) | **umgesetzt + gepusht** (ifas13 `1f3d9f393`/`0dbd47271`; Byte-Verifikation des Rückmelde-Formats wartet auf echte Antwort-ZIPs) |
-| 2 | Stufe 2 — Sync, Guard (Klammer-Transaktion), Projektion `tmp_if_last` + `letzte_preise` als Guard/Spiegel, Rebuild | O/P (nur für „Projektion überhaupt?") | [2026-09-08-fondspreise-schnitt2-sync-guard-letzte-preise.md](2026-09-08-fondspreise-schnitt2-sync-guard-letzte-preise.md) | **in Arbeit** — AP1–AP8 fertig; **Designreview 2026-09-11 → AP11 umgesetzt** (Projektion nach `kurs..tmp_if_last` in der Neusystem-Sybase, `letzte_preise` ist Guard + Spiegel, Diff-Ebenen 3/4 ausgebaut; Plan D11–D14, *Stand AP11*); AP9–AP10 offen; Branch `feat/fondspreis` (`30b6adec8`, `b5af3541d`, `1470b78ba`, `26edc0ad7`, `8f9491f73`, `3c4a6d63b`, `903f7dd60`, Merge `origin/master` `1ba887699`), nicht gepusht |
+| 1 | Lieferkette Stufe 1 — Eingang, Inbox, Rückmeldung | ~~`tax_code`~~ (erhoben, V1) | [2026-09-02-fondspreise-schnitt1-eingang-inbox-rueckmeldung.md](2026-09-02-fondspreise-schnitt1-eingang-inbox-rueckmeldung.md) | **umgesetzt + gepusht** (ifas13 `1f3d9f393`/`0dbd47271`); **Byte-Verifikation am 2026-09-14 durchgeführt** — `statistics.log` und `data.log` mussten auf das echte Format umgebaut werden, zwei Golden-File-Tests stehen (siehe *Erledigt*). Rest siehe die drei neuen offenen Punkte unten |
+| 2 | Stufe 2 — Sync, Guard (Klammer-Transaktion), Projektion `tmp_if_last` + `letzte_preise` als Guard/Spiegel, Rebuild | O/P (nur für „Projektion überhaupt?") | [2026-09-08-fondspreise-schnitt2-sync-guard-letzte-preise.md](2026-09-08-fondspreise-schnitt2-sync-guard-letzte-preise.md) | **umgesetzt** — AP1–AP11 fertig (Designreview 2026-09-11: Projektion nach `kurs..tmp_if_last` in der Neusystem-Sybase, `letzte_preise` ist Guard + Spiegel, Diff-Ebenen 3/4 ausgebaut; Plan D11–D14), AP9 Tests und AP10 Doku am 2026-09-14, dazu der Deploy-Check mit Schreibkontext-Fix und Detailseite. Branch `feat/fondspreis`: bis `fff8b561f` gepusht, die **8 Commits vom 2026-09-14 noch nicht** (`cd5ba62f2` … `2606dc1b2`). Offen bleibt nur, was bewusst nicht verdrahtet ist (Rebuild, Cleanup) |
 | 3 | `WirksamePreismeldungen` als Komponente, isoliert getestet | — | — | offen |
 | 4 | Sammelreport Lauf 1 — Plausi, Files, Publikationsprotokoll, Verteilung | — | — | offen |
 | 5 | Lauf 2 als Delta, inkl. `I3` gegen das Publikationsprotokoll | N, F | — | offen |
@@ -110,34 +110,138 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
 
 ## 4. Weitere Schritte
 
-- [ ] **Vor dem finalen Merge nach `master`: Deploy-Check Fondspreise** (User 2026-09-11) — was der
-      Stand `feat/fondspreis` beim Deploy tatsächlich tut, einmal komplett durchgehen. Befund vom
-      2026-09-11: von sich aus passiert nichts (kein Cron, kein MFT-Abholer, keine Mail); alles hängt
-      an einem eingereichten Preismeldungs-ZIP über den UI-Upload der STM-Nachrechnungsseite oder
-      `/api/recalculations`. Dann laufen Eingang, Inbox, Rückmeldungs-ZIP (nur Filestore), Stufe 2
-      nach `kurs`/`tmp_if_last` der Business-Sybase plus Guard/Spiegel in Postgres, Ebene-1-Diff.
-      Zu prüfen:
-      - [ ] **Schreibkontext**: REST läuft im Business-Kontext (`sybase-ifasneu`), der UI-Upload im
-            gerade gewählten UI-Kontext — Default im Server-Deployment ist `sybase-gast`, das
-            Altsystem. Der Sync-Pfad prüft das `writeable`-Flag nicht (nur `ArchiveService` nutzt den
-            `DatabaseWriteSwitch`). Entscheiden: Guard im Sync-Pfad bzw. Ablehnung nicht
-            beschreibbarer Kontexte bei der Job-Submission
-      - [ ] **Automatischer Feed**: postet ein MFT-seitiger Automatismus eingehende ZIPs an
-            `/api/recalculations`? Dann wird ab dem Deploy jede Preismeldung verarbeitet und in die
-            Neusystem-Sybase geschrieben. Steht nicht im Repo — Betrieb fragen
-      - [ ] **`tax_code` in der Fondspreise-Postgres** befüllen (YAML-Abzug von GAST im
-            Testdatenmodul, per Import einspielen), sonst kennt der Eingang keine Codes
-      - [ ] **Flyway-Flag `OEKB_IFAS_SYBASE_IFASNEU_FLYWAY_MIGRATION_ENABLED`**: ist es gesetzt,
-            scheitern V065/V067 (`create table kurs`/`tmp_if_last`), wo die Tabellen existieren —
-            dasselbe Muster wie V041/V062. Postgres-Flyway läuft immer: V065–V067 legen
-            `preis_herkunft`, `letzte_preise` und leere Kopien von `kurs`/`tmp_if_last` an
-      - [ ] **Nicht verdrahtet, bewusst**: Cleanup beendeter Fonds, Rebuild, Guard-Seed, generischer
-            Tabellenvergleich, Sammelreport/Filegenerierung, Fehlmeldung, Kennzahlen — bestätigen,
-            dass das für den ersten Deploy so gewollt ist
-      - [ ] **Sichtbarkeit**: der Job erscheint nur in der generischen Aufgaben-Liste über den
-            Typ-Filter; keine eigene Seite. Reicht das für den Parallelbetrieb?
-      - [ ] Flyway-Nummern gegen `origin/master` und Geschwister-Branches erneut prüfen
-            (`mathias/rules/flyway-versions-after-merge.md`)
+- [x] ~~**Vor dem finalen Merge nach `master`: Deploy-Check Fondspreise**~~ — durchgeführt
+      2026-09-14. Ausgangsbefund bestätigt: von sich aus passiert nichts (kein Fondspreise-Cron,
+      `MftService` ist reiner Sender, keine Referenz auf `/api/recalculations` im Repo); alles hängt
+      an einem eingereichten Preismeldungs-ZIP. Ergebnis je Punkt:
+      - [x] **Schreibkontext — behoben** (`9e5f0ecdb`). Der Befund war schärfer als notiert: der Job
+            erbte den ambienten Kontext des Einreichers, und **beide** Einstiege binden dort das
+            Altsystem — der REST-Pfad reicht *explizit* in `withLegacySystemDbContext` ein
+            (`RecalculationRestController:76`), die UI per `web-ui-default.db-key`. Mit `sybase-gast`
+            ohne Schreibrechte (User 2026-09-14) heißt das: die Stufe 2 hätte über keinen der beiden
+            Einstiege je erfolgreich laufen können. Jetzt läuft die ganze Kette in
+            `database-context.business.db-key`, und Einreichung wie Ausführung lehnen einen nicht
+            beschreibbaren Kontext ab (`DatabaseContextHelper.requireWriteable`). Muster dafür ist die
+            Ausschüttungs-Kette (konfigurierte Keys statt geerbtem Kontext); das StmCalc-Muster
+            (Ziel-DB im Formular, auf beschreibbare gefiltert) bleibt unangetastet, weil das
+            Recalc-Upload-Formular mit STM/ISIN/Ausschüttung geteilt ist
+      - [ ] **Automatischer Feed**: offen, Frage an den Betrieb — postet ein MFT-seitiger
+            Automatismus eingehende ZIPs an `/api/recalculations`? Im Repo steht nichts davon. Mit
+            dem Schreibkontext-Fix ist die Frage entschärft, aber nicht beantwortet: ab dem Deploy
+            würde jede so eingereichte Preismeldung in die Neusystem-Sybase geschrieben
+      - [x] ~~**`tax_code` in der Fondspreise-Postgres** befüllen~~ — **Annahme war falsch.**
+            `TaxCode` mappt `kurs.dbo.tax_code` und wird laut `package-info` im **Business**-Kontext
+            gelesen; `PreismeldungStammdatenService.createProvider()` läuft im Kontext des Jobs. Die
+            Postgres-Tabelle aus V062 ist reine Local/CI-Provisionierung und wird im
+            Server-Deployment nie gelesen. Nötig ist stattdessen, dass die verwendete
+            Business-Sybase die Legacy-Tabelle trägt — bei `sybase-ifasneu` also der Voll-Sync.
+            **Test-Blindfleck dabei:** in den H2-Tests sind Fondspreise- und Business-Kontext
+            dieselbe DB, deshalb funktioniert das Seeding über `withFondspreiseDbContext` dort
+            zufällig. Lokal ohne `tax_code` lehnt der Eingang jede Zeile ab (am 2026-09-14 im
+            laufenden `LocalH2OnlyIfasApplication` beobachtet: 2 Zeilen, 0 angenommen, 4 Bugs).
+            **Nachtrag 2026-09-14 (User-Frage):** derselbe falsche Kontext-Schluss stand hinter der
+            Entscheidung, `standard_TAX_CODE_data.yaml` aus dem Standard-Basisimport herauszuhalten
+            (`bef9800c6`: „the Fondspreise tables live in their own database"). Das gilt für
+            `preismeldung_zeilen`, nicht für `tax_code` — und `tax_code` war das Einzige, was
+            `FondspreiseBasedataCreator` trug. Damit kannte **jede** per Basisimport bestückte DB
+            keine Preiscodes. Behoben in `f89c5d06b`: die Tax-Code-DTOs hängen jetzt in
+            `BasedataCreator`, der Fondspreise-Creator ist weg, `BasedataCreatorTest` deckt den
+            Import auf allen drei DBMS mit ab
+      - [x] **Flyway-Flag** — entschärft: `SybaseIfasNeu.flyway` hängt an
+            `@ConditionalOnProperty(OEKB_IFAS_SYBASE_IFASNEU_FLYWAY_MIGRATION_ENABLED)` mit
+            explizitem „nur für lokale Docker-Test-DBs". Aus → V065/V067 Sybase laufen nicht.
+            Postgres-Flyway läuft immer und legt `preis_herkunft`, `letzte_preise` plus ungenutzte
+            Kopien von `kurs`/`tmp_if_last` an
+      - [x] **Nicht verdrahtet** — bestätigt: `cleanupEndedFunds`, `rebuildLetztePreise`,
+            `seedGuardFromTmpIfLast`, `importLegacyLastPrices` haben **nur Test-Aufrufer**. Ebenso
+            fehlen generischer Tabellenvergleich, Sammelreport, Fehlmeldung, Kennzahlen. Für den
+            ersten Deploy so gewollt
+      - [x] **Sichtbarkeit — behoben** (`d54277af1`). Der Befund war schlechter als notiert: es gab
+            keine Preismeldungs-Seite **und** die generische Aufgaben-Detailseite liefert nur
+            `protocolFile`, das dieser Job nie schreibt — das Result-Bundle war aus der UI gar nicht
+            erreichbar. Jetzt eigene Detailseite nach dem Muster `IsinAnforderungDiffDetailPage`
+            (`/ui/preis-meldung-diffs/{id}`), verlinkt aus der Aufgaben-Detailseite, mit
+            Sync-Protokoll und Rückmeldungs-Diff inline plus beiden Bundle-Downloads. Am 2026-09-14
+            im laufenden System geprüft
+      - [x] **Flyway-Nummern** — `master`/`stable`/`production` enden bei V064, unsere V065–V067
+            sind frei. Kollision nur mit `origin/ausschuettung` (eigene V065/V066); wer später
+            mergt, nummeriert um
+
+- [x] ~~**Menüpunkt „Testen → Preismeldungs-Diffs" samt Listenseite**~~ — umgesetzt 2026-09-14
+      (User). Der Deploy-Check hatte nur die *Detail*-Sichtbarkeit repariert (`d54277af1`); der
+      Einstieg fehlte, man musste über *System → Aufgaben* mit `taskType=PreisMeldungDiff` filtern.
+      Gebaut nach dem Muster der ISIN-Diffs:
+      - `PreisMeldungDiffListPageController` + `preis-meldung-diff-list.html` unter
+        `/ui/preis-meldung-diffs` — dieselben Filter wie die ISIN-Liste (Text, Status, Stichtag,
+        Fehler, Warnungen, Archiv), sortierbare Spalten, Bulk-Archivieren/-Dearchivieren.
+        Spalten zusätzlich zur ISIN-Vorlage: **Lieferant**, **Rückmeldung** (Urteil),
+        **Abgelehnt** (`bugZeilenCount`) und **Veto** — damit sieht man ohne Öffnen, wie oft die
+        Ausschüttung eine Löschung verweigert hat (offener Punkt *Veto-Befunde persistent
+        auswerten*). Dafür neu: `PreisMeldungDiffJobQueryService.getJobs(...)` mit
+        `Specification` (Textfilter zusätzlich über `lieferant`) und
+        `PreisMeldungDiffJobSubmissionService.setArchivedBatch`
+      - Navbar-Eintrag „Preismeldungs-Diffs" in `layout.html`, `activePage` der Detailseite von
+        `jobs` auf `preis-meldung-diffs` umgestellt, Zurück-Link der Detailseite zeigt jetzt auf
+        die Liste statt auf die Aufgaben
+      - `WebUiAuthorization.canAccessPreisMeldungDiffs()` ergänzt und in `canAccessTesten()`
+        aufgenommen — `IfasRight.PREIS_MELDUNG_DIFFS` gab es schon, war aber in der
+        Gruppen-Oder-Verknüpfung nicht enthalten
+      - **Kein endgültiges Löschen** wie bei den ISIN-Diffs: `preismeldung_zeilen` hängt ohne FK
+        über `job_id` am Job (V061), eine Löschung ließe die Inbox-Zeilen verwaist zurück. Das
+        gehört mit dem produktiven Job (nächster Punkt) gebaut
+      - **Eigenes Upload-Formular** `/ui/preis-meldung-diff` (User, gleicher Tag — der
+        „Neuer Auftrag"-Button hatte vorher auf `/ui/stm-recalc` und damit auf eine Seite namens
+        „Neue Rekalkulation" gezeigt): `PreisMeldungDiffFormPageController` +
+        `preis-meldung-diff-form.html` nach dem Muster des ISIN-Diff-Formulars, mit Lieferant
+        (inkl. `lieferant-datalist`-Fragment, Controller dafür in `LieferantSuggestionsAdvice`
+        eingetragen), Stichtag, ZIP und Notizen. Es prüft **vor** dem Einreichen über
+        `Resources.peek` + `SteuerMeldungBundles.countNumberOfRecalculationSuitableFiles`, dass
+        `hasOnlyPreisMeldungFiles()` gilt, und meldet sonst am Formular, was stattdessen im ZIP
+        liegt — ohne einen Job anzulegen. Damit erzeugt ein versehentlich hier hochgeladenes
+        STM-Bundle keine stille Rekalkulation mehr. `IfasRight.PREIS_MELDUNG_DIFFS` deckt jetzt
+        auch die Singular-Pfade ab. Der Dispatch-Weg über `/ui/stm-recalc` bleibt unverändert
+        bestehen
+      - **Detailseite abgespeckt** (User, gleicher Tag): der Stufe-2-Block und das Sync-Protokoll
+        sind als HTML-Kommentar auskommentiert, die verbleibende Karte heißt nur noch „Eingang und
+        Rückmeldung" (ohne Stufen-Präfix, solange keine zweite Stufe danebensteht). Der
+        `syncReport` wird im Detail-Controller nicht mehr ins Model gelegt — er speist nur diesen
+        Block und hätte sonst je Seitenaufruf das Ergebnis-ZIP gelesen. Sichtbar bleiben Kopfkarte,
+        Eingang und Rückmeldung, Rückmeldungs-Diff, Inbox-Zeilen und beide Downloads. Kommt mit dem
+        produktiven Preismeldungs-Job zurück
+      Im laufenden `LocalH2OnlyIfasApplication` end to end geprüft (Beispielfile
+      `OEKB_MELD_20260512_131610.csv`): Liste, Detail-Link, Zurück-Link, Bulk-Archivieren und
+      -Dearchivieren, Text-/Fehler-/Status-/Stichtags-Filter, alle Sortierspalten. Das Formular
+      dazu: Einreichung läuft bis `COMPLETED` durch (der `peek`-Ersatzstream ist also lesbar, mit
+      identischem Ergebnis wie über das Recalc-Formular), ein STM-Bundle und ein ZIP ohne bekannte
+      Datei werden beide am Formular abgewiesen, ohne dass irgendwo ein Job entsteht
+
+- [ ] **Produktiver Preismeldungs-Job (`persistResult=true`)** — die Zweiteilung analog zur
+      STM-Seite (User 2026-09-14). Phase 1 ist gebaut (`37212a931`): die Sync-Stufe trennt
+      Entscheiden von Speichern über `persistResult`, der `PreisMeldungDiffJob` des Parallelbetriebs
+      entscheidet nur. Offen ist Phase 2: ein eigener Job-Typ analog `StmCalcJob` — Entity, Flyway,
+      Submission-/Execution-/Query-Service, Detailseite, Dispatcher-Zweig; später dazu die
+      Außenwirkungen (Rückmeldungs-Mail, MFT-Upload), die der Diff-Job unterdrückt. Umfang etwa wie
+      Schnitt 1; der Parallelbetrieb braucht ihn nicht, der Echtbetrieb schon.
+      **Vorbild:** `SteuerlicheErmittlungRecalcOptions.persistResult` — `CalculationDomainService`
+      (`:125`, `DEFAULT`, persistiert) und `RecalculationDomainService` (`:471-479`, persistiert
+      nicht) rufen denselben `ermittlungDomainService.processLieferung(...)`
+
+- [ ] **Ausschüttungs-Keys auf `business-new-introduced` ziehen** (Rest des Deploy-Check-Befunds
+      2026-09-14): `database-context.fondspreise.db-key` ist am 2026-09-14 zu
+      `business-new-introduced` geworden (`2da0312a7`) und benennt jetzt die Regel statt des
+      Features. Offen bleiben `ausschuettung-tmp-db-key` und `ausschuettung-asf-db-key` — sie tragen
+      in allen Profilen denselben Wert, hängen an `@Value` statt an `DatabaseContextProperties` und
+      haben dort selbst ein `// todo use DatabaseContextProperties instead!`
+      (`AusschuettungWorkQueueHandler:46,50`). Fremder Code, deshalb nicht mitgezogen.
+      **Achtung:** `ausschuettung_tmp` ist neu und gehörte nach `business-new-introduced`, `ASF`
+      dagegen ist eine Alt-Tabelle und gehörte nach `business` (siehe nächster Punkt)
+
+- [ ] **Befund: `ASF` widerspricht der Verortungsregel** (Deploy-Check 2026-09-14). Die Regel des
+      Users lautet: *Tabellen, die es schon gab, füllt IFAS-neu weiterhin in der Sybase — Fremdsysteme
+      wie KUPL/KMS lesen sie auch nach der Ablöse; nur wirklich neue Tabellen gehen nach Postgres.*
+      `ASF` ist eine Alt-Tabelle, wird von der Ausschüttungs-Kette aber nach Postgres geschrieben
+      (`database-context.ausschuettung-asf-db-key=postgres-server`). Fremder Code, hier nur
+      dokumentiert — mit Markus bzw. dem Ausschüttungs-Team klären
 - [x] **Zeitlicher Ablauf als eigener Schritt** (User 2026-09-08) — erledigt:
       [2026-09-08-fondspreise-tagesablauf-alt-vs-neu.deck.html](2026-09-08-fondspreise-tagesablauf-alt-vs-neu.deck.html),
       die Tages-Zeitachse Alt gegen Neu als Gegenüberstellung, plus dieselben Bausteine als
@@ -184,21 +288,43 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
       D13 nicht mehr für den Diff-Job nötig, aber für den generischen Tabellenvergleich und als
       realistische Umgebung für die beiden Cross-DB-Klammern (`kurs`, `tmp_if_last`). Vor
       Parallelbetrieb-Start aufsetzen
-- [ ] **Konzept nachziehen (Runde 10, Designreview 2026-09-11)**: Entscheidung 9 Schreiberliste
-      (`R`-Löschpfad toter Code, unbekannte ISIN tot), Entscheidung B Verortung (B3 bleibt, Tabelle
-      ist `kurs..tmp_if_last` in der Neusystem-Sybase, `letzte_preise` Guard + Spiegel), Abschnitt
-      *Parallelbetrieb* (Ebenen 3/4 → generischer Vergleich), Entscheidung M nur für **neue**
-      Tabellen; Deck neu erzeugen. Details im Schnitt-2-Plan unter AP10
+- [x] ~~**Konzept nachziehen (Runde 10, Designreview 2026-09-11)**~~ — erledigt 2026-09-14 (AP10):
+      Runde 10 im Änderungsprotokoll, Entscheidungen 8/9/B/M und der Abschnitt *Parallelbetrieb*
+      korrigiert, die drei „nur wenn Preisdatum neuer"-Stellen richtiggestellt, Deck nachgezogen
 - [ ] **Schnitt 6 — `Calc*`-Gates**: Legacy trennt je Fondskategorie das *Speichern* der Preise
       (`InsPreiseCPlan`/`InsPreiseAIF`/`InsPreiseFondsInLiquidation`) vom *Nachrechnen* der
       Kennzahlen (`CalcCPlan`/`CalcAIF`/`CalcFondsInLiquidation`, `preisekennzahl.cpp:2795-2820`).
       Die Sync-Entscheidung (Schnitt 2) kennt nur Ersteres; `marksKorrektur` sagt „Kennzahlen ab
       Preisdatum veraltet", nicht „nachrechnen erlaubt". Die Kennzahlen-Stufe muss die `Calc*`-Gates
       selbst anwenden — Befund aus dem Review vom 2026-09-10
-- [ ] **Echte Preis-Antwort-ZIPs anfordern** (Fachabteilung/Betrieb): idealerweise die
-      Altsystem-Antworten zu den 4 Beispielfiles vom 12.05.2026 (`docs/Fondspreise/beispiele/`,
-      passend zu `fplausib.txt`) — nötig für die Byte-Verifikation des Rückmeldungs-Diffs
-      (Schnitt 1, blockiert nicht die Implementierung)
+- [x] ~~**Echte Preis-Antwort-ZIPs anfordern**~~ — **geliefert 2026-09-14** (User):
+      `docs/Fondspreise/beispiele/testdaten_september.zip` mit dem MFT-Archiv vom 01.–08.09.2026 —
+      103 Preismeldungs-Antworten aus 10 Lieferantenverzeichnissen (`Meldung/db_*`), dazu 46
+      STM-Antworten und 5 Bereitstellungs-ZIPs (`Bereitstellung/preis*.zip`, Auslieferung für
+      Schnitt 5). Die Verifikation ist damit gelaufen, Ergebnis siehe *Erledigt*
+
+- [ ] **Eingang sammelt Bugs je Zeile, statt bei der ersten Meldung abzubrechen**: das Altsystem
+      führt für Format 3 alle Prüfungen einer Zeile durch und setzt nur `nIsOk = 0`
+      (`M_INSERT.CPP:1123-1200`); `PreismeldungLineValidations.checkLine` kehrt bei der ersten
+      Meldung zurück. In der September-Stichprobe liefert `db_gut` vom 01.09. dafür den Beleg: eine
+      Zeile erzeugt im Altsystem drei Bugs (Aktions-, Code- und LMT-Prüfung), das Neusystem einen.
+      Betrifft `error.log`, die Bug-Statistik und — weil `szBugInfo` überschrieben wird — auch den
+      Text, den `data.log` für die Zeile trägt. Der Golden-File-Test fährt für `db_gut` deshalb nur
+      den Writer, nicht die Prüfkette
+
+- [ ] **`unix2dos`-Konvertierung je Lieferant klären** (Betrieb): `make_einzel.awk:296-300` schickt
+      alle fünf Logs durch `unix2dos -c iso`, das Zeilenenden **und** Zeichensatz umstellt. In der
+      September-Stichprobe ist das bei genau einer Datei passiert — `db_allianz`s `data.log`
+      (CRLF, `ü` = 0x81 = CP437); die übrigen 102 Antworten sind LF + ISO-8859-1, `db_allianz`s
+      eigene `statistics.log`/`error.log`/`info.log` eingeschlossen. Der Writer schreibt die
+      Mehrheitsvariante. Zu klären, wovon die Konvertierung abhängt (deployte MFT-Skripte/INIs
+      liegen nicht im Repo, siehe *Datenbeschaffung*), sonst meldet der Diff für `db_allianz`
+      dauerhaft Abweichungen
+
+- [ ] **Zeitstempel je `--- input row` im `data.log`**: das Altsystem schreibt pro Zeile die
+      aktuelle Uhrzeit (`cAAktTime::OutAktDateTime`), die bei großen Files über den Lauf wandert;
+      der Writer setzt überall den Verarbeitungsbeginn. Für den Diff irrelevant (er maskiert
+      Zeitstempel), für eine echte Byte-Gleichheit großer Lieferungen nicht
 
 - [ ] **Zeichenkodierung in `kurs..tax_code`**: 3 der 57 GAST-Zeilen haben doppelt kodierte
       Umlaute in `txt_bez` (`AQS`, `L1`, `TD` — z. B. „RuecknahmebeschrÃ¤nkung"); `txt_bez_e` ist
@@ -210,12 +336,88 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
       fehlt laut Abgrenzung, Voraussetzung für Schnitt 6
 - [ ] Soll-Konzept nach `docs/Fondspreise/fondspreise-soll-konzept.md`, sobald I entschieden ist
       (B ist entschieden)
-- [ ] `docs/Technische Konzepte/ifas13-jobs.md` aktualisieren — „Fondspreise — out of scope" stimmt
-      dann nicht mehr
+- [x] ~~`docs/Technische Konzepte/ifas13-jobs.md` aktualisieren~~ — erledigt 2026-09-14: Stufe 2 als
+      eigener Abschnitt, `PreisMeldungDiffJob` um Sync-Report und Zähler ergänzt
 - [ ] `docs/Fondspreise/fondspreise-legacy-analyse.deck.html` neu erzeugen (laut Konzept veraltet:
       zeigt noch `I4`, 26 Sektionen gegen 53 Abschnitte)
 
 ## Erledigt
+
+- 2026-09-14 — **Rückmeldungs-Format gegen echte Altsystem-Antworten verifiziert und korrigiert**
+  (User-Lieferung `testdaten_september.zip`). Bestätigt haben sich `error.log`/`info.log` Zeichen für
+  Zeichen, alle fünf in der Stichprobe vorkommenden Meldungstexte, die `DataLogStatus`-Texte sowie
+  ZIP-Name und Eintragsreihenfolge. Falsch waren:
+  - **`data.log`**: das Altsystem schreibt je Zeile Trennlinie, `--- input row: %05d`, die
+    Lieferzeile, `--- data-records: ` und die Feldzeilen (`%-3d %-30s: %s`, Betrag `%.4f`, Code als
+    `<code> - <txt_bez_e>`), erst dann den Status; verworfene Zeilen tragen statt des Status den
+    **letzten** Bug-Text. Geschrieben wurde bisher nur Zeile + Status
+  - **`statistics.log`**: Layout ist `%7d  - <Label>` mit den Legacy-Zählern (`Rows delivered`, je
+    Preiscode `<txt_bez_e> (<code>)`, `Import-Bugs`, `Plausi-Infos`) plus `bug statistics`-Block in
+    der Deklarationsreihenfolge von `cBugStatMsgs`. Bisher standen dort erfundene Zähler in einem
+    erfundenen Layout
+  - **Zeilenenden**: LF, nicht CRLF (siehe den offenen `unix2dos`-Punkt)
+  - **NODATA**: das Altsystem meldet *einen* Bug und nur für ein File ganz ohne Zeile
+    (`M_INSERT.CPP:442`); das Neusystem meldete zwei, sobald keine Zeile angenommen wurde — bei
+    `db_rrz` betraf das real jede Lieferung, in der alle Zeilen verworfen wurden
+  - **Q/T/TA**: seit 2017 still verworfen (`M_INSERT.CPP:1164`) — kein Bug, kein Zähler, nur der
+    `data.log`-Status. Das Neusystem hätte sie in die Inbox übernommen; `db_union` liefert täglich
+    vier solche Zeilen je ISIN
+  Die Labels stammen durchgehend aus `txt_bez_e`, nicht `txt_bez` — die „Rüchnahmepreis"-Typo aus
+  dem `tax_code`-Punkt schlägt in der Rückmeldung also nicht durch. Zwei Lieferungen liegen als
+  unveränderte Fixtures im Testdatenpfad des Moduls (`db_union` 10 Zeilen end-to-end über Prüfkette
+  und Writer, `db_gut` 4 Zeilen nur über den Writer); `PreismeldungRueckmeldungGoldenFileTest`
+  vergleicht alle vier Logs byteweise
+
+
+- 2026-09-14 — **Stufe 2 entscheidet im Parallelbetrieb, ohne zu speichern** (`37212a931`, User).
+  Die Sync-Stufe kennt jetzt `persistResult`; der `PreisMeldungDiffJob` setzt `false` und lässt
+  `kurs`, `tmp_if_last`, `preis_herkunft` und `letzte_preise` unberührt — die Zähler und der
+  `sync-report.txt` sagen, was die Stufe getan hätte. Genau die Trennung, die die STM-Seite mit
+  `SteuerlicheErmittlungRecalcOptions.persistResult` schon macht. Der Writeable-Check ist mitgewandert:
+  er sitzt jetzt im Schreibpfad der Stufe und greift nur beim Speichern, statt eine Einreichung
+  abzulehnen, die gar nichts schreibt. Damit darf ein Diff-Lauf auch gegen einen read-only
+  Business-Kontext laufen. Die Job-Tests prüfen entsprechend die Entscheidungen statt der Zeilen;
+  die Persistenz deckt weiter `PreismeldungSyncServiceTest` mit `persistResult=true` ab
+
+- 2026-09-14 — **Dritter Business-Kontext benannt: `business-new-introduced`** (`2da0312a7`, User).
+  `database-context.fondspreise.db-key` sagte, welches Feature den Kontext angefragt hat, nicht was
+  hineingehört — deshalb hat sich jedes weitere Feature seinen eigenen Key gebaut. Der neue Name
+  kodiert die Regel („gab es die Tabelle im Altsystem?") und übersteht die Sybase-Migration: auch
+  wenn 2027 alle drei Kontexte in Postgres liegen, bleibt der Unterschied zwischen geerbtem,
+  eingefrorenem Schema und eigenem bestehen. `preis_herkunft` und `letzte_preise` sind umgezogen;
+  `kurs`, `tmp_if_last` und `tax_code` bleiben im `business`-Kontext. Die **Inbox** ist stattdessen
+  zum Job-System gewandert — sie hängt über `(job_id, zeilen_nr)` am Job, also liegt
+  `PreismeldungZeile` jetzt neben `PreisMeldungDiffJob` in `ifas-persistence-infra` und wird im
+  job-system-Kontext gelesen und geschrieben. Physisch bewegt sich nichts: alle Profile mappen alten
+  und neuen Key auf dieselbe DB
+
+- 2026-09-14 — **`tax_code` in den Standard-Basisimport gezogen** (`f89c5d06b`, User-Frage nach dem
+  Deploy-Check). Die Tabelle wurde nur von einem Fondspreise-eigenen Creator geseedet, und der schrieb
+  sie im Fondspreise-Kontext — gelesen wird sie aber im Business-Kontext. In den Tests fiel das nie
+  auf, weil beide Kontexte dort dieselbe H2 sind. Folge war, dass jede per Basisimport bestückte
+  Datenbank keine Preiscodes kannte und der Eingang jede Zeile ablehnte. Dieselbe falsche Annahme wie
+  beim Deploy-Check-Punkt `tax_code`
+
+- 2026-09-14 — **Deploy-Check durchgeführt**, zwei Befunde behoben. (a) Der Job erbte den
+  Datenbank-Kontext des Einreichers, und beide Einstiege binden dort das Altsystem — der REST-Pfad
+  reicht explizit in `withLegacySystemDbContext` ein, die UI per `web-ui-default.db-key=sybase-gast`.
+  Da auf GAST keine Schreibrechte bestehen, hätte die Stufe 2 über keinen der beiden Einstiege je
+  laufen können. Die Kette läuft jetzt in `database-context.business.db-key`, Einreichung und
+  Ausführung lehnen nicht beschreibbare Kontexte ab (`9e5f0ecdb`). (b) Das Result-Bundle war aus der
+  UI nicht erreichbar — eigene Detailseite gebaut und im laufenden System geprüft (`d54277af1`).
+  Entkräftet: die `tax_code`-Sorge (wird im Business-Kontext gelesen, nicht aus der Fondspreise-
+  Postgres) und das Flyway-Flag (nur für lokale Docker-DBs). Neu als offene Punkte: die drei
+  identischen Neu-Kontexte, `ASF` gegen die Verortungsregel, und der automatische MFT-Feed
+
+- 2026-09-14 — **AP9 + AP10, Schnitt 2 abgeschlossen.** Tests: Ausschüttungs-Veto gegen die echte
+  `ASF`-Abfrage (die lief bis dahin in keinem Test), Wiederholung desselben Jobs verliert am
+  Guard-Prädikat, Löschlieferung und Job-Wiederholung end to end über den `PreisMeldungDiffJob`,
+  `InvRepository#findEndedIsins` auf allen drei DBMS, Konflikt-Retry von `recordLastPrice` als
+  Mockito-Test. Neu in `ifas-test-data`: `FondspreiseStammdatenCreator` (Fonds-Stammdaten + ASF-Zeile)
+  — er ersetzt die zwei fast gleichen Seed-Blöcke der Integrationstests; der im Plan vorgesehene
+  `KursTestdataCreator` entfällt (die `kurs`-Zeilen entstehen in jedem Test durch einen Sync-Lauf).
+  Doku: Konzept-Runde 10 samt Deck, `ifas13-jobs.md`. Alle Tests grün (Domain 121, Integration 71,
+  Service-Unit 2)
 
 - 2026-09-11 — **Designreview Schnitt 2** (Diskussion, keine Codeänderung). Entschieden: DB-Setup
   bestätigt (zwei Sybase, eingefroren; Postgres frei; Voll-Sync zum Go-live, danach

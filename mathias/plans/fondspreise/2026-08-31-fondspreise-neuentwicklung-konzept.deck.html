@@ -704,8 +704,8 @@
 
       <rect x="280" y="258" width="246" height="52" rx="8"
             fill="var(--accent-wash)" stroke="var(--line-strong)"/>
-      <text x="296" y="281" fill="currentColor" font-size="15">kurs · pool_if_kurs</text>
-      <text x="296" y="299" fill="var(--muted)" font-size="12">+ tmp_if_last · del_protokoll</text>
+      <text x="296" y="281" fill="currentColor" font-size="15">kurs</text>
+      <text x="296" y="299" fill="var(--muted)" font-size="12">+ Projektion tmp_if_last</text>
 
       <rect x="556" y="258" width="256" height="52" rx="8"
             fill="var(--accent-wash)" stroke="var(--line-strong)"/>
@@ -858,7 +858,9 @@
           <td><code>AusgabeAktion { UPSERT, DELETE }</code></td><td>—</td></tr>
       <tr><td>monotoner Guard</td><td><code>PreisHerkunft</code></td>
           <td><code>kurs.preis_herkunft</code> (Postgres)</td></tr>
-      <tr><td><code>tmp_if_last</code>-Projektion</td><td><code>LetzterPreis</code></td>
+      <tr><td>die Projektion selbst</td><td><code>TmpIfLast</code></td>
+          <td><code>kurs..tmp_if_last</code> (Neusystem-Sybase)</td></tr>
+      <tr><td>ihr Guard und Spiegel</td><td><code>LetzterPreis</code></td>
           <td><code>kurs.letzte_preise</code> (Postgres)</td></tr>
       <tr><td><strong>welche Lieferung sich durchsetzt</strong> — die Komponente</td>
           <td><code>WirksamePreismeldungen</code><br><small>statische Fabriken, Muster
@@ -975,10 +977,9 @@ am Job zusätzlich:        sammelreportJob        : FK → PreisSammelreportJob,
           <td><span class="tag danger">nicht idempotent</span> zweite Mail beim Lieferanten. Guard:
               <code>rueckmeldung_gesendet_at</code></td></tr>
       <tr><td>nach <code>kurs</code></td>
-          <td>Upsert idempotent; <code>D</code> auf gelöschte Zeile ist No-op;
-              <code>tmp_if_last</code> schreibt „nur wenn neuer" → No-op</td>
-          <td><code>del_protokoll</code> bekommt einen zweiten Eintrag
-              (<code>Del_Protokoll</code> Default <code>0</code>)</td></tr>
+          <td>Upsert idempotent; <code>D</code> auf gelöschte Zeile ist No-op; die Projektion
+              verliert am Guard-Prädikat, weil die Wiederholung dieselbe Ankunftszeit trägt → No-op</td>
+          <td>keine — <code>del_protokoll</code> wird nicht geschrieben</td></tr>
       <tr><td>Kennzahlen</td><td>deterministisch, gleiche Eingaben → gleiche Werte</td>
           <td><code>ASF.r_faktor</code> identisch — <strong>aber</strong>
               <code>r_faktor_ges</code> muss vorwärts kaskadieren
@@ -1161,11 +1162,13 @@ update preis_herkunft
      bleiben unverändert.</p>
 
   <h3><code>tmp_if_last</code> braucht dieselbe Behandlung</h3>
-  <p>Legacy schreibt dort „nur wenn Preisdatum neuer" — schon ein monotoner Guard, aber der falsche:
-     zwei Lieferungen zum <strong>gleichen</strong> Preisdatum (eine Korrektur) würden am Prädikat
-     <code>preisdatum &lt;</code> scheitern. Der Guard muss lexikografisch über
-     <code>(preisdatum, angekommen_am)</code> gehen. Weil <code>tmp_if_last</code> unsere eigene
-     Projektion ist, kann die Zeile <code>angekommen_am</code> einfach mitführen.</p>
+  <p>Legacy vergleicht dort <strong>gar kein Datum</strong>: <code>WriteLastKurse</code> löscht über
+     <code>(num_okb, cod_waehrung, cod_preiscode, cod_ex)</code> und fügt neu ein — der zuletzt
+     verarbeitete Satz gewinnt, auch mit älterem Preisdatum. Unser Guard geht lexikografisch über
+     <code>(preisdatum, angekommen_am)</code>: das jüngste Preisdatum gewinnt, bei gleichem
+     Preisdatum die später angekommene Lieferung (die Korrektur). Weil die Projektion in der Sybase
+     des Neusystems liegt und ihr Guard <code>letzte_preise</code> in Postgres, ist auch das eine
+     <strong>Klammer-Transaktion</strong>.</p>
 
   <h3>Zwei Nebeneffekte</h3>
   <div class="grid">
@@ -1465,6 +1468,37 @@ flowchart TD
 
 <section id="delta" data-nav="Was sich geändert hat">
   <h2>Änderungsprotokoll</h2>
+  <h3>Runde 10 — 2026-09-11, Designreview Schnitt 2</h3>
+  <div class="scrollx">
+  <table>
+    <thead><tr><th>Was</th><th>vorher</th><th>jetzt</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Verortung der Projektion</strong></td>
+          <td>neue Tabelle <code>kurs.letzte_preise</code> in Postgres, <code>tmp_if_last</code>
+              abgelöst</td>
+          <td>die Projektion bleibt <code>kurs..tmp_if_last</code> und wird in der Neusystem-Sybase
+              Legacy-getreu geschrieben; <code>letzte_preise</code> ist Guard <em>und</em> Spiegel.
+              Entscheidung M gilt nur für <strong>neue</strong> Tabellen</td></tr>
+      <tr><td><strong>Diff-Ebenen 3 und 4</strong></td>
+          <td>im <code>PreisMeldungDiffJob</code>, je Lieferung</td>
+          <td>aus dem Lieferjob heraus in einen generischen, geplanten Tabellenvergleich Sybase alt
+              gegen Sybase neu — die Schreibzeitpunkte der beiden Systeme liegen Stunden auseinander</td></tr>
+      <tr><td><strong>Schreiberliste <code>tmp_if_last</code></strong></td>
+          <td>Schreiben, Variante, Löschen im <code>R</code>-Pfad</td>
+          <td>der <code>R</code>-Löschpfad ist toter Code; einziger lebender Grund für „nicht aus
+              <code>kurs</code> ableitbar" ist die Preiswährung</td></tr>
+      <tr><td><code>pool_if_kurs</code>, <code>del_protokoll</code>, Fondsaktivierung</td>
+          <td>Teil des Berechtigungsfilters</td>
+          <td>nicht portiert — kein Leser bzw. seit 2018 durch <code>isin_aktivieren</code>
+              ersetzt</td></tr>
+      <tr><td><strong>Seed</strong></td><td>einmaliger Migrationsschritt aus dem Altsystem</td>
+          <td>entfällt — der Voll-Sync zum Go-live bringt die Projektion mit, der Guard startet
+              leer</td></tr>
+      <tr><td>Legacy-Schreibregel</td><td>„nur wenn Preisdatum neuer"</td>
+          <td><strong>gar kein Datumsvergleich</strong> — der zuletzt verarbeitete Satz gewinnt</td></tr>
+    </tbody>
+  </table>
+  </div>
   <h3>Runde 9 — 2026-09-02, Begriffe: Eingang und Inbox</h3>
   <div class="scrollx">
   <table>
@@ -1799,15 +1833,30 @@ flowchart TD
   <h3>Der Berechtigungsfilter</h3>
   <p>Diese Logik gehört in die Stufe, nicht in die Tabelle:</p>
   <ul>
-    <li>ISIN in IFAS nicht auflösbar → <code>pool_if_kurs</code>, <code>kurs</code> unberührt</li>
-    <li>Preiswährung ≠ Fondswährung → nicht nach <code>kurs</code></li>
+    <li>Preiswährung ≠ Fondswährung → nicht nach <code>kurs</code>, aber in die Projektion</li>
     <li>TEST-ISIN, C-Plan, AIF, Fonds in Liquidation → Ausschlüsse
       (<code>InsPreise*</code>-Schalter)</li>
-    <li>vorläufiger Fonds mit <code>R</code>-Wert → Aktivierungsversuch, bei Misserfolg
-      <code>pool_if_kurs</code></li>
     <li>Löschungen: <code>DeleteKurseReally</code>, bei <code>R</code> zusätzlich die abhängigen
-      Kennzahlen, <code>del_protokoll</code></li>
+      Kennzahlen</li>
   </ul>
+  <h3>Drei Zweige werden nicht portiert</h3>
+  <div class="grid">
+    <div class="card"><h3><code>pool_if_kurs</code></h3>
+      <p>Die Dead-Letter-Tabelle für nicht auflösbare ISINs hat <strong>keinen Leser</strong>, und
+         beide Schreibpfade sind zu: eine unbekannte ISIN verwirft schon der Eingang
+         (<code>ERR_ISIN06</code>), und der Vorl-Fonds-Zweig prüft <code>nRet</code> statt
+         <code>nRet2</code> (<code>preisekennzahl.cpp:2760</code>), feuert also nie. Empirisch kein
+         Schreiber seit 2012-03-30.</p></div>
+    <div class="card"><h3>Fondsaktivierung</h3>
+      <p><code>VorlFondsAktivieren</code> für einen vorläufigen Fonds mit <code>R</code>-Wert. Seit
+         2018-12-12 erledigt das die tägliche Aktion <code>isin_aktivieren</code>; die Sync-Stufe
+         lässt <code>INV.status</code> unberührt. Eigenes Stammdaten-Feature.</p></div>
+    <div class="card"><h3><code>del_protokoll</code></h3>
+      <p>Kein Leser im Legacy — alle vier Fundstellen sind Schreiber, die einzige lesende Stored
+         Procedure <code>s_exp_del</code> wird nirgends aufgerufen, und IFASNXT zieht die Preise per
+         SSIS direkt aus <code>kurs</code>. Bei Default <code>0</code> wäre Schreiben ohnehin neues
+         Verhalten.</p></div>
+  </div>
   <h3>Vom „materialisierten Tagesbestand" bleibt das Publikationsprotokoll</h3>
   <p>Diese Tabelle war am 31.8. noch der <em>Preis</em> einer Option und schien dann durch das Delta
      ohnehin nötig. Mit dem Sync als Stufe fällt ihr zweiter Zweck weg, und übrig bleibt genau
@@ -1829,12 +1878,11 @@ flowchart TD
      zurückgezogenen Preis.</p>
   <h3>Zwei Kosten der Verlagerung</h3>
   <div class="grid">
-    <div class="card warn"><h3><code>del_protokoll</code>-Rauschen</h3>
+    <div class="card warn"><h3>Vorübergehende Zustände in <code>kurs</code></h3>
       <p>Bei „<code>N</code> um 08:00, <code>D</code> um 09:00" schreibt Legacy nie nach
-         <code>kurs</code>; wir schreiben und löschen wieder. Endzustand identisch, aber IFASNXT
-         bekommt eine Löschung für etwas, das es nie gesehen hat. Relativiert:
-         <code>CONFIG.INI/Del_Protokoll</code> ist per Default <code>0</code> — produktiven Wert
-         prüfen.</p></div>
+         <code>kurs</code>; wir schreiben und löschen wieder. Endzustand identisch, aber ein Leser
+         dazwischen sieht einen Preis, den es bei Legacy nie gab. Bewusst akzeptiert und als
+         bekannte Abweichung im Tabellenvergleich geführt.</p></div>
     <div class="card warn"><h3>Mehrfachnachrechnung</h3>
       <p>Drei Korrekturen an einem Fonds an einem Tag heißen dreimal
          <code>Nachrechnung(daTag, daEndTag)</code>, und <code>daEndTag</code> ist „heute". Legacy
@@ -1847,8 +1895,9 @@ flowchart TD
 
 <section id="last" data-nav="tmp_if_last">
   <h2><code>tmp_if_last</code> ist eine Projektion, kein Eingang</h2>
-  <p>Je <code>(ISIN, Währung, Code)</code> die Zeile mit dem höchsten <code>preisdatum</code>, ohne
-     Löschsätze und ohne drei Fondsklassen.</p>
+  <p>Je <code>(ISIN, Währung, Code)</code> <strong>eine</strong> Zeile, ohne Löschsätze und ohne
+     drei Fondsklassen. Welche das ist, entscheidet bei Legacy die Verarbeitungsreihenfolge, bei uns
+     der Guard über <code>(preisdatum, angekommen_am)</code>.</p>
   <h3>Genau ein Leser — belegt</h3>
   <div class="scrollx">
   <table>
@@ -1879,26 +1928,36 @@ flowchart TD
   <p>Belegt aus <code>WriteLastKurse</code> (<code>preisekennzahl.cpp:1226</code>): gespeichert wird
      der <em>gelieferte</em> Wert, es gibt keine Spalte für ein Rechenergebnis, aus der Nachrechnung
      fließt nichts zurück. <code>tmp_if_last</code> ist eine reine Funktion der Lieferungen — und
-     <strong>nicht</strong> aus <code>kurs</code> ableitbar, weil es Werte trägt, die
-     <code>kurs</code> nie sieht: unbekannte ISIN, Währungsabweichung.</p>
+     <strong>nicht</strong> aus <code>kurs</code> ableitbar. Lebend ist davon nur noch
+     <strong>ein</strong> Grund: die <strong>Preiswährung ≠ Fondswährung</strong>. Die unbekannte
+     ISIN ist tot (der Eingang verwirft sie), und der Reihenfolge-Unterschied verschwindet mit
+     unserem Guard.</p>
+  <p class="note warn">Der <code>R</code>-Löschpfad nach <code>tmp_if_last</code>
+     (<code>DeleteLastKurse</code>, <code>:1849</code>) ist <strong>toter Code</strong>: nur im
+     Header deklariert, nirgends aufgerufen, und sein SQL nennt Spalten
+     (<code>waehrung</code>, <code>cod_fliesscode</code>), die die Tabelle gar nicht hat. Eine
+     <code>D</code>-Lieferung löscht aus <code>kurs</code> und lässt die Projektion stehen — der
+     zurückgezogene Preis wird im Lauf-1-Fallback erneut veröffentlicht (offener Punkt P).</p>
   <h3>Warum es die Inbox nicht sein kann</h3>
   <p>Der Delete-vor-Insert-Schlüssel enthält <strong>kein</strong> <code>preisdatum</code>. Es gibt
      genau einen Platz je (ISIN, Währung, Code); eine spätere Korrektur für ein <em>früheres</em>
      Datum verdrängt den jüngeren Preis, und kein Filter auf der Leseseite holt ihn zurück.
      Zusätzlich setzt <code>WriteLastKurse</code> <code>cod_ex</code> hart auf <code>'N'</code> —
      Löschsätze wären strukturell unsichtbar.</p>
-  <p class="note">Nebenläufigkeit: der Guard aus <em>Zwei Server, ein Pool</em> muss auch hier
-     greifen, und zwar lexikografisch über <code>(preisdatum, angekommen_am)</code> — Legacys „nur
-     wenn Preisdatum neuer" würde eine Korrektur zum <em>gleichen</em> Preisdatum verwerfen. Und
-     weil <code>letzte_preise</code> in Postgres liegt, ist der Guard hier ein einzelnes bedingtes
-     Update in der eigenen Zeile — keine Klammer-Transaktion nötig.</p>
-  <h3>Initialbefüllung</h3>
-  <p class="note warn">Beim Start — des Parallelbetriebs wie später des Echtbetriebs — ist
-     <code>letzte_preise</code> leer. Ohne Seed verfehlt der Lauf-1-Fallback 65 Tage lang fast alle
-     Fonds, und der B3-Diff gegen die Legacy-Tabelle wäre von Tag 1 an rot. Deshalb ein einmaliger
-     Migrationsschritt: <strong>Seed aus <code>kurs..tmp_if_last</code></strong> des Altsystems, mit
-     synthetischem <code>angekommen_am</code> (Seed-Zeitpunkt); ab dann führt die Kette die Tabelle
-     selbst.</p>
+  <p class="note">Nebenläufigkeit: der Guard aus <em>Zwei Server, ein Pool</em> greift auch hier,
+     lexikografisch über <code>(preisdatum, angekommen_am)</code> — Legacy vergleicht gar kein Datum.
+     Weil die Projektion in <code>kurs..tmp_if_last</code> liegt und ihr Guard
+     <code>letzte_preise</code> in Postgres, ist auch das eine <strong>Klammer-Transaktion</strong>.
+     <code>preis_herkunft</code> kann den Guard nicht übernehmen — sein Schlüssel enthält
+     <code>dat_kurs</code>, die Projektion hat je (ISIN, Währung, Code) nur einen Platz.</p>
+  <h3>Initialbefüllung — entfällt</h3>
+  <p class="note ok">Die Projektion kommt mit dem einmaligen <strong>Voll-Sync</strong> der Datenbank
+     zum Go-live in die Neusystem-Sybase und ist von Tag 1 an vollständig. Der Guard
+     <code>letzte_preise</code> startet leer, und das bleibt so: der erste Write je Schlüssel findet
+     keine Guard-Zeile und verhält sich wie Legacy („zuletzt verarbeitet gewinnt"), ab dem zweiten
+     greift unsere Regel. Ein Seed hätte die strengere Regel auch gegen die mitgebrachten
+     Altbestände durchgesetzt und eine Korrektur zu einem älteren Datum abgelehnt, die Legacy
+     annimmt.</p>
   <h3>Wozu der Fallback da ist, steht nirgends</h3>
   <p>Der Mechanismus ist dokumentiert, der <strong>Zweck nicht</strong>. Weil <code>I2</code> ein
      Upsert ist, ist eine Fallback-Zeile beim Bezieher ein No-op — gleicher Schlüssel, gleicher Wert.
@@ -2082,7 +2141,9 @@ flowchart TD
           <td><span class="tag ok">entschieden</span> <strong>B3</strong> — geführte Tabelle plus
               Rebuild aus der Inbox. Ausschlaggebend: der <strong>Parallelbetrieb</strong>. Bei
               B2 gibt es nichts zu diffen, und die retroaktive Abfrage würde die Legacy-Tabelle
-              systematisch verfehlen</td><td>—</td></tr>
+              systematisch verfehlen. <strong>Verortung korrigiert 2026-09-11:</strong> die geführte
+              Tabelle <em>ist</em> <code>kurs..tmp_if_last</code> in der Neusystem-Sybase;
+              <code>letzte_preise</code> in Postgres ist ihr Guard und Spiegel</td><td>—</td></tr>
       <tr><td><strong>C</strong></td><td>Kennzahlen: Invalidierung oder Auftragsübergabe?</td>
           <td><span class="tag ok">C1 faktisch gesetzt</span> der Sweep braucht ein Kriterium, und
               „Preise ohne Kennzahl" ist es. Rest: welche anderen Verbraucher mit abwesenden statt
@@ -2135,6 +2196,16 @@ flowchart TD
           <td>Datenanalyse läuft. Ist <code>INV.preismeldung</code> die gemeinte Tabelle? Nur
               <code>R</code> oder alle Codes? Ein Lieferant je ISIN — und was mit Fonds ohne jeden
               <code>liefer_typ='F'</code>-Lieferanten?</td><td>Markus / Fachabteilung</td></tr>
+      <tr><td><strong>O</strong></td><td>Wer liest <code>kurs..tmp_if_last</code> noch?</td>
+          <td><span class="tag accent">neu</span> lesen KUPL/KMS die Tabelle direkt, und welche
+              Spalten? Entscheidet, ob die Projektion dauerhaft bleibt — und wie genau
+              <code>txt_bez</code>, <code>liefer_id</code> und <code>eintragezeit</code> dem Legacy
+              entsprechen müssen</td><td>Fachabteilung / KUPL-KMS</td></tr>
+      <tr><td><strong>P</strong></td><td>Fallback-Semantik: Währung und Löschungen</td>
+          <td><span class="tag accent">neu</span> darf ein Preis in einer Währung ≠ Fondswährung
+              (steht nie in <code>kurs</code>) und ein per <code>D</code> zurückgezogener Preis im
+              Lauf-1-Fallback erneut veröffentlicht werden? Bis zur Antwort bleibt das Verhalten
+              Legacy-getreu</td><td>Fachabteilung</td></tr>
     </tbody>
   </table>
   </div>
@@ -2228,34 +2299,48 @@ flowchart TD
      nach dem Muster <code>IsinAnforderungslisteDiffJob</code>; der Einstieg existiert schon:
      <code>ParallelbetriebJobSubmissionService</code> erkennt Preismeldungs-Files und ruft den
      heutigen Stub <code>PreisMeldungDiffJobSubmissionService</code> (derzeit BadInput).</p>
-  <h3>Vier Diff-Ebenen</h3>
+  <h3>Vier Diff-Ebenen — aber nicht alle im selben Job</h3>
   <div class="scrollx">
   <table>
-    <thead><tr><th>Ebene</th><th>Neusystem</th><th>gegen</th></tr></thead>
+    <thead><tr><th>Ebene</th><th>Neusystem</th><th>gegen</th><th>Träger</th></tr></thead>
     <tbody>
       <tr><td>Rückmeldung</td>
           <td>das erzeugte ZIP (<code>data.log</code>/<code>error.log</code>/<code>info.log</code>)</td>
-          <td>das Rückmelde-ZIP des Altsystems</td></tr>
+          <td>das Rückmelde-ZIP des Altsystems</td>
+          <td><code>PreisMeldungDiffJob</code></td></tr>
       <tr><td>Ausgabefiles</td><td><code>preis.csv</code>/<code>solva.csv</code>, Reports</td>
-          <td>die Files des Altsystems</td></tr>
+          <td>die Files des Altsystems</td>
+          <td><code>PreisMeldungDiffJob</code></td></tr>
       <tr><td>DB-Stand</td>
-          <td><code>kurs</code>, <code>pool_if_kurs</code>, <code>del_protokoll</code> in der
-              Neusystem-Sybase</td>
-          <td>dieselben Tabellen im Altsystem (<code>DatabaseCompareService</code>)</td></tr>
-      <tr><td>Projektion</td><td><code>kurs.letzte_preise</code> (Postgres)</td>
-          <td><code>kurs..tmp_if_last</code> im Altsystem — der B3-Diff</td></tr>
+          <td><code>kurs</code>, <code>pool_if_kurs</code> in der Neusystem-Sybase</td>
+          <td>dieselben Tabellen im Altsystem</td>
+          <td>generischer Tabellenvergleich</td></tr>
+      <tr><td>Projektion</td><td><code>kurs..tmp_if_last</code> in der Neusystem-Sybase</td>
+          <td>dieselbe Tabelle im Altsystem</td>
+          <td>generischer Tabellenvergleich</td></tr>
     </tbody>
   </table>
   </div>
+  <p class="note danger"><strong>Die beiden DB-Ebenen gehören nicht in den Lieferjob</strong>
+     (Designreview 2026-09-11). Legacy schreibt <code>kurs</code> und <code>tmp_if_last</code> im
+     Tagesjob-Schritt 4 am Tagesende, das Neusystem Minuten nach der Lieferung; ein Vergleich im
+     Lieferjob am selben Tag ist per Konstruktion rot, und „nur berührte Schlüssel" sieht keine
+     Drift. Sie werden ein eigener, <strong>geplanter und generischer Tabellenvergleich Sybase alt
+     gegen Sybase neu</strong>, der nach dem Legacy-Tagesjob läuft und je Szenario konfiguriert wird
+     (Tabelle, Schlüsselfenster, bekannte Abweichungen) — für alle Tabellen, die das Neusystem
+     schreibt, später auch <code>ASF</code> und die Kennzahlen. <code>pool_if_kurs</code> läuft darin
+     als Kontrolle „beidseitig unverändert".</p>
   <p class="note warn"><strong>Außenwirkungen sind unterdrückt:</strong> keine Rückmeldungs-Mails an
      Lieferanten, kein MFT/T2S-Upload, keine Fehlmeldungs-Mails. Die Rückmeldung wird als File
      erzeugt und gedifft statt versandt; die Ergebnisartefakte hängen am Diff-Job (Muster
      <code>resultBundleFile</code>).</p>
-  <p><strong>Bekannte Abweichungen</strong> müssen im Diff konfigurierbar geführt werden — dasselbe
-     Muster wie die <code>ValidationSettings</code> der STM-Return-File-Diffs. Von Anfang an bekannt:
-     das explizite <code>I3</code> aus D und das <code>del_protokoll</code>-Rauschen aus dem Sync.
-     Der Diff-Job wächst mit den Schnitten: nach Schnitt 1 difft er die Rückmeldung, nach Schnitt 2
-     den DB-Stand und die Projektion, nach den Schnitten 4/5 die Ausgabefiles.</p>
+  <p><strong>Bekannte Abweichungen</strong> müssen konfigurierbar geführt werden — dasselbe Muster
+     wie die <code>ValidationSettings</code> der STM-Return-File-Diffs. Von Anfang an bekannt: das
+     explizite <code>I3</code> aus D; <code>kurs.guelt</code> (bei uns die Lieferzeit, bei Legacy das
+     Tagesende); die vorübergehenden <code>N</code>-dann-<code>D</code>-Zustände; und die Projektion
+     bei fallendem Preisdatum, wo unser Guard strenger ist als Legacy. Der Diff-Job wächst mit den
+     Schnitten: nach Schnitt 1 difft er die Rückmeldung, nach den Schnitten 4/5 die Ausgabefiles —
+     DB-Stand und Projektion kommen aus dem generischen Tabellenvergleich.</p>
 </section>
 
 <section id="schnitt1-architektur" data-nav="Schnitt-1-Architektur">

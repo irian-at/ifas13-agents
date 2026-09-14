@@ -76,7 +76,8 @@ ist logische UUID-Referenz ohne FK.
 | AP6 Projektion/Rebuild/Seed | fertig — `LetztePreiseService` (Fortschreiben aus AP5 hierher extrahiert, `cleanupEndedFunds`, `seed`), `PreismeldungSyncService.rebuildProjection`; +4 Tests. **Seed-Leser** aus `tmp_if_last` offen (Cross-DB, siehe unten). **→ AP11 (2026-09-11):** Projektion wandert nach `kurs..tmp_if_last`, `letzte_preise` bleibt Guard + Spiegel, Seed-Leser hinfällig |
 | AP7 Job-Erweiterung | fertig — `PreisMeldungDiffJob` um `angekommen_am` (DB-Uhr bei Submission) + Zähler `synced/skipped/veto/db_diff`; Execution-Service ruft Stufe 2, schreibt `sync-report.txt` und die Zähler; Flyway V066. `PreisMeldungDiffJobTest` prüft Stufe 2 mit |
 | AP8 Diff-Ebenen 3+4 | fertig — `PreismeldungDbDiff` (Domain) + `PreismeldungDbDiffService` (kurs neu↔alt, letzte_preise↔tmp_if_last im legacyBusiness-Kontext); `db-diff.txt` + `db_diff_count`; read-only `TmpIfLast` + Flyway V067. 6 Domain-Tests + Selbstvergleich-E2E. **`pool_if_kurs`-Kontrolle verschoben**. **→ AP11 (2026-09-11): wieder ausgebaut** — DB-Vergleich wird generischer Job (D13) |
-| AP9–AP10 | offen |
+| AP9 Tests | fertig — Veto gegen echte `ASF`-Zeile, Wiederholung am Guard-Prädikat, Löschlieferung und Job-Wiederholung end to end, `findEndedIsins` auf allen drei DBMS, Konflikt-Retry als Mock-Test; `FondspreiseStammdatenCreator` in `ifas-test-data`; siehe *Stand 2026-09-14* |
+| AP10 Doku | fertig — Konzept Runde 10, `ifas13-jobs.md` Stufe 2, Tracker; siehe *Stand 2026-09-14* |
 | AP11 Umbau nach Designreview | fertig — Projektion nach `tmp_if_last`, `letzte_preise`-Klammer, Diff-Ebenen 3/4 ausgebaut, Guard-Seed-Leser; siehe *Stand 2026-09-11 — AP11* |
 
 **Stand 2026-09-10 — AP4 und Code-Review.** `/code-review-ifas` über AP4 fand zwei echte
@@ -233,6 +234,58 @@ Erstanspruch-Wiederholung bei `DataIntegrityViolationException`); `eintragezeit`
 Ankunftszeit der Lieferung in Wiener Zeit; `cleanupEndedFunds` löscht beidseitig und fragt die
 Fondsenden in 1000er-Blöcken ab, damit die IN-Liste auf Sybase auch für die volle Projektion trägt.
 `TmpIfLast` trägt jetzt `liefer_id`, `eintragezeit`, `intervall` und trimmt `cod_ex`/`txt_bez`.
+
+**Stand 2026-09-14 — AP9 und AP10 erledigt; Schnitt 2 ist abgeschlossen.** Alle Tests grün:
+Domain 121, Integration 71 (H2, Postgres, Sybase), dazu 2 Unit-Tests im Service-Modul.
+
+Dazugekommen an Tests:
+
+- **Ausschüttungs-Veto gegen die echte Abfrage** (`PreismeldungSyncServiceTest`, 2 Fälle): eine
+  `ASF`-Zeile am Preisdatum lehnt die Löschung des errechneten Werts ab, dieselbe Zeile einen Tag
+  früher nicht. `AsfRepository#existsActiveAusschuettung` war bis dahin in keinem Test ausgeführt —
+  die Domain-Tests fahren einen statischen Provider.
+- **Wiederholung verliert am Prädikat**: derselbe Job mit derselben Ankunftszeit noch einmal
+  gesynct — beide Codes superseded, der gespeicherte Stand unverändert. Das ist die Retry-Semantik
+  der Klammer: die Guard-Zeile existiert nur, wenn der `kurs`-Write davor committet hat (innen
+  zuerst); ein abgebrochener Lauf hinterlässt höchstens `kurs` ohne Guard, und das repariert die
+  Wiederholung.
+- **Löschlieferung end to end** (`PreisMeldungDiffJobTest`): eine `D`-CSV nach einer `N`-Lieferung
+  räumt `kurs` und lässt die Projektion stehen — D14 über die ganze Kette belegt statt nur in der
+  Entscheidungslogik.
+- **Job-Wiederholung**: dieselbe Lieferung zweimal eingereicht ergibt dieselben Zeilen, nicht
+  doppelte — der Beleg für delete-then-insert je Code.
+- **`InvRepository#findEndedIsins` auf allen drei DBMS** (`InvRepositoryTest`, 2 Fälle): die einzige
+  Abfrage des Cleanups lief bisher nur im H2-Pfad des Sync-Tests mit.
+- **Konflikt-Retry** (`LetztePreiseServiceTest`, Mockito): der `DataIntegrityViolationException`-Pfad
+  von `recordLastPrice`, je ein Fall für „zweiter Anspruch verliert" und „gewinnt". Einzige Stelle,
+  an der ein Mock-Test die richtige Form ist — die Race lässt sich einthreadig nicht provozieren.
+
+Zwei Abweichungen von der AP9-Liste:
+
+- **Kein `KursTestdataCreator`.** Der Plan sah ihn vor, als die Tests noch vorhandene `kurs`-Zeilen
+  seeden sollten; tatsächlich entstehen sie in jedem Fall durch einen Sync-Lauf. Stattdessen ist ein
+  `FondspreiseStammdatenCreator` (`ifas-test-data`) entstanden: Fonds-Stammdaten (`wkn_hist` + `INV`,
+  mit Fondsende und Status) plus die `ASF`-Zeile für den Veto-Test. Er ersetzt die zwei fast
+  identischen `seedFonds`/`seedStammdaten`-Blöcke der beiden Integrationstests.
+- **Der Sync-Test bleibt H2-only.** Ein Multi-DB-Lauf der ganzen Stufe ist nicht möglich:
+  `preis_herkunft` und `letzte_preise` gibt es nur im Postgres-Baum (V065), die Testprofile fahren
+  aber ein DBMS für alle Kontexte. Die DBMS-Abdeckung liegt deshalb auf der Repository-Ebene —
+  `KursRepositoryTest` und `TmpIfLastRepositoryTest` (je 3 Fälle × H2/PG/Sybase, `char`-Padding
+  eingeschlossen), `InvRepositoryTest`, und `PreismeldungSyncGuardTest` auf H2 + Postgres für die
+  beiden bedingten Updates.
+
+Doku (AP10):
+
+- **Konzept, Runde 10** im Änderungsprotokoll. Korrigiert: Entscheidung 8 (Berechtigungsfilter ohne
+  `pool_if_kurs`/`del_protokoll`/Fondsaktivierung, je mit Begründung), Entscheidung 9
+  (Schreiberliste, Ableitbarkeit nur noch über die Preiswährung, Klammer statt einzelnem Update,
+  Initialbefüllung entfällt), Entscheidung B (Verortung), Entscheidung M (gilt nur für neue
+  Tabellen), Abschnitt *Parallelbetrieb* (Diff-Ebenen 3/4 → generischer Tabellenvergleich, neue
+  Liste bekannter Abweichungen). Dazu die drei Stellen, die „nur wenn Preisdatum neuer" behaupteten
+  — Legacy vergleicht gar kein Datum.
+- **Deck** desselben Konzepts nachgezogen (dieselben Abschnitte, plus O und P in der Tabelle der
+  offenen Punkte).
+- **`docs/Technische Konzepte/ifas13-jobs.md`**: Stufe 2 als eigener Abschnitt.
 
 **Abweichungen vom Plan, bewusst:**
 
@@ -711,7 +764,7 @@ Konstruktor halten. Gibt eine Prüfung Meldungen zurück, dann als Ergebnis-Reco
 - `PreismeldungDbDiff` (Domain) + Service-Teil, der die Gegenseite im legacyBusiness-Kontext liest;
   bekannte Abweichungen über `PreisMeldungDiffSetting` (D8), Textreport ins Result-ZIP.
 
-### AP9 — Tests (inkrementell, `.claude/rules/testing-conventions.md`)
+### AP9 — Tests (inkrementell, `.claude/rules/testing-conventions.md`) — **erledigt**
 - **Unit (Domain):** je Regel aus D1 ein Fall mit `ofStatic`-Providern — Ausschlüsse, Währung ≠
   Fondswährung, vorläufiger Fonds, `D` mit und ohne `R`, Veto, Korrektur-Erkennung, LMT wird
   übersprungen.
@@ -725,7 +778,7 @@ Konstruktor halten. Gibt eine Prüfung Meldungen zurück, dann als Ergebnis-Reco
 - **Testdaten:** `ifas-test-data` um einen `KursTestdataCreator` ergänzen; ASF-Seed für den
   Veto-Test.
 
-### AP10 — Doku + Tracker
+### AP10 — Doku + Tracker — **erledigt**
 - Konzept: die beiden falschen „nur wenn Preisdatum neuer"-Stellen korrigieren (D5); `pool_if_kurs`
   in Entscheidung 8 als „nicht portiert, mit Begründung" nachziehen; Deck neu erzeugen.
 - Tracker: Schnitt-2-Zeile auf den Detail-Plan verlinken; die Klärung „`pool_if_kurs` portieren?"
@@ -766,7 +819,7 @@ Konstruktor halten. Gibt eine Prüfung Meldungen zurück, dann als Ergebnis-Reco
   gültig.
 
 **Reihenfolge (aktualisiert 2026-09-11):** AP1 → (AP2 ∥ AP3) → AP4 → AP5 → AP6 → AP7 → AP8 →
-**AP11** → AP9 → AP10.
+**AP11** → AP9 → AP10. Alle erledigt.
 Kritischer Pfad: AP1 → AP4 → AP5 → AP7.
 
 ## Verifikation
