@@ -277,6 +277,13 @@ private Boolean active;
 - Scripts location: `ifas-database/ifas-database-flyway/src/main/resources/db/migration/`
 - Database-specific directories: `postgres15/` and `sybase16/`
 - H2 reuses PostgreSQL migrations directly (`DbConfigs.FLYWAY_MIGRATION_LOCATION_H2 = FLYWAY_MIGRATION_LOCATION_POSTGRES`) — H2 runs in `MODE=PostgreSQL` compatibility mode, so no H2-specific SQL is needed
+- **A script committed to `master` is frozen** — never modify an existing migration, comments and
+  whitespace included. Test deploys from `master` and `stable`/`production` follow it, so the script
+  has run and its CRC-32 sits in `flyway_schema_history`. Flyway's checksum covers comments, and the
+  app runs `migrate()` with `validateOnMigrate=true`, so any edit aborts startup with
+  `FlywayValidateException: Migration checksum mismatch`. Correct the schema with a new versioned
+  script and outdated prose in `package-info.java`/`docs/`; editing the script itself is free only
+  while it is unmerged on a feature branch.
 
 ### Multi-Database Support
 

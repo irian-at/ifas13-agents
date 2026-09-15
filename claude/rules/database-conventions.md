@@ -2,6 +2,7 @@
 paths:
   - "**/persistence*/**/*.java"
   - "**/flyway/**"
+  - "**/db/migration/**"
   - "**/database*/**/*.java"
   - "**/repository/**/*.java"
 ---
@@ -30,6 +31,25 @@ paths:
 - Scripts location: `ifas-database/ifas-database-flyway/src/main/resources/db/migration/`
 - Database-specific directories: `postgres15/` and `sybase16/`
 - H2 reuses PostgreSQL migrations directly (`DbConfigs.FLYWAY_MIGRATION_LOCATION_H2 = FLYWAY_MIGRATION_LOCATION_POSTGRES`) — H2 runs in `MODE=PostgreSQL` compatibility mode, so no H2-specific SQL is needed
+
+### A script that reached `master` is frozen
+
+**Never modify a migration script once it is committed to `master` — comments and whitespace
+included.** The test stage deploys from `master` and `stable`/`production` follow it, so from that
+commit on the script has run somewhere and its checksum sits in `flyway_schema_history`.
+
+Flyway's checksum is a CRC-32 over the file's lines and knows nothing about SQL comments, so a
+comment-only edit invalidates it exactly like changed DDL. Every database config runs Flyway as
+`@Bean(initMethod = "migrate")` with the defaults from `DbConfigs.createFlyway`, i.e.
+`validateOnMigrate=true` — a mismatch aborts application startup with `FlywayValidateException:
+Migration checksum mismatch for migration version <n>`.
+
+- Correct or extend the schema with a **new** versioned script; never edit an applied one.
+- A wrong or outdated *comment* is not a reason to touch the file. Put the correct statement where
+  the code lives — the entity's `package-info.java`, `docs/` — and leave the script alone.
+- Editing and renumbering is free only while the script is still unmerged on a feature branch.
+- `flyway repair` rewrites the stored checksums, but it is a manual step per deployed database —
+  a recovery tool, not a licence to edit.
 
 ## Multi-Database Support
 
