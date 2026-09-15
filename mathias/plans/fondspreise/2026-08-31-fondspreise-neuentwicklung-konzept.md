@@ -269,7 +269,8 @@ Referenz** (UUID), kein DB-FK.
 | **Publikationsprotokoll** — ein publizierter Schlüssel je Lauf | `PreisPublikation` | `kurs.preis_publikationen` (Postgres) |
 | die Aktion `I2`/`I3` darin | `AusgabeAktion { UPSERT, DELETE }` | — |
 | monotoner Guard | `PreisHerkunft` | `kurs.preis_herkunft` (Postgres) |
-| `tmp_if_last`-Projektion | `LetzterPreis` | `kurs.letzte_preise` (Postgres) |
+| **Letztpreis-Projektion** | `TmpIfLast` | `kurs..tmp_if_last` (Sybase, Business-Kontext) |
+| deren Guard und Spiegel | `LetzterPreis` | `kurs.letzte_preise` (Postgres) |
 | **welche Lieferung sich durchsetzt** — die Komponente | `WirksamePreismeldungen` (statische Fabriken, wie `SteuerMeldungBundles`) | — |
 | deren Ergebniszeile | `WirksamePreismeldung` | — |
 | Fehlmeldungs-Job | `FehlendePreismeldungenJob` | `infra.fehlende_preismeldungen_jobs` |
