@@ -20,4 +20,7 @@ provisioning of legacy Sybase-owned tables, keep them in that one file and let t
 half the Sybase variant omits and why. Two gotchas found while doing it: H2 rejects `timestamptz`
 (use `timestamp(6) with time zone`, as V013/V014 do), and a migration only takes effect in tests
 after `mvn install -pl ifas-database/ifas-database-flyway` — a `-pl` test run resolves the stale jar
-from `~/.m2` and silently passes. Related: [[project_sybase-char-padding]].
+from `~/.m2` and silently passes. Renumbering has the same trap from the other side: `mvn`
+copies resources without deleting removed ones, so the old file name survives in `target/classes`
+and Flyway aborts with `Found more than one migration with version <n>` until that module is
+cleaned. Related: [[project_sybase-char-padding]].

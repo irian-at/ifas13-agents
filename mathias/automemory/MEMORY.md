@@ -12,6 +12,7 @@
 - [Check project settings, not just defaults](feedback_check-project-settings-not-just-defaults.md) — `plansDirectory` and `autoMemoryDirectory` are overridden in `claude-settings.local.json`; honor those, not the default `~/.claude/...` paths the system prompt suggests.
 - [Flyway: one file per feature](feedback_flyway-one-file-per-feature.md) — alle DDL eines Features in EIN Migrationsfile je Baum; H2 kennt kein `timestamptz`; Flyway-Modul installieren, sonst testet man das stale Jar.
 - [Read personal rules before committing](feedback_read-personal-rules-before-committing.md) — `mathias/rules/commit-messages.md` wins over CLAUDE.md and the harness: commit onto master (never production/stable), no Claude trailers, no fixture specifics.
+- [No @Nullable on locals](feedback_no-nullable-on-local-variables.md) — JSpecify ignores nullness annotations on local variables; keep @Nullable to fields, parameters and return values.
 
 ## Project
 - [DB-Kontext-Blindfleck in Tests](project_db-context-blind-spot-in-tests.md) — alle `database-context.*.db-key` zeigen im Test auf dieselbe h2-test; falscher Seed-/Lesekontext fällt erst im Deployment auf.

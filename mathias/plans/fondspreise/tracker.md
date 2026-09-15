@@ -165,7 +165,9 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
             im laufenden System geprüft
       - [x] **Flyway-Nummern** — `master`/`stable`/`production` enden bei V064, unsere V065–V067
             sind frei. Kollision nur mit `origin/ausschuettung` (eigene V065/V066); wer später
-            mergt, nummeriert um
+            mergt, nummeriert um. **Beim Merge von `origin/master` am 2026-09-14 erneut geprüft**
+            (`fcb8f35ff`): master bringt gar keine Migration mit (nur Fristenprüfungs-Testdaten),
+            höchste Version dort weiterhin V064, nicht umnummeriert
 
 - [x] ~~**Menüpunkt „Testen → Preismeldungs-Diffs" samt Listenseite**~~ — umgesetzt 2026-09-14
       (User). Der Deploy-Check hatte nur die *Detail*-Sichtbarkeit repariert (`d54277af1`); der
