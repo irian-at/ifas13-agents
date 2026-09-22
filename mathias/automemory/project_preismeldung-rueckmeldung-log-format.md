@@ -1,5 +1,5 @@
 ---
-name: preismeldung-rueckmeldung-log-format
+name: project_preismeldung-rueckmeldung-log-format
 description: "Verified byte format of the Preismeldung Rückmeldung logs - LF + ISO-8859-1 (not CRLF), labels from txt_bez_e, and the September 2026 production sample that pins it."
 metadata: 
   node_type: memory
@@ -32,4 +32,4 @@ the file afterwards. The sample lives in `docs/Fondspreise/beispiele/testdaten_s
 (`Meldung/db_*` = 103 Preismeldungs-Antworten, `Bereitstellung/` = Auslieferungs-ZIPs); two of
 them are committed as fixtures under the fondspreise module's
 `src/test/resources/.../rueckmeldung/` and compared byte-for-byte by
-`PreismeldungRueckmeldungGoldenFileTest`. Related: [[legacy-file-charsets-differ]].
+`PreismeldungRueckmeldungGoldenFileTest`. Related: [[project_legacy-file-charsets-differ]].

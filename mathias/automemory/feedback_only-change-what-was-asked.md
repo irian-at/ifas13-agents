@@ -1,7 +1,11 @@
 ---
-name: Only change what was asked
+name: feedback_only-change-what-was-asked
 description: Do not modify file content the user did not ask about. Especially watch for silent encoding/whitespace/format drift caused by tooling.
-type: feedback
+metadata: 
+  node_type: memory
+  type: feedback
+  originSessionId: 1fee64d9-966a-4d22-b87c-267f691cb0c8
+  modified: 2026-09-22T09:28:03.533Z
 ---
 
 Stay strictly within the scope of the user's request. Never silently change unrelated content — including encoding, whitespace, line endings, or character substitutions in lines you did not need to touch.

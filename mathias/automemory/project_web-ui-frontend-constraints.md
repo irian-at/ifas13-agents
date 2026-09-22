@@ -1,5 +1,5 @@
 ---
-name: web-ui-frontend-constraints
+name: project_web-ui-frontend-constraints
 description: "ifas-web-ui has no npm/webjars/CDN and its layout pulls only ~{::section} — new markup or scripts outside <section> are silently dropped"
 metadata: 
   node_type: memory

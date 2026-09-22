@@ -32,4 +32,4 @@ counts as the active `previousSteuerMeldung` only when `getGueltBis() == null` (
 on `DbSteuerMeldung` only — input/CSV STMs never have it). Do **not** filter the `existingMeldungen`
 map map-wide — chain walks (`findVorherigeFinalSteuerMeldung`, successor lookups) still need ended rows.
 
-Related: [[project_recalc-fixture-data-recovery]], [[recalc-historical-fidelity]].
+Related: [[project_recalc-fixture-data-recovery]], [[project_recalc-historical-fidelity]].

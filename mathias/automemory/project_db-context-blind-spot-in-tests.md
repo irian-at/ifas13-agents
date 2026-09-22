@@ -1,5 +1,5 @@
 ---
-name: db-context-blind-spot-in-tests
+name: project_db-context-blind-spot-in-tests
 description: In den Integrationstests zeigen alle database-context.*.db-key auf dieselbe h2-test-DB — ein im falschen Kontext geschriebener oder gelesener Zugriff fällt dort nie auf.
 metadata: 
   node_type: memory
@@ -30,4 +30,4 @@ DBMS für alle Kontexte fahren. Nur die Deklaration verrät die Wahrheit.
 `package-info` des Persistence-Pakets und dem `@Table(catalog=…)` der Entity — dort steht, in
 welchem Kontext sie tatsächlich gelesen wird. Für Schreibziele gilt das Muster der
 Ausschüttungs-Kette: Kontext aus der Konfiguration auflösen, nie vom Einreicher erben
-([[sybase-schema-freeze]]).
+([[project_sybase-schema-freeze]]).

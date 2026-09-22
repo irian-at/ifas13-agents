@@ -1,5 +1,5 @@
 ---
-name: intellij-git-add
+name: user_intellij-git-add
 description: Der User staged neue Dateien manuell in IntelliJ — der Git-Index enthält oft schon seine Adds (auch von Claude-erzeugten Dateien).
 metadata: 
   node_type: memory

@@ -1,5 +1,5 @@
 ---
-name: quick-recalc-undo-single-update
+name: project_quick-recalc-undo-single-update
 description: "To test whether an UPDATE would have been accepted/rejected using a quick-recalc yaml that's a post-processing export, strip the successor STM it created (+ child rows) and revert the predecessor's guelt/gueltBis to reproduce the pre-update DB state."
 metadata: 
   node_type: memory
@@ -14,7 +14,7 @@ doesn't test the original question — the targeted stmId is now superseded (`gu
 you get `ERR_MELDID_NICHT_MEHR_GUELTIG` instead of the Fristen/status outcome you actually wanted
 to check.
 
-**Undo recipe** (single-STM version of [[recalc-fixture-data-recovery]]'s grossfile pattern):
+**Undo recipe** (single-STM version of [[project_recalc-fixture-data-recovery]]'s grossfile pattern):
 
 1. Remove the `STEUER_MELDUNG` block(s) the update created — the direct successor
    (`vorherigeStmId` = the target) and anything chained further off it (e.g. a later DELETE of
@@ -38,5 +38,5 @@ input CSV in a legacy-style result zip are safe to leave untouched: `Recalculati
 (`STM_MELDUNG_CSV_FILE`) over confirm/delete/prefilled-Excel — the return file is only read
 separately for delta comparison. They aren't replayed as a chain.
 
-Related: [[recalc-fixture-data-recovery]], [[gueltbis-active-meldung-discriminator]],
-[[quick-recalc-stale-test-classes]].
+Related: [[project_recalc-fixture-data-recovery]], [[project_gueltbis-active-meldung-discriminator]],
+[[project_quick-recalc-stale-test-classes]].

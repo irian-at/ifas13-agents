@@ -1,5 +1,5 @@
 ---
-name: headless-launch-devtools-npe
+name: project_headless-launch-devtools-npe
 description: "Launching a Local*IfasApplication via bare `java -cp` needs -Dspring.devtools.restart.enabled=false, else every DB access NPEs"
 metadata: 
   node_type: memory
@@ -22,7 +22,7 @@ configurations don't hit this, so it looks like a code bug when it is purely a l
 **How to apply:** when starting the app headlessly (agent verification, screenshots, smoke tests),
 always pass `-Dspring.devtools.restart.enabled=false`, and add `--server.port=<n>` to avoid
 colliding with an instance already on 8080. Don't chase the NPE stack trace — no frames in it
-belong to application code. See [[project-recalc-historical-fidelity]] for other launcher notes.
+belong to application code. See [[project_recalc-historical-fidelity]] for other launcher notes.
 
 **Full recipe** from `ifas-applications/ifas-main-application` after `mvn install -DskipTests`:
 

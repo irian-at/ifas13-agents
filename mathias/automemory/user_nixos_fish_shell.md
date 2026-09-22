@@ -1,8 +1,10 @@
 ---
-name: User uses NixOS with fish shell
+name: user_nixos_fish_shell
 description: User runs NixOS with home-manager, fish as interactive shell, CLAUDE_CODE_SHELL=bash for Claude Code. comma (`,`) is enabled for ad-hoc nixpkgs invocation.
-type: user
-originSessionId: 2d06199c-90d2-457b-b1d2-50a667625a74
+metadata:
+  type: user
+  originSessionId: 2d06199c-90d2-457b-b1d2-50a667625a74
+  modified: 2026-09-22T09:28:02.026Z
 ---
 - NixOS with home-manager for system configuration
 - Fish shell as interactive shell

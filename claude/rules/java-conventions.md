@@ -97,6 +97,8 @@ private static final Logger LOG = LoggerFactory.getLogger(MyClass.class);
 All classes and interfaces must use JSpecify annotations (`org.jspecify.annotations`):
 - Mark every class/interface with `@NullMarked`
 - Explicitly mark nullable fields, parameters, and return values with `@Nullable`
+- Never annotate a **local variable** — JSpecify leaves locals out of scope and infers their
+  nullness, so the annotation compiles (it is `TYPE_USE`) but is silently ignored
 
 ## Exception Handling
 

@@ -1,5 +1,5 @@
 ---
-name: recalc-historical-fidelity
+name: project_recalc-historical-fidelity
 description: When recalculating an old SteuerMeldung version V, IFAS13 must reproduce the validator output legacy would have produced at the time V was current — not legacy's current behavior. Version gates that look redundant may be intentional.
 metadata:
   type: project
@@ -15,4 +15,4 @@ When IFAS13 recalculates a SteuerMeldung of schema version V (≤ current legacy
 - When introducing a similar gate, cite the legacy `OeKBSD-…` ticket in the commit message so the rationale doesn't get lost.
 - Grossfile baselines and `[+]/[-]` deviations may legitimately include legacy-only entries that current legacy wouldn't emit — those are stale-by-design (fixture logs predate legacy changes).
 
-Related: [[only-change-what-was-asked]].
+Related: [[feedback_only-change-what-was-asked]].

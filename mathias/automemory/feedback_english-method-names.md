@@ -1,11 +1,11 @@
 ---
-name: english-method-names
+name: feedback_english-method-names
 description: "Methodennamen englisch (write/process/compare), deutsch nur für Fachbegriffe in Typ-/Feldnamen."
 metadata: 
   node_type: memory
   type: feedback
   originSessionId: 29d00419-c8e9-488e-8e21-00dd20901780
-  modified: 2026-09-02T14:31:14.967Z
+  modified: 2026-09-22T09:30:01.771Z
 ---
 
 Methodennamen sind englisch — `write` statt `schreibe`, `process` statt `verarbeite`, `compare`
@@ -20,3 +20,6 @@ CLAUDE.md-Konvention „Englisch für Technisches, Mischung erlaubt".
 **How to apply:** Beim Schreiben neuer Methoden das Verb immer englisch wählen; deutsche Verben
 nur in Legacy-Meldungstexten (die bleiben wortgetreu). Betrifft auch Test-Methodennamen
 (`whenProcess`, nicht `whenVerarbeite`).
+
+Seit 2026-09-22 als Regel hinterlegt: `mathias/rules/english-method-names.md` (lädt auf
+`**/*.java`). Diese Memory hält nur noch die Herkunft fest.

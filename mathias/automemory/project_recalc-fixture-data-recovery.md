@@ -1,5 +1,5 @@
 ---
-name: recalc-fixture-data-recovery
+name: project_recalc-fixture-data-recovery
 description: "When a grossfile recalc references a meldung/ISIN missing from sybase-gast, recover it from a LATER grossfile's export-AFTER snapshot before giving up — undoing that grossfile's own mutations."
 metadata: 
   node_type: memory

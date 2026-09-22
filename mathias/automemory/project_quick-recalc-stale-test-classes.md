@@ -1,5 +1,5 @@
 ---
-name: quick-recalc-stale-test-classes
+name: project_quick-recalc-stale-test-classes
 description: "QuickRecalculationTest scans target/test-classes, so a swapped-out zip left behind there breaks the run with a misleading \"must have at least one Melde-CSV\" error."
 metadata: 
   node_type: memory
@@ -27,4 +27,4 @@ real cause is a duplicate resource.
 **How to apply:** when this error appears, `ls target/test-classes/.../quick-recalc/` **before**
 inspecting the zip. Any extra zip there is the bug; delete it (or `mvn clean test-compile -pl
 ifas-testing/ifas-integration-tests -Pno-proxy`). Same trap applies to the multi-file mode of the
-test. See [[recalc-fixture-data-recovery]] for the fixture side of quick-recalc work.
+test. See [[project_recalc-fixture-data-recovery]] for the fixture side of quick-recalc work.

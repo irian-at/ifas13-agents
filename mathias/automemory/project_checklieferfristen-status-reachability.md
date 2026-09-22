@@ -1,5 +1,5 @@
 ---
-name: project-checklieferfristen-status-reachability
+name: project_checklieferfristen-status-reachability
 description: "Legacy CheckLieferfristen() (ERR_FRIST_NOSN / ERR_FRIST_SN) is reachable from NEW, CONFIRMED and UPDATE — never DELETE; the UPDATE call site is easy to miss."
 metadata: 
   node_type: memory
@@ -39,7 +39,7 @@ that trips such filters), which makes UPDATE look unreachable.
 
 **How to apply:** when checking which statuses a legacy Frist validation fires for,
 enumerate call sites with a plain `grep -a -n` (no `//` filter — legacy .cpp is
-ISO-8859-1, see [[project-kontroll-tolerance-legacy]]) and follow each into its
+ISO-8859-1, see [[project_kontroll-tolerance-legacy]]) and follow each into its
 enclosing status branch. `isShouldCheckFristNosn` in
 `SteuerMeldungStatusValidationService` already encodes this matrix correctly
 (NEW=always, CONFIRMED=no prior FINAL, UPDATE=OPEN predecessor without FINAL,

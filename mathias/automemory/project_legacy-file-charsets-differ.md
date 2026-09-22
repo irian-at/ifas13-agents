@@ -1,5 +1,5 @@
 ---
-name: legacy-file-charsets-differ
+name: project_legacy-file-charsets-differ
 description: Legacy EStB CSVs are windows-1252 while return/delete/confirm CSVs and logs are IBM437 - the encoding follows the data's origin, not the producing program.
 metadata:
   type: project
@@ -21,5 +21,5 @@ so it carries the DB's windows-1252.
 "it's a legacy file, so IBM437". Reading an EStB CSV as IBM437 silently turns every umlaut
 into U+207F, which then encodes to `?` in a report - it does not throw, it just manufactures
 field diffs. Verify with a byte histogram (`tr -dc '\200-\377' < file | od -An -tx1`) before
-trusting a declaration. See [[gf1-fielddiff-null-vs-zero]] for the other class of phantom
+trusting a declaration. See [[project_gf1-fielddiff-null-vs-zero]] for the other class of phantom
 field diffs.

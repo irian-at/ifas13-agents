@@ -1,10 +1,11 @@
 ---
-name: plan-file-naming
+name: feedback_plan-file-naming
 description: "Immediately after plan approval, mv the plan file from ~/.claude/plans/<random-slug>.md to mathias/plans/ as YYYY-MM-DD-<descriptive-kebab-name>.md — renaming during plan mode is impossible."
 metadata: 
   node_type: memory
   type: feedback
   originSessionId: 3f16e04c-394e-423d-aa21-90f5c73de4df
+  modified: 2026-09-22T09:30:10.417Z
 ---
 
 The harness pre-creates the plan file at `~/.claude/plans/<random-slug>.md` (e.g. `have-a-look-at-elegant-stearns.md`) and ignores the configured `plansDirectory` (upstream bug anthropics/claude-code#19537). Plan mode is read-only — the slug file is the ONLY editable file, so renaming/moving **cannot happen before `ExitPlanMode`**.
@@ -31,5 +32,9 @@ Good-name examples:
 - Pick the name from the plan's title/scope, not the session slug.
 - Do the `mv` before touching any implementation work.
 - Target dir for this project: `/home/sma/dev/projects/ifas13-agents/mathias/plans/`.
+
+Since 2026-09-22 the rule file `mathias/rules/plan-file-naming.md` carries this verbatim (it
+previously said to "override the suggested path before writing", which plan mode makes impossible,
+and omitted the mandatory date prefix). This memory keeps only the origin.
 
 Related: [[plan-mode-tilde-path]]

@@ -1,5 +1,5 @@
 ---
-name: check-active-fixture-before-synthesizing-repro
+name: feedback_check-active-fixture-before-synthesizing-repro
 description: "When the user is mid-investigation of a specific production/test-environment ticket, check their already-staged scratch fixture (quick-recalc.zip etc.) for the exact scenario before building a synthetic minimal reproduction from scratch."
 metadata: 
   node_type: memory
@@ -17,7 +17,7 @@ Ausschüttungsmeldung.
 
 **Why:** the user routinely stages the real (or server-exported) data for whatever they're
 currently debugging in their disposable `quick-recalc` scratch slot before asking about it — per
-[[quick-recalc-stale-test-classes]], that fixture is gitignored and swapped between
+[[project_quick-recalc-stale-test-classes]], that fixture is gitignored and swapped between
 investigations. Building a parallel synthetic scenario duplicates work they'd already done and
 risks testing the wrong shape of data entirely.
 

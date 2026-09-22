@@ -1,5 +1,5 @@
 ---
-name: check-project-settings-not-just-defaults
+name: feedback_check-project-settings-not-just-defaults
 description: Before using a default path the plan-mode prompt or system prompt suggests (plans dir, memory dir, etc.), check claude-settings.local.json for an override. Same rule as autoMemoryDirectory — it applies to plansDirectory too.
 metadata:
   type: feedback
@@ -26,5 +26,5 @@ default prompts. If the file path in the plan-mode system reminder
 points at `~/.claude/...`, treat that as a default-prompt artifact and
 relocate.
 
-Related: [[only-change-what-was-asked]],
-[[plan-file-naming]].
+Related: [[feedback_only-change-what-was-asked]],
+[[feedback_plan-file-naming]].

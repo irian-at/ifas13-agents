@@ -1,5 +1,5 @@
 ---
-name: korrekturfrist-requires-final-predecessor
+name: project_korrekturfrist-requires-final-predecessor
 description: "ERR_UPD_TOLATE (15.12. Korrekturfrist) only fires when a FINAL exists in the meldung's chain; an OPEN meldung that was never confirmed falls back to the plain Meldefrist (GJ-Ende + 7 months) instead, regardless of how far the calendar year has passed. Matches legacy exactly."
 metadata: 
   node_type: memory
@@ -28,5 +28,5 @@ check whether the targeted meldung has ever been through CONFIRMED→FINAL. If i
 nothing to "correct" yet. A stricter rule ("reject any update once the calendar year is over,
 confirmed or not") is a new business requirement, not a fix — legacy has never enforced that either.
 
-Related: [[gueltbis-active-meldung-discriminator]] (same "guelt_bis is null = active" chain-walk
-family), [[checklieferfristen-status-reachability]], [[recalc-historical-fidelity]].
+Related: [[project_gueltbis-active-meldung-discriminator]] (same "guelt_bis is null = active" chain-walk
+family), [[project_checklieferfristen-status-reachability]], [[project_recalc-historical-fidelity]].

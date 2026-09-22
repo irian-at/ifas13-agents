@@ -1,5 +1,5 @@
 ---
-name: sybase-schema-freeze
+name: project_sybase-schema-freeze
 description: Keine neuen Tabellen/Spalten in Sybase; neue Tabellen nach Postgres — Business-Tabellen aber NICHT nach infra. Sybase-Migration nach Postgres im Lauf von 2027.
 metadata: 
   node_type: memory
@@ -25,5 +25,5 @@ und Sybase-Legacy-Tabelle gibt es nicht (kein XA) — bis zur Migration Klammer-
 Fondspreise-Konzept. Parallelbetrieb neuer Domänen: Altsystem verarbeitet/persistiert zuerst, seine
 Input-/Resultfiles laufen als Diff-Job durchs Neusystem (Muster `IsinAnforderungslisteDiffJob`,
 `AusschuettungsMeldungDiffJobSubmissionService`); Außenwirkungen (Mails, MFT) unterdrückt. Siehe
-[[gf1-fielddiff-null-vs-zero]] und [[validationsetting-flags-have-two-effects]] für die
+[[project_gf1-fielddiff-null-vs-zero]] und [[project_validationsetting-flags-have-two-effects]] für die
 Diff-Konfiguration bekannter Abweichungen.
