@@ -14,6 +14,7 @@
 - [Read personal rules before committing](feedback_read-personal-rules-before-committing.md) — `mathias/rules/commit-messages.md` wins over CLAUDE.md and the harness: commit onto master (never production/stable), no Claude trailers, no fixture specifics.
 - [No @Nullable on locals](feedback_no-nullable-on-local-variables.md) — JSpecify ignores nullness annotations on local variables; keep @Nullable to fields, parameters and return values.
 - [Check active fixture before synthesizing repro](feedback_check-active-fixture-before-synthesizing-repro.md) — Before building a synthetic reproduction, check the user's already-staged scratch fixture (quick-recalc.zip etc.) for the real scenario.
+- [Glossary for symbols and refs](feedback_glossary-for-symbols-and-refs.md) — every message using placeholder names (O, Z, K, D) or numbered refs (B2, Chunk 3) opens with a short glossary; re-issue it each time.
 
 ## Project
 - [DB-Kontext-Blindfleck in Tests](project_db-context-blind-spot-in-tests.md) — alle `database-context.*.db-key` zeigen im Test auf dieselbe h2-test; falscher Seed-/Lesekontext fällt erst im Deployment auf.
@@ -39,7 +40,7 @@
 - [STM delivery-chain test harness](project_stm-delivery-chain-test-harness.md) — chains need processLieferung; recalc never persists and calculateBundle rejects confirm/delete files.
 - [Temporal type storage per DBMS](project_temporal-type-storage-per-dbms.md) — all 3 java.time types agree on the Instant, but offset types store UTC on Sybase/Postgres and Vienna on H2.
 - [Sybase testcontainer credentials](project_sybase-testcontainer-credentials.md) — repo-root .env now present; .idea's skip-sybase16-tests silently drops Sybase invocations; jTDS product name is exactly "ASE".
-- [Import/Export n:n Lieferanten](project_importexport-nn-lieferanten.md) — nur die HDP/KAG-Seite wird geschrieben; ein HDP-Eintrag ohne `lieferanten` löscht die Join-Zeilen, und Sybase hat dort keine FKs.
+- [Import/Export n:n Lieferanten](project_importexport-nn-lieferanten.md) — nur KAG/HDP owning; `lieferanten` fehlt = Links bleiben, `[]` = weg; Lieferant mappedBy (ee12a63fc); Sybase ohne FKs.
 - [jTDS shared-Calendar race](project_jtds-shared-calendar-race.md) — Calendar AIOOBE under jTDS is Hibernate's shared static UTC_CALENDAR (silently swaps timestamps between threads), never bad data.
 - [Sybase char-Padding](project_sybase-char-padding.md) — `char(n)` liefert aufgefüllte Werte (`"R "`, `"AIF "`); `INV.status` ist varchar; `@Convert` greift auf `@Id` nicht, trimmender Getter stattdessen.
 - [Fondspreise Stufe 1/2 split](project_fondspreise-stufe-split.md) — Stufe 1 auf master (max V070), Stufe 2 auf feat/fondspreise-sync als ein Revert-Commit; dessen V067-V069 kollidieren alle drei, vor dem Merge auf V071-V073 nachnummerieren.
@@ -48,3 +49,4 @@
 - [zufluss is the FINAL Stichtag](project_zufluss-is-the-final-stichtag.md) — select "became FINAL for Stichtag D" via `zufluss = D`, never a gueltAb/eintragezeit window; gueltAb is re-stamped at finalize and looks usable but is a wall clock.
 - [Korrekturfrist needs a FINAL predecessor](project_korrekturfrist-requires-final-predecessor.md) — ERR_UPD_TOLATE only fires with a FINAL in the chain; an OPEN meldung never confirmed falls back to the plain Meldefrist (GJ-Ende+7M) regardless of calendar year — matches legacy, not a bug.
 - [quick-recalc: undo a single UPDATE](project_quick-recalc-undo-single-update.md) — strip the successor STM (+ STEUER_FIELDS_DATA/STEUER_BEH_DATA child rows by stmId) and revert predecessor's guelt/gueltBis to reproduce pre-update state from a post-processing export.
+- [Grossfile yaml trimming](project_grossfile-yaml-trimming.md) — UAT exports carry the full STM history; the recalc reads field data only for processed Vorherige; strip with FondsYamlStripTool and prove it by diffing all output files against a full run.
