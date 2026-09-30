@@ -1,8 +1,13 @@
 # Fondspreise — Umsetzungs-Tracker
 
-Lebendes Dokument: der Status aller offenen Schritte zur Umsetzung von
-[2026-08-31-fondspreise-neuentwicklung-konzept.md](2026-08-31-fondspreise-neuentwicklung-konzept.md).
-Definitionen und Begründungen stehen ausschließlich im Konzept; hier stehen nur Status, Blocker und
+Lebendes Dokument: der Status aller offenen Schritte. **Seit 2026-09-30 gibt es genau zwei
+Referenzdokumente:** den Plan
+[2026-09-30-fondspreise-preis-historie-versionen.md](2026-09-30-fondspreise-preis-historie-versionen.md)
+(die Lösung: `preis_historie`, Verarbeitung, Chunks) und die Analyse
+[2026-09-30-fondspreise-legacy-analyse-und-befunde.md](2026-09-30-fondspreise-legacy-analyse-und-befunde.md)
+(Altsystem-Befunde, Tagesablauf, Datenlage, Fachabteilung, Klärungen A–P, Constraints). Das
+Konzept vom 31.08. und alle Zwischenentwürfe liegen unter `../archive/2026-08/` und
+`../archive/2026-09/` und werden nicht mehr gepflegt. Hier stehen nur Status, Blocker und
 Verweise. Zu diesem File gibt es bewusst **kein Deck** — es darf täglich churnen.
 
 ## 1. Klärungen
@@ -19,7 +24,7 @@ Verweise. Zu diesem File gibt es bewusst **kein Deck** — es darf täglich chur
 | **L** | Vorrangregel Preis-/Ausschüttungs-Einspielung — Empfehlung O1+O3 bestätigen. **Befund 2026-09-08 (Zeitachse):** der Diskussionsstand „Cutoff 1 ~14:00 / Cutoff 2 ~16:00" kollidiert mit der Cron-Zeit von Ausschüttungs-Job 3 (16:00) — **Lauf 2 muss nach ihm liegen**, sonst fehlt dessen Buchung im Delta. Lauf 1 vor Job 3 ist damit erfüllt (14:00 < 16:00) | Markus / Fachabteilung | — | offen, Terminfrage präzisiert |
 | **N** | Zweck des `tmp_if_last`-Fallbacks (N1/N2) — N2 würde Entscheidung 6 kippen | Fachabteilung / Bezieher | Schnitt 5 | offen |
 | **O** | Fremdleser von `kurs..tmp_if_last`: lesen KUPL/KMS die Tabelle direkt, und welche Spalten? Entscheidet, ob die Projektion dauerhaft bleibt (sonst Fallback aus `kurs`, Plan D14) und wie exakt `txt_bez`/`liefer_id`/`eintragezeit` dem Legacy entsprechen müssen | Fachabteilung / KUPL-KMS-Verantwortliche | Schnitt 2 AP11 (Spaltentreue), Schnitt 4 | offen (User 2026-09-11) |
-| **P** | Fallback-Semantik: darf ein Preis in Währung ≠ Fondswährung (steht nie in `kurs`) und ein per `D` zurückgezogener Preis im Lauf-1-Fallback erneut veröffentlicht werden? Fragen-File [2026-09-11-fondspreise-fachabteilung-fragen-fallback-waehrung.md](2026-09-11-fondspreise-fachabteilung-fragen-fallback-waehrung.md); Größenordnung über V6 im SQL-File | Fachabteilung | Schnitt 4/5; bis dahin Legacy-getreu (Plan D14) | offen |
+| **P** | Fallback-Semantik: darf ein Preis in Währung ≠ Fondswährung (steht nie in `kurs`) und ein per `D` zurückgezogener Preis im Lauf-1-Fallback erneut veröffentlicht werden? Fragen-File [2026-09-11-fondspreise-fachabteilung-fragen-fallback-waehrung.md](../archive/2026-09/2026-09-11-fondspreise-fachabteilung-fragen-fallback-waehrung.md); Größenordnung über V6 im SQL-File | Fachabteilung | Schnitt 4/5; bis dahin Legacy-getreu (Plan D14) | offen |
 | 13. | `ERR_DATE04` nur für Code `R` — gilt Kommentar oder Code? | Fachabteilung | Schnitt-1-Detail | offen |
 | 14. | Bestätigen, dass nur Plausi-Abschnitt 15 entfällt (nicht 17, `makeCorrelationERZ`) | Markus | Schnitt-4-Detail | offen |
 | — | „LMT = Liquidity Management Tools" für Außendokumente bestätigen | Fachabteilung | — | offen |
@@ -79,6 +84,34 @@ Quelle: Konzept, Abschnitt *Datenbeschaffung*. Q-Nummern siehe Warnung unten.
       vorhanden / aktuell — quantifiziert O/P. Erste Fassung lief zu lange (korreliertes `max` über
       die Kurshistorie), Fassung mit `#lp`-Zwischentabelle und `exists` liegt bereit. **Auf GAST
       ausführen, Ergebnis eintragen**
+- [ ] **Währungsprüfung für alle Preiscodes — Häufigkeit messen** (User 2026-09-24): entschieden ist,
+      `tax_code.isinwaehrung = J` für `R`/`E`/`Z`/`S`/`S2`/`S3` zu setzen, **nur im Neusystem**; die
+      Lieferanten bekommen `ERR_CURRENCY04` erst ab Go-live, Legacy bleibt unverändert. Offen: das
+      Flag im Neusystem schon im Parallelbetrieb setzen (jede betroffene Lieferung wird eine Differenz
+      im Rückmeldungs-Diff; bekannte Abweichungen klassifiziert er über `PreisMeldungDiffSetting`,
+      bisher nur `ignoreInfoDelMessages` — ein Flag für `ERR_CURRENCY04` wäre dasselbe Muster) oder
+      erst am Umstellungstag.
+      Vor der Entscheidung zählen: betroffene Zeilen und Lieferungen je Tag, **je Code getrennt**
+      (Solva ist ein Prozentsatz, die Währungsspalte dort Formsache) und je Lieferant. Über mehrere
+      Liefertage, nicht nur einen; V6d (Fall Währung ≠ Fondswährung in `tmp_if_last`) liefert nur die
+      Schlüssel im 65-Tage-Fenster, nicht das Tagesvolumen
+- [ ] **Identische Nachlieferungen im Preisfile — Differenzen auswerten** (User 2026-09-24):
+      entschieden ist, dass ein neueres `N` mit **gleichem Wert** (numerisch verglichen, nicht als
+      Text) keine neue Version in `preis_historie` erzeugt und deshalb vom Sammelreport nicht erneut
+      verschickt wird. Legacy schreibt jede am Tag empfangene Zeile ins File, also auch identische
+      Nachlieferungen zu **älteren** Stichtagen als `I2` (beim Bezieher ein No-op-Upsert). Im
+      Preisfile-Diff des Parallelbetriebs auswerten: wie viele solche Zeilen je Tag und je Lieferant,
+      und welcher Anteil der „Korrekturen" (Beispielreport: 107 an einem Tag) tatsächlich einen
+      geänderten Wert trägt. Erst danach entscheiden, ob es bei „weglassen" bleibt. **Ergänzung 2026-09-25** (Plan `preis_historie`, B8): dieselbe Frage
+      von der anderen Seite — hat es für die Fachabteilung einen Mehrwert, wenn ersichtlich ist, dass
+      derselbe Preis neuerlich geliefert wurde? In `preis_historie` hinterlässt das heute keine Spur
+      (Gleicher-Wert-Regel; nur die Inbox im Aufbewahrungsfenster zeigt es). Ja → Regel kippen
+      (Zeile je Lieferung, Sammelreport schickt `I2` erneut wie Legacy) oder ein Ankunftsmerkmal an
+      der offenen Zeile; nein → bleibt. **Vermutung nein** (User 2026-09-25, aus den
+      Unterlagen): das tägliche Preisfile soll in erster Linie den letzten in `kurs` veröffentlichten
+      Preis liefern, wenn nichts geliefert wurde den vorherigen — deshalb wird `tmp_if_last` künftig
+      vermutlich nicht mehr gebraucht (siehe Klärung N), und eine Nachlieferung eines unveränderten
+      Preises ändert für den Bezieher nichts. Mit der Fachabteilung nur noch bestätigen
 - [ ] Vollständiger `fplausib.txt` mit Treffern in allen Abschnitten (Meldungstexte)
 - [ ] Aktuelle `preis.dtd`, wie tatsächlich ausgeliefert
 - [ ] `datum_min`-Vergleichsrichtung (Code widerspricht Feldbeschreibung) — Fachabteilung
@@ -98,8 +131,8 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
 
 | # | Schnitt | blockiert durch | Detail-Plan | Status |
 |---|---|---|---|---|
-| 1 | Lieferkette Stufe 1 — Eingang, Inbox, Rückmeldung | ~~`tax_code`~~ (erhoben, V1) | [2026-09-02-fondspreise-schnitt1-eingang-inbox-rueckmeldung.md](2026-09-02-fondspreise-schnitt1-eingang-inbox-rueckmeldung.md) | **umgesetzt + gepusht** (ifas13 `1f3d9f393`/`0dbd47271`); **Byte-Verifikation am 2026-09-14 durchgeführt** — `statistics.log` und `data.log` mussten auf das echte Format umgebaut werden, zwei Golden-File-Tests stehen (siehe *Erledigt*). Rest siehe die drei neuen offenen Punkte unten |
-| 2 | Stufe 2 — Sync, Guard (Klammer-Transaktion), Projektion `tmp_if_last` + `letzte_preise` als Guard/Spiegel, Rebuild | O/P (nur für „Projektion überhaupt?") | [2026-09-08-fondspreise-schnitt2-sync-guard-letzte-preise.md](2026-09-08-fondspreise-schnitt2-sync-guard-letzte-preise.md) | **umgesetzt** — AP1–AP11 fertig (Designreview 2026-09-11: Projektion nach `kurs..tmp_if_last` in der Neusystem-Sybase, `letzte_preise` ist Guard + Spiegel, Diff-Ebenen 3/4 ausgebaut; Plan D11–D14), AP9 Tests und AP10 Doku am 2026-09-14, dazu der Deploy-Check mit Schreibkontext-Fix und Detailseite. Branch `feat/fondspreis`: bis `fff8b561f` gepusht, die **8 Commits vom 2026-09-14 noch nicht** (`cd5ba62f2` … `2606dc1b2`). Offen bleibt nur, was bewusst nicht verdrahtet ist (Rebuild, Cleanup) |
+| 1 | Lieferkette Stufe 1 — Eingang, Inbox, Rückmeldung | ~~`tax_code`~~ (erhoben, V1) | [2026-09-02-fondspreise-schnitt1-eingang-inbox-rueckmeldung.md](../archive/2026-09/2026-09-02-fondspreise-schnitt1-eingang-inbox-rueckmeldung.md) | **umgesetzt + gepusht** (ifas13 `1f3d9f393`/`0dbd47271`); **Byte-Verifikation am 2026-09-14 durchgeführt** — `statistics.log` und `data.log` mussten auf das echte Format umgebaut werden, zwei Golden-File-Tests stehen (siehe *Erledigt*). Rest siehe die drei neuen offenen Punkte unten |
+| 2 | Stufe 2 — **`preis_historie`** (Versionen je Preisschlüssel, Verarbeitungs-Job mit Claim, `preis_historie_source`); Sybase-Ableitung `kurs`/`tmp_if_last` als Folgejob danach | — | [2026-09-30-fondspreise-preis-historie-versionen.md](2026-09-30-fondspreise-preis-historie-versionen.md) | **Design entschieden 2026-09-30**, Umsetzung in Chunks 1–6 offen. Das Guard-Design vom 08.09. (`preis_herkunft`, `letzte_preise`, Klammer-Transaktionen; Branch `feat/fondspreise-sync`, V067–V069 nie deployt) ist verworfen — der Branch dient nur als Steinbruch. `Kurs`/`TmpIfLast` liegen seit `5d22c157c` (V073) auf master |
 | 3 | `WirksamePreismeldungen` als Komponente, isoliert getestet | — | — | offen |
 | 4 | Sammelreport Lauf 1 — Plausi, Files, Publikationsprotokoll, Verteilung | — | — | offen |
 | 5 | Lauf 2 als Delta, inkl. `I3` gegen das Publikationsprotokoll | N, F | — | offen |
@@ -245,12 +278,12 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
       (`database-context.ausschuettung-asf-db-key=postgres-server`). Fremder Code, hier nur
       dokumentiert — mit Markus bzw. dem Ausschüttungs-Team klären
 - [x] **Zeitlicher Ablauf als eigener Schritt** (User 2026-09-08) — erledigt:
-      [2026-09-08-fondspreise-tagesablauf-alt-vs-neu.deck.html](2026-09-08-fondspreise-tagesablauf-alt-vs-neu.deck.html),
+      [2026-09-08-fondspreise-tagesablauf-alt-vs-neu.deck.html](../archive/2026-09/2026-09-08-fondspreise-tagesablauf-alt-vs-neu.deck.html),
       die Tages-Zeitachse Alt gegen Neu als Gegenüberstellung, plus dieselben Bausteine als
       **Ablaufdiagramm nebeneinander** — gleiches Raster, sodass nur die drei Kanten auffallen, die
       links stehen und rechts fehlen (Rückkante um `ASF`, EZB-Selbstschleife, der Mensch als
       Knoten). Für die Diskussion mit der Fachabteilung. Dazu das Begleitblatt
-      [2026-09-08-fondspreise-tagesablauf-diagramme.html](2026-09-08-fondspreise-tagesablauf-diagramme.html)
+      [2026-09-08-fondspreise-tagesablauf-diagramme.html](../archive/2026-09/2026-09-08-fondspreise-tagesablauf-diagramme.html)
       mit dem **vollständigen** Bild ohne Spaltenbreiten-Limit: Gantt je System über alle
       Cron-Läufe, der Altsystem-Ablauf mit beiden Batches und ihrer Verzahnung, und der Tagesjob
       mit allen neun Checkpoints. Quellen dafür neu im Repo: `docs/Tagesjob und Programmablauf/` (Crontab,
@@ -334,6 +367,18 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
       Preismeldung nur über `L1`. Datenkorrektur im Altsystem anfragen (Fachabteilung), sonst
       wandert der Fehler beim Umstieg mit
 
+- [ ] **Aufräumregel für Inbox-Zeilen spezifizieren** (User 2026-09-24): entschieden ist, dass
+      produktive Preismeldungs-Jobs wie die `AusschuettungsMeldungJob`s **nie gelöscht** werden
+      (das Archivieren bleibt das Flag, das nur ausblendet), damit die Quellreferenz
+      `(job_id, zeilen_nr)` aus `preis_historie` dauerhaft auflösbar bleibt. Die Inbox-Zeilen
+      (~26 k/Tag) werden nach einem Fenster gelöscht; danach führt die Referenz über den Job
+      (Lieferant, Dateiname, `empfangen`) zum NetApp-archivierten File. Zu spezifizieren: die Länge
+      des Fensters (wohl als Property konfigurierbar), der Auslöser (geplanter Job?) und was das
+      Fenster mindestens abdecken muss: Wiederholungen und späte Läufe eines Empfangstags, das
+      Support-Tool (Zeilen späterer Empfangstage zum selben Schlüssel), die Jobseite, ggf. die
+      Fondsbezeichnung für `tmp_if_last` (65-Tage-Fenster, offen bis Klärung O). Dasselbe für die
+      Filestore-Bundles (Input-File, Rückmeldungs-ZIP) entscheiden
+
 - [ ] Kennzahlen-Ist-Analyse erstellen (`preisekennzahl.cpp`, `fondskennzahl.cpp`, `c_calc.cpp`) —
       fehlt laut Abgrenzung, Voraussetzung für Schnitt 6
 - [ ] Soll-Konzept nach `docs/Fondspreise/fondspreise-soll-konzept.md`, sobald I entschieden ist
@@ -345,6 +390,22 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
 
 ## Erledigt
 
+- 2026-09-30 — **Ledger-Design entschieden, Plandokumente konsolidiert.** Diskussion vom 30.09.:
+  `preis_historie` als Versionszeilen (`created_at`/`invalidated_at`/`deleted`, Position
+  `empfangen_at` + `zeilen_nr`), Claim je Verarbeitungs-Lauf statt Guard, `preis_historie_source`
+  (eine Zeile je wirksamer Inbox-Zeile, `operation` + beide Versions-IDs, beim Job-System mit
+  Cascade), kein Wertvergleich, Wiederholung fügt nur hinzu, Sybase-Ableitung als Folgejob. Plan:
+  `2026-09-30-fondspreise-preis-historie-versionen.md`. Alle Befunde zum Altsystem, die Datenlage,
+  die Fachabteilungs-Aussagen und die Klärungen A–P in
+  `2026-09-30-fondspreise-legacy-analyse-und-befunde.md` zusammengeführt; Konzept, Schnitt-1/2-Pläne,
+  Formen, ER, Zeitreihe + Review, Tagesablauf-Decks und Fragen-File nach `../archive/` verschoben
+- 2026-09-29 — **`kurs` und `tmp_if_last` nach `master`** (uncommitted): `Kurs`/`KursId`/
+  `KursRepository` und `TmpIfLast`/`TmpIfLastId`/`TmpIfLastRepository` aus `feat/fondspreise-sync`
+  übernommen (Javadoc ohne Sync-/`letzte_preise`-Bezug), DDL beider Tabellen in **einer** Migration
+  `V073__kurs_tmp_if_last.sql` je Baum. Nur Persistenz — die Ableitung aus `preis_historie` bleibt
+  offen (Plan Abschnitt 8). **Flyway-Nummern geprüft:** `master`/`origin/master` enden bei V072,
+  `stable`/`production` bei V064, höchster Sibling `origin/pul/master` V071 → V073 frei, nichts
+  umnummeriert
 - 2026-09-14 — **Rückmeldungs-Format gegen echte Altsystem-Antworten verifiziert und korrigiert**
   (User-Lieferung `testdaten_september.zip`). Bestätigt haben sich `error.log`/`info.log` Zeichen für
   Zeichen, alle fünf in der Stichprobe vorkommenden Meldungstexte, die `DataLogStatus`-Texte sowie
@@ -458,7 +519,7 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
   `TmpIfLastRepositoryTest` auf H2/PG/Sybase — alle grün; Test-Compile aller Module grün
 
 - 2026-09-08 — **Zeitachse Alt gegen Neu** als Deck
-  ([2026-09-08-fondspreise-tagesablauf-alt-vs-neu.deck.html](2026-09-08-fondspreise-tagesablauf-alt-vs-neu.deck.html)),
+  ([2026-09-08-fondspreise-tagesablauf-alt-vs-neu.deck.html](../archive/2026-09/2026-09-08-fondspreise-tagesablauf-alt-vs-neu.deck.html)),
   aus der neuen Doku unter `docs/Tagesjob und Programmablauf/` plus Ist-Analyse und Konzept.
   Drei Befunde, die vorher nur implizit waren: (a) **ein** Sammler (`run_preise`, alle 10 Min)
   trägt Preis-, Ausschüttungs- **und** Steuermeldungen, weil `preis_ins.e` die Meldungsart selbst
@@ -481,7 +542,7 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
   die Ausschüttungs-Domäne, wenn die STM-Seite im Neusystem nicht mehr nach `tmp_aussch` schreibt
 
 - 2026-09-08 — **Schnitt 2 begonnen**, Detail-Plan
-  [2026-09-08-fondspreise-schnitt2-sync-guard-letzte-preise.md](2026-09-08-fondspreise-schnitt2-sync-guard-letzte-preise.md).
+  [2026-09-08-fondspreise-schnitt2-sync-guard-letzte-preise.md](../archive/2026-09/2026-09-08-fondspreise-schnitt2-sync-guard-letzte-preise.md).
   AP1–AP3 umgesetzt: `FondsStammdaten` um `numWfsKu`/`codArtF`/`status` erweitert (eine gebündelte
   Query statt zweier Lookups), `FondspreiseProperties` (`ifas.fondspreise`), Entities `Kurs`,
   `PreisHerkunft` und `LetzterPreis` samt Guard-Repositories, Flyway `V065__fondspreise_sync.sql`
