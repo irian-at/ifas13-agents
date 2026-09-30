@@ -15,6 +15,7 @@
 - [No @Nullable on locals](feedback_no-nullable-on-local-variables.md) — JSpecify ignores nullness annotations on local variables; keep @Nullable to fields, parameters and return values.
 - [Check active fixture before synthesizing repro](feedback_check-active-fixture-before-synthesizing-repro.md) — Before building a synthetic reproduction, check the user's already-staged scratch fixture (quick-recalc.zip etc.) for the real scenario.
 - [Glossary for symbols and refs](feedback_glossary-for-symbols-and-refs.md) — every message using placeholder names (O, Z, K, D) or numbered refs (B2, Chunk 3) opens with a short glossary; re-issue it each time.
+- [/discuss: prose alternatives, not cards](feedback_discuss-prose-alternatives-not-cards.md) — option cards were rejected twice; lay forks out flat in prose/table, one open question, he states his own shape.
 
 ## Project
 - [DB-Kontext-Blindfleck in Tests](project_db-context-blind-spot-in-tests.md) — alle `database-context.*.db-key` zeigen im Test auf dieselbe h2-test; falscher Seed-/Lesekontext fällt erst im Deployment auf.
@@ -43,7 +44,7 @@
 - [Import/Export n:n Lieferanten](project_importexport-nn-lieferanten.md) — nur KAG/HDP owning; `lieferanten` fehlt = Links bleiben, `[]` = weg; Lieferant mappedBy (ee12a63fc); Sybase ohne FKs.
 - [jTDS shared-Calendar race](project_jtds-shared-calendar-race.md) — Calendar AIOOBE under jTDS is Hibernate's shared static UTC_CALENDAR (silently swaps timestamps between threads), never bad data.
 - [Sybase char-Padding](project_sybase-char-padding.md) — `char(n)` liefert aufgefüllte Werte (`"R "`, `"AIF "`); `INV.status` ist varchar; `@Convert` greift auf `@Id` nicht, trimmender Getter stattdessen.
-- [Fondspreise Stufe 1/2 split](project_fondspreise-stufe-split.md) — Stufe 1 auf master (max V070), Stufe 2 auf feat/fondspreise-sync als ein Revert-Commit; dessen V067-V069 kollidieren alle drei, vor dem Merge auf V071-V073 nachnummerieren.
+- [Fondspreise Stufe 1/2 split](project_fondspreise-stufe-split.md) — Stufe 1 auf master; feat/fondspreise-sync nur Steinbruch (V067-V069 entfallen); Kurs/TmpIfLast auf master als V073; **plans/fondspreise/ hält nur noch: Plan `2026-09-30-…-preis-historie-versionen.md`, Analyse `2026-09-30-…-legacy-analyse-und-befunde.md`, tracker.md, SQL**; alles Ältere liegt in plans/archive/.
 - [Preismeldung Rückmeldung log format](project_preismeldung-rueckmeldung-log-format.md) — Logs sind LF + ISO-8859-1 (nicht CRLF), Labels aus `txt_bez_e`; verifiziert gegen `testdaten_september.zip`, gepinnt von `PreismeldungRueckmeldungGoldenFileTest`.
 - [Legacy file charsets differ](project_legacy-file-charsets-differ.md) — EStB CSVs sind windows-1252, Return/Delete/Confirm + Logs IBM437; die Kodierung folgt der Herkunft der Daten (echo vom Lieferanten vs. aus der DB), nicht dem schreibenden Programm.
 - [zufluss is the FINAL Stichtag](project_zufluss-is-the-final-stichtag.md) — select "became FINAL for Stichtag D" via `zufluss = D`, never a gueltAb/eintragezeit window; gueltAb is re-stamped at finalize and looks usable but is a wall clock.
