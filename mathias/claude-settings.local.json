@@ -55,7 +55,7 @@
   "enabledPlugins": {
     "frontend-design@claude-plugins-official": false
   },
-  "outputStyle": "default",
+  "outputStyle": "Scannable",
   "plansDirectory": "/home/sma/dev/projects/ifas13-agents/mathias/plans",
   "autoMemoryEnabled": true,
   "autoMemoryDirectory": "/home/sma/dev/projects/ifas13-agents/mathias/automemory",
