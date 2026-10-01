@@ -256,6 +256,7 @@ Coding standards are enforced via `.claude/rules/`. Key rules:
 | `database-conventions.md` | `**/persistence*/**` | JPA, Flyway, multi-DB support |
 | `async-processing.md` | `**/service/**` | Executor injection, no `@Async` within same class |
 | `ide-refactoring.md` | `**/*.java` | Use IDE/MCP tools for renames/moves |
+| `web-authorization.md` | `ifas-web/**` | Every new `/api` or `/ui` path needs an `IfasRight` entry + auth tests |
 
 ## Git Conventions
 
