@@ -248,6 +248,21 @@ See `.claude/rules/git-commits.md` for git commit and documentation rules.
 
 **HARD RULE: NEVER add a "Co-Authored-By" line (or any co-author/attribution hint) to commit messages.**
 
+### Pushing to the ifas13 Remote
+
+**HARD RULE: never run `git push` (or `git fetch`/`git pull`) against the `ifas13` remote
+(`devops.oekb.at`) yourself** — it is not reachable from automated sessions; the user pushes manually.
+When commits are ready to push:
+
+1. Optionally ask the user to fetch first: `! git fetch origin`.
+2. If the fetch brought remote changes (`git log --oneline master..origin/master`), merge them
+   locally (`git merge origin/master`, like the existing `Merge remote-tracking branch` commits),
+   resolve conflicts, and rebuild/re-run the affected tests.
+3. Ask the user to push: `! git push origin master` — list the commits that will go out.
+
+This applies to the `ifas13` repository only; `ifas13-agents` (GitHub) may be fetched and pushed
+directly.
+
 ### Time and Date Handling
 
 See `.claude/rules/time-date-handling.md` for time/date handling rules.
