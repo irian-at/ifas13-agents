@@ -20,6 +20,23 @@ paths:
   - `TJaNeinToBooleanConverter` — "J"/"N" to Boolean
   - `UriConverter` — URI to String (`autoApply = true`)
 
+### New entity → regenerate the schema reference
+
+Whenever you define a new JPA entity:
+
+1. Register it in `at.oekb.ifas.devtools.DatabaseSchemaTool`
+   (`metadata.addAnnotatedClass(NewEntity.class);` in the matching group).
+2. Run the tool **from the repository root** (it writes to a root-relative path):
+   ```bash
+   mvn -q -pl ifas-dev-tools -am install -DskipTests -Pno-proxy -Pplatform-arm64 -Pdev-build
+   mvn -q -pl ifas-dev-tools org.codehaus.mojo:exec-maven-plugin:3.5.1:java \
+     -Dexec.mainClass=at.oekb.ifas.devtools.DatabaseSchemaTool \
+     -Pno-proxy -Pplatform-arm64 -Pdev-build
+   ```
+3. `git add` the updated
+   `ifas-dev-tools/src/main/resources/at/oekb/ifas/devtools/postgres-db-schema.sql`
+   together with the `DatabaseSchemaTool` change.
+
 ## JPA Repositories
 
 - Extend `JpaRepository<Entity, ID>` and `JpaSpecificationExecutor<Entity>`
