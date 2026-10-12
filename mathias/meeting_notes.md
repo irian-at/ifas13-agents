@@ -1,4 +1,10 @@
 
+Preisfile Sammellauf - Lauf 2 soll optional (konfigurierbar) sein. Und die Uhrzeiten ebenfalls konfigurierbar.
+wenn kein 2. lauf, erst im lauf des nächsten tages enthalten.
+
+euro referenzkurse - vom vortag? werden in einem job von mak -> ifas geschrieben. - oder polling wenn etwas reingeschrieben wurde..
+
+
 ## offene Fragen an Markus:
 1) Was macht ein Delete? gibt es dann keinen Preis für den vergangenen Tag, oder gilt der vorherige? Was ist mit den alten Kennzahlen?
 2) Hat ein Preisdatum einen gültigkeitsbereich (zB Wochenende)

@@ -29,7 +29,7 @@ seit 2026-09-30 in `mathias/plans/fondspreise/2026-09-30-fondspreise-legacy-anal
 (Digest; Basis bleibt `docs/Fondspreise/fondspreise-legacy-analyse.md`). Konzept (31.08.),
 Schnitt-1/2-Pläne, Formen, ER, Zeitreihe + Review, Tagesablauf-Decks und das Fragen-File liegen
 **archiviert** unter `mathias/plans/archive/2026-08/` und `2026-09/` — nicht mehr daraus zitieren;
-`plans/fondspreise/` hält nur Plan, Analyse, `tracker.md` und das SQL-File. Der Branch dient als Steinbruch (übernommen werden u. a.
+`plans/fondspreise/` hält nur Plan, Analyse, `tracker.md`, das SQL-File und seit 2026-10-08 den Sync-Plan `2026-10-08-fondspreise-preis-version-sync-kurs.md` (Schnitt 2b). Der Branch dient als Steinbruch (übernommen werden u. a.
 `PreismeldungSyncDecisions`, `FondspreiseProperties`; Tabelle im Plan, Abschnitt 5). **`Kurs`/`TmpIfLast` samt Repositories
 sind seit 2026-09-30 auf master** (`5d22c157c`, DDL als `V073__kurs_tmp_if_last.sql` in beiden
 Bäumen, nur Test-DB-Provisionierung); die Ableitung nach `kurs`/`tmp_if_last` fehlt weiterhin.
@@ -40,3 +40,13 @@ Die frühere Nachnummerierung V067-V069 → V071+ ist damit hinfällig; neue DDL
 
 `database-context.fondspreise` heißt `business-new-introduced`; `preis_historie` wird
 dort die erste Tabelle sein — siehe [[project_sybase-schema-freeze]].
+
+**Stand 2026-10-12:** der Sync-Plan (`2026-10-08-…-preis-version-sync-kurs.md`) ist in sieben Chunks
+vollständig umgesetzt (`22adddcf6` … `1e23c2c5f`); `ifas.fondspreise.preis-version-sync.enabled` bleibt
+aus, bis die Go-live-Backlog-Entscheidung (Plan Abschnitt 7) steht — bis dahin hat der Sync nur Tests und den
+manuellen Auslöser auf „Geplante Aufgaben“ als Aufrufer.
+
+**Stand 2026-10-12 (abends):** auch der produktive `PreisMeldungJob` ist umgesetzt (Plan
+`2026-10-12-fondspreise-preis-meldung-job.md`, Commits `a15b22307`/`791ab3736`/`63dfb558b`): Upload-Formular unter
+STM → Eingang → Rückmeldung an Archiv/MFT → Lauf (`sync_requested=true`) → Sync. Die Ankunft via MFT ist nur ein
+auskommentierter `submitFromMft` mit TODO; der Parallelbetrieb-Dispatcher routet Preisfiles weiter zum Diff-Job.

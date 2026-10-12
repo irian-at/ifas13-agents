@@ -1,6 +1,6 @@
 ---
 name: project_db-context-blind-spot-in-tests
-description: In den Integrationstests zeigen alle database-context.*.db-key auf dieselbe h2-test-DB — ein im falschen Kontext geschriebener oder gelesener Zugriff fällt dort nie auf.
+description: In ifas-integration-tests zeigen alle database-context.*.db-key auf dieselbe h2-test-DB (Kontextfehler unsichtbar); Routing-/Commit-Reihenfolge-Beweise gehören ins Modul ifas-integration-tests-multidbctx (drei H2).
 metadata: 
   node_type: memory
   type: project
@@ -23,8 +23,17 @@ Zwei Fälle, die genau daran hingen (beide 2026-09-14 gefunden):
 - Der `PreisMeldungDiffJob` erbte den Kontext des Einreichers; beide Einstiege binden dort
   `sybase-gast` (`9e5f0ecdb`).
 
-**Why:** Kontextfehler sind in dieser Codebase strukturell untestbar, solange die Testprofile ein
-DBMS für alle Kontexte fahren. Nur die Deklaration verrät die Wahrheit.
+**Why:** In `ifas-integration-tests` sind Kontextfehler strukturell untestbar, weil das Profil ein DBMS
+für alle Kontexte fährt. Nur die Deklaration verrät die Wahrheit.
+
+**Gegenstück (seit 2026-10-09 genutzt):** `ifas-testing/ifas-integration-tests-multidbctx` fährt drei
+physische H2 mit dem produktiven Routing — `h2-test-write` = `business`, `h2-test` =
+`business-new-introduced`/`legacy-business`, `h2-infra-test` = Job-System/Work-Queue/Filestore
+(`workqueue.enabled=false`, Executor von Hand bauen). Dort gehören Tests hin, die Routing oder
+Commit-Reihenfolge über Kontexte beweisen (`PreisVersionSyncJobCommitOrderMultiDbCtxTest`, `03804889c`).
+Falle: eine Testklasse mit eigenem `properties=` und `workqueue.enabled=true` hält ihren gecachten
+Kontext samt pollendem Executor am Leben, der Items späterer Klassen aus der geteilten In-Memory-Infra-DB
+claimt — `@DirtiesContext` dort.
 
 **How to apply:** Bei jeder kontextgerouteten Tabelle nicht dem Seeding-Code glauben, sondern dem
 `package-info` des Persistence-Pakets und dem `@Table(catalog=…)` der Entity — dort steht, in

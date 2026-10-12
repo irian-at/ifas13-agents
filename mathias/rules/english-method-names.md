@@ -9,7 +9,7 @@ Method names are English. The verb is always English — `write`, not `schreibe`
 `verarbeite`; `compare`, not `vergleiche`; `isEmptyLine`, not `istLeerzeile`.
 
 German stays for **Fachbegriffe** only, and those live in type, field and record-component names
-(`PreismeldungEingangProcessor`, `Meldekategorie`, `lineNumber`, `countByCode`) or as a noun inside an
+(`PreisMeldungEingangProcessor`, `Meldekategorie`, `lineNumber`, `countByCode`) or as a noun inside an
 otherwise English method name (`isHandelswaehrung`, `findReferenzpreis`, `getInboxZeilen`).
 
 ## How to apply

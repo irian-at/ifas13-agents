@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 29d00419-c8e9-488e-8e21-00dd20901780
-  modified: 2026-09-02T10:21:55.665Z
+  modified: 2026-10-08T00:00:00.000Z
 ---
 
 Vorgabe (User, 2026-09-02): In der Sybase dürfen **keine neuen Tabellen und keine neuen Spalten**
@@ -24,6 +24,6 @@ logische UUIDs, keine DB-FKs (verschiedene DB-Kontexte). Eine Transaktion über 
 und Sybase-Legacy-Tabelle gibt es nicht (kein XA) — bis zur Migration Klammer-Transaktion wie im
 Fondspreise-Konzept. Parallelbetrieb neuer Domänen: Altsystem verarbeitet/persistiert zuerst, seine
 Input-/Resultfiles laufen als Diff-Job durchs Neusystem (Muster `IsinAnforderungslisteDiffJob`,
-`AusschuettungsMeldungDiffJobSubmissionService`); Außenwirkungen (Mails, MFT) unterdrückt. Siehe
+`AusschuettungsMeldungDiffJobSubmissionService`); Außenwirkungen (Mails, MFT) unterdrückt — seit 2026-10-08 (User) zählt auch der Sync nach Sybase (`kurs`/`tmp_if_last` aus `preis_versions`) dazu: optional per Property und nur auf Wunsch des auslösenden Jobs, der `PreisMeldungDiffJob` synct nie; das Ledger in Postgres schreibt er trotzdem. Siehe
 [[project_gf1-fielddiff-null-vs-zero]] und [[project_validationsetting-flags-have-two-effects]] für die
 Diff-Konfiguration bekannter Abweichungen.
