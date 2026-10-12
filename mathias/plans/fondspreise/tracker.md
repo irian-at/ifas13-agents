@@ -318,7 +318,7 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
       der Cleanup nimmt seine Kandidaten aus `tmp_if_last`. Der gebaute Code
       (`LetztePreiseService.seedGuardFromTmpIfLast` / `importLegacyLastPrices` + 2 Tests) bleibt
       vorerst liegen und kann beim Aufräumen von `letzte_preise` mitgehen
-- [ ] **Sybase-Ableitung `kurs`** — Plan geschrieben 2026-10-08: [2026-10-08-fondspreise-preis-version-sync-kurs.md](2026-10-08-fondspreise-preis-version-sync-kurs.md) (Schnitt 2b). Entscheidungen: Sync = „bring `kurs` auf den Stand des Ledgers“,
+- [x] ~~**Sybase-Ableitung `kurs`**~~ — **umgesetzt 2026-10-09/12** (Chunks 1–7, `22adddcf6` … `1e23c2c5f`; Aufrufer seit `791ab3736` der `PreisMeldungJob`; Property bleibt aus bis zum Migrations-Stempel). Plan geschrieben 2026-10-08: [2026-10-08-fondspreise-preis-version-sync-kurs.md](2026-10-08-fondspreise-preis-version-sync-kurs.md) (Schnitt 2b). Entscheidungen: Sync = „bring `kurs` auf den Stand des Ledgers“,
       Stempel `processed_at`/`preis_version_sync_job_id` (Id-Spalte nach der Regel, seit 2026-10-08), Reconcile je Schlüssel, alles oder
       nichts, ein aktiver Sync (jüngerer tritt zurück, Backoff statt Warten), Sybase zuerst enrollt, Diff-Job
       löst nie aus, kein Sweep (manueller Auslöser), Währungsregel wie Legacy. `tmp_if_last` eigener Plan
