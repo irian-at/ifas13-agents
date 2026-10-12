@@ -3,7 +3,7 @@
 Lebendes Dokument: der Status aller offenen Schritte. **Seit 2026-09-30 gibt es genau zwei
 Referenzdokumente:** den Plan
 [2026-09-30-fondspreise-preis-historie-versionen.md](2026-09-30-fondspreise-preis-historie-versionen.md)
-(die Lösung: `preis_historie`, Verarbeitung, Chunks) und die Analyse
+(die Lösung: `preis_versions`, Verarbeitung, Chunks) und die Analyse
 [2026-09-30-fondspreise-legacy-analyse-und-befunde.md](2026-09-30-fondspreise-legacy-analyse-und-befunde.md)
 (Altsystem-Befunde, Tagesablauf, Datenlage, Fachabteilung, Klärungen A–P, Constraints). Das
 Konzept vom 31.08. und alle Zwischenentwürfe liegen unter `../archive/2026-08/` und
@@ -97,14 +97,14 @@ Quelle: Konzept, Abschnitt *Datenbeschaffung*. Q-Nummern siehe Warnung unten.
       Schlüssel im 65-Tage-Fenster, nicht das Tagesvolumen
 - [ ] **Identische Nachlieferungen im Preisfile — Differenzen auswerten** (User 2026-09-24):
       entschieden ist, dass ein neueres `N` mit **gleichem Wert** (numerisch verglichen, nicht als
-      Text) keine neue Version in `preis_historie` erzeugt und deshalb vom Sammelreport nicht erneut
+      Text) keine neue Version in `preis_versions` erzeugt und deshalb vom Sammelreport nicht erneut
       verschickt wird. Legacy schreibt jede am Tag empfangene Zeile ins File, also auch identische
       Nachlieferungen zu **älteren** Stichtagen als `I2` (beim Bezieher ein No-op-Upsert). Im
       Preisfile-Diff des Parallelbetriebs auswerten: wie viele solche Zeilen je Tag und je Lieferant,
       und welcher Anteil der „Korrekturen" (Beispielreport: 107 an einem Tag) tatsächlich einen
-      geänderten Wert trägt. Erst danach entscheiden, ob es bei „weglassen" bleibt. **Ergänzung 2026-09-25** (Plan `preis_historie`, B8): dieselbe Frage
+      geänderten Wert trägt. Erst danach entscheiden, ob es bei „weglassen" bleibt. **Ergänzung 2026-09-25** (Plan `preis_versions`, B8): dieselbe Frage
       von der anderen Seite — hat es für die Fachabteilung einen Mehrwert, wenn ersichtlich ist, dass
-      derselbe Preis neuerlich geliefert wurde? In `preis_historie` hinterlässt das heute keine Spur
+      derselbe Preis neuerlich geliefert wurde? In `preis_versions` hinterlässt das heute keine Spur
       (Gleicher-Wert-Regel; nur die Inbox im Aufbewahrungsfenster zeigt es). Ja → Regel kippen
       (Zeile je Lieferung, Sammelreport schickt `I2` erneut wie Legacy) oder ein Ankunftsmerkmal an
       der offenen Zeile; nein → bleibt. **Vermutung nein** (User 2026-09-25, aus den
@@ -132,7 +132,8 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
 | # | Schnitt | blockiert durch | Detail-Plan | Status |
 |---|---|---|---|---|
 | 1 | Lieferkette Stufe 1 — Eingang, Inbox, Rückmeldung | ~~`tax_code`~~ (erhoben, V1) | [2026-09-02-fondspreise-schnitt1-eingang-inbox-rueckmeldung.md](../archive/2026-09/2026-09-02-fondspreise-schnitt1-eingang-inbox-rueckmeldung.md) | **umgesetzt + gepusht** (ifas13 `1f3d9f393`/`0dbd47271`); **Byte-Verifikation am 2026-09-14 durchgeführt** — `statistics.log` und `data.log` mussten auf das echte Format umgebaut werden, zwei Golden-File-Tests stehen (siehe *Erledigt*). Rest siehe die drei neuen offenen Punkte unten |
-| 2 | Stufe 2 — **`preis_historie`** (Versionen je Preisschlüssel, Verarbeitungs-Job mit Claim, `preis_historie_source`); Sybase-Ableitung `kurs`/`tmp_if_last` als Folgejob danach | — | [2026-09-30-fondspreise-preis-historie-versionen.md](2026-09-30-fondspreise-preis-historie-versionen.md) | **Design entschieden 2026-09-30**, Umsetzung in Chunks 1–6 offen. Das Guard-Design vom 08.09. (`preis_herkunft`, `letzte_preise`, Klammer-Transaktionen; Branch `feat/fondspreise-sync`, V067–V069 nie deployt) ist verworfen — der Branch dient nur als Steinbruch. `Kurs`/`TmpIfLast` liegen seit `5d22c157c` (V073) auf master |
+| 2 | Stufe 2 — **`preis_versions`** (Versionen je Preisschlüssel, `PreisVersionJob` mit Claim, `preis_version_sources`); Sybase-Ableitung `kurs`/`tmp_if_last` als Folgejob danach | — | [2026-09-30-fondspreise-preis-historie-versionen.md](2026-09-30-fondspreise-preis-historie-versionen.md) | **Design entschieden 2026-09-30**; **Chunk 3 (Persistenzhälfte) umgesetzt 2026-10-01**, committet und gepusht als `b137e7724`: V075 (`preis_versions`, `preis_version_sources`, Inbox neu mit `id`/`empfangen_at`/`processing_job_id` (V076 → `preis_version_job_id`), kein Bestand, kein Backfill), Entities/Repositories, `currentDbTime()`, Multi-DB-Tests. Entscheidungen 2026-10-01: Position auf der Zeile, Markerprüfung im Claim, Benennung Entity = Tabelle (`PreisVersion` ↔ `preis_versions`). **Chunks 1 und 2 (Domäne: Faltung, Filter) umgesetzt 2026-10-01**, Commits `aa8eaedb6` und `457446d83`. Benennung nachgezogen in `85dff4c2c` (`StorageGates`, `SkipReason`, `PreisKey`). Weitere Benennungsrunde 2026-10-01, Commit `04eb37736`: Schreibweise `PreisMeldung` (Tabelle `preis_meldung_zeilen`, in V075 geändert statt V076 — vor dem ersten Deployment), Packages `service.fondspreise` / `persistence.infra.fondspreise`, Suffix `Data`. Eingang write-once, Chunks 4–6 offen. Das Guard-Design vom 08.09. (`preis_herkunft`, `letzte_preise`, Klammer-Transaktionen; Branch `feat/fondspreise-sync`, V067–V069 nie deployt) ist verworfen — der Branch dient nur als Steinbruch. `Kurs`/`TmpIfLast` liegen seit `5d22c157c` (V073) auf master |
+| 2b | Sybase-Ableitung **`kurs`** aus `preis_versions` — `PreisVersionSyncJob` als Folgejob des Laufs, Stempel `processed_at`/`preis_version_sync_job_id` auf der Version, ein aktiver Sync, selbstheilend; `tmp_if_last` später | produktiver Preismeldungs-Job (erster Einreicher mit `sync_requested`) | [2026-10-08-fondspreise-preis-version-sync-kurs.md](2026-10-08-fondspreise-preis-version-sync-kurs.md) | **Design entschieden 2026-10-08** (/discuss), Plan geschrieben; **Chunk 1 umgesetzt** `22adddcf6`; **Chunk 2 umgesetzt** `068df2816` (`KursChanges.derive`); **Chunk 3 umgesetzt** `47094764d` (Sync-Job); **Chunk 4 umgesetzt** `34b20d641` (Lauf reicht Sync ein); **Chunk 5 umgesetzt** `f5091bb5f` (Verschränkungstests); **Chunk 6 umgesetzt** `03804889c` (Commit-Reihenfolge auf drei DBs); **Chunk 7 umgesetzt** `1e23c2c5f` (Detailseite, `kurs`-Spalte, geplante Aufgabe) — **Plan vollständig umgesetzt 2026-10-12**; Property bleibt aus bis zum Migrations-Stempel (Todo unten, Verfahren entschieden 2026-10-12, Plan Abschnitt 7) |
 | 3 | `WirksamePreismeldungen` als Komponente, isoliert getestet | — | — | offen |
 | 4 | Sammelreport Lauf 1 — Plausi, Files, Publikationsprotokoll, Verteilung | — | — | offen |
 | 5 | Lauf 2 als Delta, inkl. `I3` gegen das Publikationsprotokoll | N, F | — | offen |
@@ -175,7 +176,7 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
             **Nachtrag 2026-09-14 (User-Frage):** derselbe falsche Kontext-Schluss stand hinter der
             Entscheidung, `standard_TAX_CODE_data.yaml` aus dem Standard-Basisimport herauszuhalten
             (`bef9800c6`: „the Fondspreise tables live in their own database"). Das gilt für
-            `preismeldung_zeilen`, nicht für `tax_code` — und `tax_code` war das Einzige, was
+            `preis_meldung_zeilen`, nicht für `tax_code` — und `tax_code` war das Einzige, was
             `FondspreiseBasedataCreator` trug. Damit kannte **jede** per Basisimport bestückte DB
             keine Preiscodes. Behoben in `f89c5d06b`: die Tax-Code-DTOs hängen jetzt in
             `BasedataCreator`, der Fondspreise-Creator ist weg, `BasedataCreatorTest` deckt den
@@ -221,7 +222,7 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
       - `WebUiAuthorization.canAccessPreisMeldungDiffs()` ergänzt und in `canAccessTesten()`
         aufgenommen — `IfasRight.PREIS_MELDUNG_DIFFS` gab es schon, war aber in der
         Gruppen-Oder-Verknüpfung nicht enthalten
-      - **Kein endgültiges Löschen** wie bei den ISIN-Diffs: `preismeldung_zeilen` hängt ohne FK
+      - **Kein endgültiges Löschen** wie bei den ISIN-Diffs: `preis_meldung_zeilen` hängt ohne FK
         über `job_id` am Job (V061), eine Löschung ließe die Inbox-Zeilen verwaist zurück. Das
         gehört mit dem produktiven Job (nächster Punkt) gebaut
       - **Eigenes Upload-Formular** `/ui/preis-meldung-diff` (User, gleicher Tag — der
@@ -250,7 +251,13 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
       identischem Ergebnis wie über das Recalc-Formular), ein STM-Bundle und ein ZIP ohne bekannte
       Datei werden beide am Formular abgewiesen, ohne dass irgendwo ein Job entsteht
 
-- [ ] **Produktiver Preismeldungs-Job (`persistResult=true`)** — die Zweiteilung analog zur
+- [x] ~~**Produktiver Preismeldungs-Job (`persistResult=true`)**~~ — **umgesetzt 2026-10-12** nach Plan
+      [2026-10-12-fondspreise-preis-meldung-job.md](2026-10-12-fondspreise-preis-meldung-job.md)
+      (`PreisMeldungJob`: Upload-Formular, Eingang write-once, Rückmeldung → Archiv+Journal und MFT-`receive`,
+      Folgejob Lauf mit `sync_requested=true`; Menü STM-Gruppe): Chunk 1 `a15b22307` (Persistenz,
+      `MftTarget.PREIS_MELDUNG`), Chunk 2 `791ab3736` (Services, Claim geweitet), Chunk 3 `63dfb558b` (Seiten,
+      Recht `PREIS_MELDUNGEN`, Doku). **Offen daraus:** MFT-Ankunft (nächster Punkt).
+      Ursprung: die Zweiteilung analog zur
       STM-Seite (User 2026-09-14). Phase 1 ist gebaut (`37212a931`): die Sync-Stufe trennt
       Entscheiden von Speichern über `persistResult`, der `PreisMeldungDiffJob` des Parallelbetriebs
       entscheidet nur. Offen ist Phase 2: ein eigener Job-Typ analog `StmCalcJob` — Entity, Flyway,
@@ -311,6 +318,11 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
       der Cleanup nimmt seine Kandidaten aus `tmp_if_last`. Der gebaute Code
       (`LetztePreiseService.seedGuardFromTmpIfLast` / `importLegacyLastPrices` + 2 Tests) bleibt
       vorerst liegen und kann beim Aufräumen von `letzte_preise` mitgehen
+- [ ] **Sybase-Ableitung `kurs`** — Plan geschrieben 2026-10-08: [2026-10-08-fondspreise-preis-version-sync-kurs.md](2026-10-08-fondspreise-preis-version-sync-kurs.md) (Schnitt 2b). Entscheidungen: Sync = „bring `kurs` auf den Stand des Ledgers“,
+      Stempel `processed_at`/`preis_version_sync_job_id` (Id-Spalte nach der Regel, seit 2026-10-08), Reconcile je Schlüssel, alles oder
+      nichts, ein aktiver Sync (jüngerer tritt zurück, Backoff statt Warten), Sybase zuerst enrollt, Diff-Job
+      löst nie aus, kein Sweep (manueller Auslöser), Währungsregel wie Legacy. `tmp_if_last` eigener Plan
+      später (Fondsbezeichnung aus IFAS-Stammdaten). Bis zum produktiven Job ohne Aufrufer
 - [ ] **Generischer Tabellenvergleich Sybase alt ↔ Sybase neu** (User 2026-09-11, Plan D13): ein
       geplanter Job nach dem Legacy-Tagesjob, je Szenario konfigurierbar (Tabelle, Schlüsselfenster,
       bekannte Abweichungen), für alle Tabellen, die das Neusystem schreibt — `kurs`, `tmp_if_last`,
@@ -318,11 +330,29 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
       Diff-Ebenen 3/4 des `PreisMeldungDiffJob`. Keim: `DatabaseCompareService` (old/new-Kontext aus
       Properties, `compareStmIds` noch `todo`), Vergleichskern `PreismeldungDbDiff`. Bekannte
       Abweichungen von Anfang an: `guelt` (Lieferzeit vs. Tagesende), Projektion bei fallendem
-      Preisdatum (strengerer Guard, Plan D5), transiente `N`-dann-`D`-Zustände (User 2026-09-08)
+      Preisdatum (strengerer Guard, Plan D5), transiente `N`-dann-`D`-Zustände (User 2026-09-08). **Vertagt 2026-10-08 (User):** da der Diff-Job nicht nach Sybase synct, liegen `kurs`/`tmp_if_last` im Parallelbetrieb nicht in der Neusystem-Sybase — ob D13 sie als projiziertes Ledger gegen Alt-`kurs` vergleicht oder erst mit dem produktiven Job auf TEST, später entscheiden
+- [ ] **Migrations-Stempel vor Go-live** (entschieden 2026-10-12, Sync-Plan Abschnitt 7): die Neusystem-Sybase
+      startet mit dem migrierten `kurs` der Alt-DB (Snapshot T). Vor dem Einschalten von
+      `ifas.fondspreise.preis-version-sync.enabled`: einen `PreisVersionSyncJob` „migration“ (COMPLETED) anlegen
+      und alle `preis_versions` mit `created_at < T` damit stempeln (`processed_at = T`); ab T bleibt alles
+      ungestempelt für den ersten echten Sync. Snapshot im ruhigen Fenster nach Legacys letztem Schreiben;
+      bei wiederholter Migration T nachziehen. Umsetzung als SQL unter `plans/fondspreise/sql/` oder als
+      Dev-Tool — entscheiden, wenn der Migrationsweg (Voll-Sync-Werkzeug) feststeht. Macht D13 zur
+      Nicht-Voraussetzung für den Go-live
+- [ ] **MFT-Ankunft für Preisfiles** (User 2026-10-12: „don't enable the queuing for arrived preisfiles yet“):
+      `PreisMeldungJobSubmissionService.submitFromMft` liegt auskommentiert hinter einem TODO. Fehlt: der
+      Inbound-Pull (Legacy `preis_ins.e` alle 10 Minuten aus `<base>/<liefer_id>/send`, `mft-interface.md`
+      „the pull direction“), Dedup nach Dateiname + Empfang, Verschieben ins `done`-Verzeichnis; Priorität NORMAL,
+      `SourceType.MFT`. Mit dem Betrieb den Pull-Kanal klären (REST-Gateway wie beim Upload?)
+- [ ] **Pagination verliert `archived`** (Befund Agent 2026-10-12): die nummerierten Seitenlinks des geteilten
+      Fragments `fragments/pagination.html` tragen `archived` nicht (nur Vor/Zurück), auf allen Listen. Klein, bei
+      der nächsten Listen-Änderung mitnehmen
 - [ ] **Dual-DB-Testprofil** (`business` = Neusystem-Sybase, `legacyBusiness` = Altsystem-DB): nach
       D13 nicht mehr für den Diff-Job nötig, aber für den generischen Tabellenvergleich und als
       realistische Umgebung für die beiden Cross-DB-Klammern (`kurs`, `tmp_if_last`). Vor
-      Parallelbetrieb-Start aufsetzen
+      Parallelbetrieb-Start aufsetzen. **Nachtrag 2026-10-09:** für die `kurs`-Klammer liefert
+      `ifas-integration-tests-multidbctx` (drei H2, produktives Routing) den Zwei-Quellen-Beweis (Sync-Plan
+      Chunk 6, `PreisVersionSyncJobCommitOrderMultiDbCtxTest`); offen bleibt nur die Sybase-Variante
 - [x] ~~**Konzept nachziehen (Runde 10, Designreview 2026-09-11)**~~ — erledigt 2026-09-14 (AP10):
       Runde 10 im Änderungsprotokoll, Entscheidungen 8/9/B/M und der Abschnitt *Parallelbetrieb*
       korrigiert, die drei „nur wenn Preisdatum neuer"-Stellen richtiggestellt, Deck nachgezogen
@@ -370,7 +400,7 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
 - [ ] **Aufräumregel für Inbox-Zeilen spezifizieren** (User 2026-09-24): entschieden ist, dass
       produktive Preismeldungs-Jobs wie die `AusschuettungsMeldungJob`s **nie gelöscht** werden
       (das Archivieren bleibt das Flag, das nur ausblendet), damit die Quellreferenz
-      `(job_id, zeilen_nr)` aus `preis_historie` dauerhaft auflösbar bleibt. Die Inbox-Zeilen
+      `(job_id, zeilen_nr)` aus `preis_versions` dauerhaft auflösbar bleibt. Die Inbox-Zeilen
       (~26 k/Tag) werden nach einem Fenster gelöscht; danach führt die Referenz über den Job
       (Lieferant, Dateiname, `empfangen`) zum NetApp-archivierten File. Zu spezifizieren: die Länge
       des Fensters (wohl als Property konfigurierbar), der Auslöser (geplanter Job?) und was das
@@ -390,9 +420,69 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
 
 ## Erledigt
 
+- 2026-10-12 — **Produktiver Preismeldungs-Job `PreisMeldungJob`** (`a15b22307`, `791ab3736`, `63dfb558b`, gepusht).
+  Entity/V080, Services (Eingang write-once; Rückmeldung → Archiv+Journal `FONDSPREISE` und MFT `PREIS_MELDUNG` in
+  der Marker-Transaktion; Folgejob Lauf mit `sync_requested=true`; Claim des Laufs auf produktive Jobs geweitet),
+  Seiten Liste/Detail/Formular unter STM, Recht `PREIS_MELDUNGEN`, `Lieferung` auf der Preisversionen-Seite,
+  Doku. MFT-Ankunft bewusst auskommentiert (Todo oben).
+- 2026-10-12 — **Sync-Plan Chunk 7: UI und Auslöser** (`1e23c2c5f`, gepusht). Detailseite
+  `/ui/preis-version-sync-jobs/{id}` (Recht `PREIS_VERSIONEN`), Spalte `kurs` auf der Preisversionen-Seite
+  („seit … (Sync …)“ / „ausstehend“), geplante Aufgabe „Preisversionen → kurs abgleichen“ (manuell, lehnt bei
+  ausgeschalteter Property ab; Sweep stündlich, Default aus), `ifas13-jobs.md`. **Der Sync-Plan ist damit
+  vollständig umgesetzt**; der Sync hat außer Tests und dem manuellen Auslöser noch keinen Aufrufer.
+- 2026-10-09 — **Sync-Plan Chunk 6: Commit-Reihenfolge des Syncs auf drei Datenbanken** (`03804889c`,
+  gepusht). `PreisVersionSyncJobCommitOrderMultiDbCtxTest` im Modul `ifas-integration-tests-multidbctx`
+  (Business, Ledger, Infra als drei H2): Reihenfolge Business → Infra → Ledger; Ledger-Commit-Fehler lässt
+  `kurs` geschrieben und Stempel fehlen (Retry heilt), Business-Commit-Fehler committet nichts.
+  `SynchronizedTransactionHolder.enrolledDatabaseKeys()` neu; `@DirtiesContext` auf
+  `ScheduledTaskDbContextMultiDbCtxTest` (laufender Executor im gecachten Kontext claimte fremde Items).
+- 2026-10-09 — **Sync-Plan Chunk 5: Verschränkungstests des Syncs** (`f5091bb5f`, gepusht). Sechs Fälle
+  (zwei Syncs zugleich, Lauf zwischen Lesen und Schreiben, N nach D, Zombie nach Orphan-Recovery, Absturz
+  nach dem `kurs`-Write, Versuche erschöpft) × 2 DBs; Harness `TwoServerWorkQueue` von beiden
+  Verschränkungstests geteilt; keine Produktionsänderung.
+- 2026-10-09 — **Sync-Plan Chunk 4: der Lauf reicht den Sync ein** (`34b20d641`, gepusht).
+  `submit(createdBy, syncRequested)`, Einreichung als letzter Schritt aller drei Ausgänge des Laufs in der
+  Handler-Transaktion (nach der Schreibtransaktion, Abweichung von 3.1), Property aus → Protokollzeile;
+  Diff-Job übergibt `false`. +6 Lauf-Tests, Diff-Ketten-Test erweitert.
+- 2026-10-09 — **Sync-Plan Chunk 3: der `PreisVersionSyncJob`** (`47094764d`, gepusht). Execution-,
+  Submission-Service, Hooks, `PreisVersionSyncBusyException`; Aktiv-Guard und Zombie-Schutz als generische
+  `WorkQueueService`-Methoden; Sybase zuerst durch Kontext-vor-Transaktion; 7 Sync-Fälle × 2 DBs grün.
+  Noch ohne Auslöser (Chunk 4, 7).
+- 2026-10-09 — **Sync-Plan Chunk 2: Ableitung der `kurs`-Änderungen** (`068df2816`, gepusht).
+  `KursChanges.derive` (Domäne, Paket `verarbeitung`) liefert je Schlüssel ein sealed `KursChange`
+  (`Write`/`Remove`/`SkippedFondswaehrung`/`SkippedStammdaten`), entschieden allein nach den offenen
+  Versionen; `KursData` als Zeile aus Plan 2.4; `PreisKey` jetzt `Comparable`. 24 neue Unit-Tests.
+- 2026-10-08 — **Sync-Plan Chunk 1: Persistenz + Protokoll des Laufs** (`22adddcf6`, gepusht). V079: Stempel
+  `processed_at`/`preis_version_sync_job_id` auf `preis_versions` (kein FK), `preis_version_jobs.sync_requested`,
+  `preis_version_sync_jobs` mit fünf Zählern; `preis_version_jobs` ohne `zeilen_no_key`,
+  `zeilen_without_effect`, `versions_deleted` — der Lauf läuft in `executeWithProtocol`, Skip-/Wirkungslos-
+  Zeilen stehen im Protokoll, Detailseite zeigt die `protocolCard`. Regel: nur listbare Zähler als Spalten,
+  Detail ins Protokoll. Sync-Plan Chunk 1
+- 2026-10-08 — **UI-Umbenennung: Preisversionen statt Preishistorie** (`727297839`, gepusht). Seitentitel und
+  Menüpunkt heißen jetzt Preisversionen; Recht `PREIS_VERSIONEN` und URL `/ui/preis-versionen` unverändert.
+  Plan Chunk 6, Benennung
+- 2026-10-08 — **Chunk 7: Verschränkungs-Tests** (`cd45f5c3d` Fix, `3bb108df6` Tests, gepusht). Zwei handgebaute `WorkQueueExecutor`
+  (`server-a` auf eigenem Thread, `server-b` synchron) und drei No-op-Hooks im `PreisVersionJobExecutionService`
+  stellen jede Verschränkung deterministisch: ein Lauf nimmt die Zeilen mehrerer Lieferungen, der
+  andere endet leer; Fehlschlag vor/nach dem Schreiben, drei Fehlversuche, Waisen-Erkennung auf dem
+  anderen Server mit Zombie, zwei Eingänge auf zwei Servern. Befund dabei behoben: ein Retry nach
+  committeter Faltung ließ den Lauf `COMPLETED` ohne Zähler — `updateResult` committet jetzt mit der
+  Faltung. 7 Szenarien × H2/Postgres grün. Plan Abschnitt 8, Chunk 7
+- 2026-10-06 — **Chunk 3 abgeschlossen: Eingang write-once** (`01ec25fb6`, gepusht). Zeilen, Ergebnis und
+  Marker `eingang_abgeschlossen_at` committen in einer Transaktion, der Marker bedingt (Rollback bei
+  paralleler Ausführung), ein Lauf mit gesetztem Marker wertet nichts neu aus. **Chunk 4 abgeschlossen** (`5e5b7056c` `PreisVersionJob`, `1f98514a2` Claim-Spalte
+  `preis_version_job_id`, gepusht): Claim → Filter → Faltung → `preis_versions` + `preis_version_sources`
+  in einer Transaktion, 58 Integrationstests H2 + Postgres. **Chunk 5 abgeschlossen** (`19dfc41d6`, gepusht): der Eingang reicht den `PreisVersionJob` als
+  Folgejob ein, Schalter `triggerPreisVersionJob` je Diff-Job; Löschen archivierter Diff-Jobs löst
+  Folgejobs vorher ab. **Chunk 6 abgeschlossen** (`83c58848b` Preishistorie-Seite + Recht
+  `PREIS_VERSIONEN`, `b9a1840de` Wirkung je Zeile + Laufseite): Plan vollständig umgesetzt. Offen:
+  Sybase-Einspielung `kurs`/`tmp_if_last` (eigener Plan), Rollen für `PREIS_VERSIONEN` provisionieren.
+  Stand je Chunk im Plan, Abschnitt 8
+- 2026-10-01 — **Chunks 1–3a umgesetzt** (`aa8eaedb6` Faltung, `457446d83` Filter, `b137e7724` V075
+  `preis_versions` + `preis_version_sources` + Inbox-Id/Claim; Umbenennungen `85dff4c2c`, `04eb37736`)
 - 2026-09-30 — **Ledger-Design entschieden, Plandokumente konsolidiert.** Diskussion vom 30.09.:
-  `preis_historie` als Versionszeilen (`created_at`/`invalidated_at`/`deleted`, Position
-  `empfangen_at` + `zeilen_nr`), Claim je Verarbeitungs-Lauf statt Guard, `preis_historie_source`
+  `preis_versions` als Versionszeilen (`created_at`/`invalidated_at`/`deleted`, Position
+  `empfangen_at` + `zeilen_nr`), Claim je Verarbeitungs-Lauf statt Guard, `preis_version_sources`
   (eine Zeile je wirksamer Inbox-Zeile, `operation` + beide Versions-IDs, beim Job-System mit
   Cascade), kein Wertvergleich, Wiederholung fügt nur hinzu, Sybase-Ableitung als Folgejob. Plan:
   `2026-09-30-fondspreise-preis-historie-versionen.md`. Alle Befunde zum Altsystem, die Datenlage,
@@ -402,7 +492,7 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
 - 2026-09-29 — **`kurs` und `tmp_if_last` nach `master`** (uncommitted): `Kurs`/`KursId`/
   `KursRepository` und `TmpIfLast`/`TmpIfLastId`/`TmpIfLastRepository` aus `feat/fondspreise-sync`
   übernommen (Javadoc ohne Sync-/`letzte_preise`-Bezug), DDL beider Tabellen in **einer** Migration
-  `V073__kurs_tmp_if_last.sql` je Baum. Nur Persistenz — die Ableitung aus `preis_historie` bleibt
+  `V073__kurs_tmp_if_last.sql` je Baum. Nur Persistenz — die Ableitung aus `preis_versions` bleibt
   offen (Plan Abschnitt 8). **Flyway-Nummern geprüft:** `master`/`origin/master` enden bei V072,
   `stable`/`production` bei V064, höchster Sibling `origin/pul/master` V071 → V073 frei, nichts
   umnummeriert
@@ -596,10 +686,10 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
   Runden 7+8 eingearbeitet, Konzept-Deck aktuell
 - 2026-09-02 — **Begriffe umbenannt** (Konzept-Runde 9): „Ingest" → **Eingang**
   (`PreismeldungEingang*`, Package `.eingang`), „Landezone" → **Inbox** (nur Prosa; Entity
-  `PreismeldungZeile`/Tabelle `preismeldung_zeilen` bleiben). Code, Konzept, Deck, Tracker und
+  `PreismeldungZeile`/Tabelle `preis_meldung_zeilen` bleiben). Code, Konzept, Deck, Tracker und
   Doku nachgezogen; alle Tests weiter grün
 - 2026-09-02 — **Schnitt 1 implementiert** (Detail-Plan im Ordner): neues Modul
-  `ifas-persistence-fondspreise` (Inbox `kurs.preismeldung_zeilen`, `TaxCode` read-only,
+  `ifas-persistence-fondspreise` (Inbox `kurs.preis_meldung_zeilen`, `TaxCode` read-only,
   Flyway V061–V063), Kontext `database-context.fondspreise.db-key`, Meldungsmodell mit
   Legacy-Codes/-Texten, Eingangs-Prüfkette B0–B20, Rückmeldungs-Writer (Legacy-ZIP-Format),
   `PreisMeldungDiffJob` mit Rückmeldungs-Diff. 95 Domain-Unit-Tests + 2 E2E-Integrationstests
