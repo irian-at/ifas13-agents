@@ -7,3 +7,4 @@ claude/rules/personal-*
 claude/skills/personal-*
 /claude/worktrees/
 claude/commands/personal-*
+__pycache__/
