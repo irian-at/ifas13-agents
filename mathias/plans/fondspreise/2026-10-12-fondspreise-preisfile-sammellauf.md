@@ -291,6 +291,14 @@ manueller Lauf 2) wären über `(key_date, daily_run_number)` verschieden; die b
 - **Stand 2026-10-13 — umgesetzt, Commit `50d943850`** (gepusht). web-core 153, web-ui 168 grün. **Damit ist der Plan
   vollständig umgesetzt** (Chunks `efd1c5fd2`, `f9fbc64fe`, `6f40d81f5`, `50d943850`). Offen laut Abschnitt 8: Plausi
   `-P`, T2S, endgültige Dateinamen, `N`-Fonds in `alle`, Migrations-Stempel (Sync + Publikation) vor dem Einschalten.
+- **Smoke-Test 2026-10-13 (`LocalH2OnlyIfasApplication`, Sync eingeschaltet, Lauf-Tasks manuell ausgelöst):**
+  db_union-Lieferung 31.08. → Lauf 1: `preis_1.csv` mit sechs `I2` (Namen aus `inv`, Spalten 7–9 leer, `I9;…;0;6`),
+  alle elf Dateien plus `pr_ready_1.txt` in Legacy-Reihenfolge am NoOp-MFT, Bundle archiviert; zweiter Trigger von
+  Lauf 1 → `DuplicateJobException` als Flash. Lieferung 01.09. → Lauf 2: sechs neue `I2`, 0 Fallback (alle Tripel
+  hatten heute eine Zeile). Fallback-Pfad: `published_at` der zwölf Versionen und `key_date` der beiden Jobs per
+  SQL-Konsole um einen Tag zurückgesetzt, Lauf 2 erneut → 0 `I2`, sechs Fallback-Zeilen (als `I2` mit Preisdatum
+  01.09., Protokoll „6 fallback version(s) of 6 candidate(s)“, nichts neu gestempelt). Hinweis: lokal sind beide
+  Tasks aus, daher zeigt auch Lauf 1 `Fallback: Ja` (`withFallback = run == 2 || !run2.enabled`) — korrekt nach Regel.
 
 ## 10. Verifikation
 

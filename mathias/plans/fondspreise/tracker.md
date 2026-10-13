@@ -331,7 +331,14 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
       Properties, `compareStmIds` noch `todo`), Vergleichskern `PreismeldungDbDiff`. Bekannte
       Abweichungen von Anfang an: `guelt` (Lieferzeit vs. Tagesende), Projektion bei fallendem
       Preisdatum (strengerer Guard, Plan D5), transiente `N`-dann-`D`-Zustände (User 2026-09-08). **Vertagt 2026-10-08 (User):** da der Diff-Job nicht nach Sybase synct, liegen `kurs`/`tmp_if_last` im Parallelbetrieb nicht in der Neusystem-Sybase — ob D13 sie als projiziertes Ledger gegen Alt-`kurs` vergleicht oder erst mit dem produktiven Job auf TEST, später entscheiden
-- [ ] **Migrations-Stempel vor Go-live** (entschieden 2026-10-12, Sync-Plan Abschnitt 7): die Neusystem-Sybase
+- [ ] **Migrations-Stempel vor Go-live — nur noch der Publikationsstempel** (Stand 2026-10-13: die Sync-Hälfte ist
+      automatisiert, Plan [2026-10-13-fondspreise-sync-selbstheilung-sybase-snapshot.md](2026-10-13-fondspreise-sync-selbstheilung-sybase-snapshot.md),
+      Chunks 1–4 `5187df831`, `e7893c8a8`, `da7ca67ec`, `529eb53f8`: der Sync erkennt einen ersetzten `kurs` an seiner Kanarienzeile, setzt
+      die Stempel auf T − Marge und stempelt beim ersten Lauf ohne Kanarie den Backlog selbst; kein manueller Lauf, kein
+      Handschlag mit dem Betrieb, Mail an den System-Support. **Bleibt manuell und einmalig:** `published_at`/`preisfile_job_id`
+      auf allen offenen Versionen vor dem ersten Sammellauf auf TEST (Marker-`PreisfileJob`, beendete Versionen nicht anfassen).
+      **Akzeptierte Lücke:** nur Löschungen zwischen zwei Refreshes ohne ein einziges Write dazwischen bleiben unerkannt.)
+      Ursprünglicher Stand (entschieden 2026-10-12, Sync-Plan Abschnitt 7): die Neusystem-Sybase
       startet mit dem migrierten `kurs` der Alt-DB (Snapshot T). Vor dem Einschalten von
       `ifas.fondspreise.preis-version-sync.enabled`: einen `PreisVersionSyncJob` „migration“ (COMPLETED) anlegen
       und alle `preis_versions` mit `created_at < T` damit stempeln (`processed_at = T`); ab T bleibt alles
@@ -344,7 +351,18 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
       `I2` hinausschicken. **Beendete Versionen vor T nicht anfassen:** `findUnpublishedDeletions` verlangt
       `published_at is not null` — bleibt es null, ist die alte Löschung nie ein `I3`-Kandidat; ein `published_at` dort
       würde dagegen jede historische Löschung als `I3` hinausschicken
-- [x] ~~**Sammellauf (Schnitte 3–5)**~~ — **umgesetzt 2026-10-13** (vier Chunks, siehe Plan). Entscheidungen 2026-10-12 (User); Plan geschrieben und angenommen 2026-10-12:
+      **Erweitert 2026-10-13 (Voll-Refresh):** die Neusystem-Sybase wird derzeit alle 1–3 Wochen komplett aus der
+      Alt-DB ersetzt (User: vorerst akzeptiert, auch für die STM-Schreibtabellen). Damit ist der Stempel kein
+      einmaliger Go-live-Schritt, sondern ein **wiederholbarer „Ledger auf Snapshot T setzen“-Lauf nach jedem
+      Refresh**, und der letzte Lauf ist der harte Schnitt: (1) alle ungestempelten Versionen mit `created_at < T`
+      mit einem Marker-Sync-Job „Snapshot T“ stempeln, (2) alle Stempel mit `processed_at >= T` löschen (die Writes
+      sind überschrieben, der nächste Sync holt sie nach; Beendigungen löschen den Stempel ohnehin). Publikationsstempel
+      bleiben unberührt (sie beschreiben, was das Preisfile verschickt hat, nicht die Sybase). Auf TEST ist der Lauf
+      damit **Voraussetzung für das Einschalten des Syncs**, nicht erst für den Go-live. T: Dump-Zeit vom DBA, Default
+      `max(kurs1.guelt)` direkt nach dem Laden (Legacy schreibt `guelt = getdate()`), nur gültig bevor der Sync wieder
+      läuft; Reihenfolge je Refresh: Sync-Task aus → Laden → Stempel-Lauf → Sync an. Form: manuell auslösbarer Job mit
+      Protokoll (T, gestempelt, gelöscht) statt SQL-File, weil er monatelang wiederkehrt.
+- [x] ~~**Sammellauf (Schnitte 3–5)**~~ — **umgesetzt 2026-10-13** (vier Chunks, siehe Plan; Smoke-Test H2 2026-10-13 inkl. Fallback-Pfad grün, siehe Plan Abschnitt 9). Entscheidungen 2026-10-12 (User); Plan geschrieben und angenommen 2026-10-12:
       [2026-10-12-fondspreise-preisfile-sammellauf.md](2026-10-12-fondspreise-preisfile-sammellauf.md) (`PreisfileJob`, vier Chunks). **Chunk 1 umgesetzt** `efd1c5fd2` (V081: Publikationsstempel, `preisfile_jobs`, Ledger-/Stammdaten-/ASF-Abfragen); **Chunk 2 umgesetzt** `f9fbc64fe` (elf Writer, byteidentisch gegen fünf Legacy-Tage); **Chunk 3 umgesetzt** `6f40d81f5` (Services, Scheduling, geordneter MFT-Upload mit Ready-File); **Chunk 4 umgesetzt** `50d943850` (Detailseite, Recht, Doku) — **Plan vollständig umgesetzt 2026-10-13**; Läufe per Property aus bis zum Migrations-Stempel.
       - **Jeder Lauf ist ein Delta** gegen das Publikationsprotokoll: jede offene Version ohne Protokolleintrag
         als `I2`, jede seit dem letzten Lauf beendete Version als `I3`. Lauf 1 = „bis dahin heute geliefert“,
@@ -364,6 +382,12 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
         (Rest von P: Vorschlag „Vorgängerpreis“, mit der Fachabteilung bestätigen).
       - Plausi (`preis_dld.e -P`) bewusst nicht im Plan — eigener Plan später (User 2026-10-12); alle elf Dateien
         plus Ready-File im Umfang (User 2026-10-12); Name `PreisfileJob` bestätigt (User 2026-10-12)
+- [ ] **Team-Diskussion: Voll-Refresh der Neusystem-Sybase vs. Schreibtabellen von IFAS-NEU** (User 2026-10-13):
+      jeder Refresh überschreibt alles, was IFAS-NEU in seine Sybase schreibt (`kurs1`, STM-Tabellen) — vorerst
+      akzeptierter Verlust. Zu entscheiden im Team: harter Schnitt (kein Refresh mehr; dann braucht IFAS-NEU einen
+      eigenen Stammdaten-Weg, weil `inv`/ASF nicht mehr aus der Alt-DB kommen) **oder** Refresh nur noch ohne die
+      Tabellen, die IFAS-NEU schreibt (Alt-DB bleibt Stammdaten-Master bis zur Abschaltung). Für den Ledger sind beide
+      gleich: der erste Refresh ohne `kurs1` ist der Schnitt (siehe Migrations-Stempel oben).
 - [ ] **MFT-Ankunft für Preisfiles** (User 2026-10-12: „don't enable the queuing for arrived preisfiles yet“):
       `PreisMeldungJobSubmissionService.submitFromMft` liegt auskommentiert hinter einem TODO. Fehlt: der
       Inbound-Pull (Legacy `preis_ins.e` alle 10 Minuten aus `<base>/<liefer_id>/send`, `mft-interface.md`
@@ -448,6 +472,10 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
 
 ## Erledigt
 
+- 2026-10-13 — **Selbstheilung des Syncs nach einem Sybase-Snapshot** (`5187df831`, `e7893c8a8`, `da7ca67ec`, `529eb53f8`, gepusht). Kanarienzeile + `kurs_guelt`, T aus `max(kurs.guelt)` im Preisdatum-Fenster, Marge 30 min,
+  drei Ledger-Updates, Zähler am Sync-Job; Job-Protokoll-Mails je Job-Typ an Fachbereich oder System-Support
+  (`notification.jobs.<JobType>.recipients`, zwei Bestandsfehler der Warnungs-Einstellungen behoben). Plan:
+  [2026-10-13-fondspreise-sync-selbstheilung-sybase-snapshot.md](2026-10-13-fondspreise-sync-selbstheilung-sybase-snapshot.md).
 - 2026-10-13 — **Preisfile-Sammellauf `PreisfileJob`** (`efd1c5fd2`, `f9fbc64fe`, `6f40d81f5`, `50d943850`, gepusht).
   Publikationsstempel auf `preis_versions` (V081), elf Writer byteidentisch gegen fünf Legacy-Tage, Lauf 1/2 als Delta
   mit Fallback im letzten Lauf des Tages, geordneter MFT-Upload mit Ready-File (`MftService.sendZipEntriesToMft`,

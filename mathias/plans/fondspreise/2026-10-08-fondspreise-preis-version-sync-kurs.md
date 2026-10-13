@@ -334,6 +334,13 @@ Kein Backfill: alle bestehenden Versionen bleiben ungestempelt (Go-live-Backlog,
 
 ---
 
+**Nachtrag 2026-10-13 — Go-live-Backlog und Selbstheilung nach Sybase-Snapshot:** der Migrations-Stempel für den Sync ist
+kein eigenes Werkzeug mehr. Der Sync prüft am Anfang seine Kanarienzeile (die `kurs`-Zeile der jüngsten offenen Version,
+die er selbst geschrieben hat, `preis_versions.kurs_guelt`), erkennt daran einen ersetzten `kurs` (Voll-Refresh der
+Neusystem-Sybase) und setzt das Ledger auf T − Marge; ohne Kanarie stempelt er den Backlog vor T als „von Legacy
+geschrieben“ — das ist die erste Aktivierung. Mail bei `WARN` an den System-Support. Eigener Plan:
+[2026-10-13-fondspreise-sync-selbstheilung-sybase-snapshot.md](2026-10-13-fondspreise-sync-selbstheilung-sybase-snapshot.md).
+
 ## 8. Chunks
 
 Reihenfolge wie gehabt: Persistenz zuerst, Live-Verdrahtung zuletzt; jeder Chunk ein Commit, Opus-Subagent

@@ -28,5 +28,10 @@ liegt archiviert unter `mathias/plans/archive/2026-08/` und `2026-09/` — nicht
 
 **Stand 2026-10-13:** auch der Preisfile-Sammellauf (`PreisfileJob`, Plan `2026-10-12-fondspreise-preisfile-sammellauf.md`,
 Commits `efd1c5fd2`/`f9fbc64fe`/`6f40d81f5`/`50d943850`) ist umgesetzt; beide Läufe per Property aus. Vor dem
-Einschalten von Sync und Sammellauf auf TEST: Migrations-Stempel (Sync- **und** Publikationsstempel, nur offene
-Versionen vor dem Snapshot). Noch kein Plan: Plausi `-P`, T2S, Fehlmeldung, Kennzahlen.
+Einschalten des Sammellaufs auf TEST: Publikationsstempel von Hand (nur offene Versionen vor dem Snapshot). Der
+Sync braucht keinen Migrations-Stempel mehr: seit `da7ca67ec` (Plan `2026-10-13-fondspreise-sync-selbstheilung-sybase-snapshot.md`)
+erkennt er einen ersetzten `kurs` an seiner Kanarienzeile (`preis_versions.kurs_guelt`), setzt das Ledger auf
+T − Marge und stempelt beim ersten Lauf ohne Kanarie den Backlog selbst — die Neusystem-Sybase wird alle 1–3 Wochen
+komplett aus der Alt-DB ersetzt (Team-Diskussion offen, STM-Verlust vorerst akzeptiert). Job-Protokoll-Mails je Job-Typ
+an Fachbereich oder System-Support (`notification.jobs.<JobType>.recipients`). Noch kein Plan: Plausi `-P`, T2S,
+Fehlmeldung, Kennzahlen.
