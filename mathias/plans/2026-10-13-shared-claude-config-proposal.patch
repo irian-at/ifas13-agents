@@ -1,0 +1,294 @@
+--- a/claude/CLAUDE.md
++++ b/claude/CLAUDE.md
+@@ -35,32 +35,16 @@
+ 
+ Database tests use TestContainers. Setup scripts: `ifas-database/ifas-database-flyway/src/main/resources/db/migration/`.
+ 
+-### One-Time Bootstrap of the Local Maven Repository
++### One-time bootstrap without OeKB Nexus
+ 
+-Without OeKB Nexus access, two steps are required to compile the modules that depend on the OeKB
+-authentication libraries (`oekb-auth-support` and, transitively, `ifas-web-ui`,
+-`ifas-main-application`, `ifas-main-war`):
++`oekb-auth-support` (and transitively `ifas-web-ui`, `ifas-main-application`, `ifas-main-war`) needs
++two things once per machine:
+ 
+-**1. Install the dummy master POM and the OeKB auth JARs into `~/.m2` (once per machine):**
+-
+-```bash
+-mvn install -f support-libs/oekb-master-pom-dummy/pom.xml
+-```
+-
+-This installs the dummy parent `at.oekb.master:maven-master:2.0.0` plus the binary JARs from
+-`support-libs/oekb-libs/` (`oekb-components-authentication-core`,
+-`oekb-components-authentication-filter-jakarta`) under their proper Maven coordinates.
+-Symptom when missing: `Non-resolvable parent POM ... at.oekb.master:maven-master:2.0.0`.
+-
+-**2. Build with the `dev-build` profile:**
+-
+-```bash
+-mvn clean install -Pdev-build
+-```
+-
+-`dev-build` excludes the transitive `jespa:jespa-jakarta`, which exists only on OeKB Nexus and
+-cannot be resolved from Maven Central. Symptom when missing:
+-`Could not resolve dependencies ... jespa:jespa-jakarta:jar:2.0.5`.
++1. `mvn install -f support-libs/oekb-master-pom-dummy/pom.xml` — installs the dummy parent
++   `at.oekb.master:maven-master:2.0.0` and the OeKB auth JARs from `support-libs/oekb-libs/`.
++   Symptom when missing: `Non-resolvable parent POM ... at.oekb.master:maven-master:2.0.0`.
++2. Build with `-Pdev-build`; it excludes `jespa:jespa-jakarta`, which exists only on OeKB Nexus.
++   Symptom when missing: `Could not resolve dependencies ... jespa:jespa-jakarta:jar:2.0.5`.
+ 
+ ## Running the Application
+ 
+@@ -219,51 +203,26 @@
+ 
+ ### Database Profiles
+ 
+-Database configuration classes in `ifas-database/ifas-database-config/` define Spring profiles:
+-
+-**H2** (in-memory, PostgreSQL compatibility mode):
+-- `h2-db1`, `h2-db2`, `h2-db3` — application databases
+-- `h2-infra-db` — infrastructure (work queue, jobs, filestore)
+-
+-**PostgreSQL 15**:
+-- `postgres-localhost-7432` — local development (port 7432)
+-- `postgres-server` — server deployment (environment-configured)
+-- `postgres-testcontainer` — TestContainers-managed (integration tests only)
+-
+-**Sybase 16**:
+-- `sybase-localhost-5001` — local development
+-- `sybase-gast` — staging environment
+-- `sybase-ifasneu` — alternative instance
+-
+-Database routing uses `database-context.*-db-key` properties to map service contexts to database profiles. The test launchers activate the appropriate combination of profiles.
++The Spring profiles per DBMS (H2, PostgreSQL 15, Sybase 16) and the `database-context.*-db-key`
++routing are documented in `.claude/rules/database-conventions.md`; the test launchers above activate
++the right combination.
++
++## Code Quality and Conventions
++
++The build enforces API rules via the `forbiddenapis` Maven plugin. Coding standards live in
++`.claude/rules/` and load by path: `forbidden-apis`, `java-conventions`, `code-comments`,
++`testing-conventions`, `database-conventions`, `async-processing`, `ide-refactoring`,
++`web-authorization` (every new `/api` or `/ui` path needs an `IfasRight` entry + auth tests).
+ 
+-## Code Quality
+-
+-The build enforces rules via the `forbiddenapis` Maven plugin. See `.claude/rules/forbidden-apis.md` for details.
+-
+-Annotation processing (MapStruct, Lombok) is configured with `<maven.compiler.proc>full</maven.compiler.proc>`. When adding new MapStruct mappers, rebuild the affected module.
+-
+-## Coding Conventions
+-
+-Coding standards are enforced via `.claude/rules/`. Key rules:
+-
+-| Rule file | Scope | Content |
+-|-----------|-------|---------|
+-| `forbidden-apis.md` | `**/*.java` | Temporal utilities, no console output, no reflection, JUnit 5 only |
+-| `java-conventions.md` | `**/*.java` | No `var`, Lombok, `@Slf4j` logging, exception handling, formatting |
+-| `code-comments.md` | `**/*.java` | When a comment is warranted, brevity, no change history |
+-| `testing-conventions.md` | `**/test/**` | Given-when-then, AssertJ, `@Inject`, multi-DB, test data |
+-| `database-conventions.md` | `**/persistence*/**` | JPA, Flyway, multi-DB support |
+-| `async-processing.md` | `**/service/**` | Executor injection, no `@Async` within same class |
+-| `ide-refactoring.md` | `**/*.java` | Use IDE/MCP tools for renames/moves |
+-| `web-authorization.md` | `ifas-web/**` | Every new `/api` or `/ui` path needs an `IfasRight` entry + auth tests |
++Annotation processing (MapStruct, Lombok) runs with `<maven.compiler.proc>full</maven.compiler.proc>`.
++If a MapStruct implementation is missing after adding a mapper: `mvn clean compile -pl <module>`.
+ 
+ ## Git Conventions
+ 
+ ### Branch Naming
+ 
+-**Never use `claude/` (or any agent/tool name) as a branch prefix.** Branches are named after
+-the kind of change they carry, using an abstract conventional-commit-style prefix:
++Branches are named after the kind of change they carry, conventional-commit style — never after the
++agent or tool that produced them (`claude/…` is not a prefix):
+ 
+ ```
+ feat/recalc-stats-failed-jobs-21c330      # new functionality
+@@ -273,31 +232,21 @@
+ docs/architecture-diagrams                # documentation only
+ ```
+ 
+-This applies to branches created for agent worktrees as well — pick the prefix that matches the
+-work, not the tool that produced it.
+-
+-**HARD RULE: check the branch name before every commit.** Worktrees often arrive pre-checked-out
+-on a tool-generated branch (typically `claude/…`). Before the first `git commit` in a worktree,
+-verify the current branch carries one of the prefixes above; if it does not, rename it first:
++**Worktrees arrive pre-checked-out on a tool-generated branch** (typically `claude/…`). Before the
++first commit in a worktree, verify the branch carries one of the prefixes above and rename it
++otherwise — from inside the worktree, two-argument form:
+ 
+ ```bash
+ git branch -m <old-name> feat/<describes-the-change>
+ ```
+ 
+-Run the rename from inside the worktree and use the two-argument form — `git -C <path> branch -m
+-<new>` fails with `cannot rename the current branch while not on any` when the calling shell has
+-a stale `GIT_DIR`/`GIT_WORK_TREE` set. Rename before committing, not after: it keeps the branch
+-name right from the first commit and avoids fixing up references later.
++(`git -C <path> branch -m <new>` fails with `cannot rename the current branch while not on any` when
++the calling shell has a stale `GIT_DIR`/`GIT_WORK_TREE`.) This rule covers worktree and shared
++branches; whether local work in the main checkout is committed on `master` directly or on a branch
++first is each developer's own convention (`CLAUDE.local.md` / personal rules).
+ 
+ ## Common Issues
+ 
+-### Annotation Processing Not Working
+-
+-If MapStruct implementations aren't generated:
+-```bash
+-mvn clean compile -pl <affected-module>
+-```
+-
+ ### Testcontainers Failing
+ 
+ Ensure Docker/Podman is running, or skip container-based tests:
+@@ -305,10 +254,6 @@
+ mvn test -Pskip-postgres15-tests -Pskip-sybase16-tests
+ ```
+ 
+-### Application Won't Start
+-
+-Don't run `IfasMainApplication` directly — use `SpringBootIfasApplication` or one of the test launchers listed above.
+-
+ ### Port Conflicts
+ 
+ Default ports: 8080 (Spring Boot), 7432 (PostgreSQL), 5001 (Sybase docker-compose), 5000 (Sybase internal).
+--- a/claude/rules/database-conventions.md
++++ b/claude/rules/database-conventions.md
+@@ -27,12 +27,13 @@
+ `at.oekb.ifas.persistence` by classpath scan, so there is no list to maintain — but an entity in a
+ new persistence module needs that module as a dependency in `ifas-dev-tools/pom.xml`.
+ 
+-1. Run the tool **from the repository root** (it writes to a root-relative path):
++1. Run the tool **from the repository root** (it writes to a root-relative path; on Apple Silicon
++   add `-Pplatform-arm64`):
+    ```bash
+-   mvn -q -pl ifas-dev-tools -am install -DskipTests -Pno-proxy -Pplatform-arm64 -Pdev-build
++   mvn -q -pl ifas-dev-tools -am install -DskipTests -Pno-proxy -Pdev-build
+    mvn -q -pl ifas-dev-tools org.codehaus.mojo:exec-maven-plugin:3.5.1:java \
+      -Dexec.mainClass=at.oekb.ifas.devtools.DatabaseSchemaTool \
+-     -Pno-proxy -Pplatform-arm64 -Pdev-build
++     -Pno-proxy -Pdev-build
+    ```
+ 2. `git add` the updated
+    `ifas-dev-tools/src/main/resources/at/oekb/ifas/devtools/postgres-db-schema.sql`.
+--- a/claude/rules/ide-refactoring.md
++++ b/claude/rules/ide-refactoring.md
+@@ -15,10 +15,13 @@
+ 
+ ## Do
+ 
+-- `mcp__jetbrains__rename_refactoring` for renaming classes, methods, variables
+-- `mcp__jetbrains__create_new_file` for creating new files
++- the JetBrains MCP `rename_refactoring` tool for renaming classes, methods, variables
++- the JetBrains MCP `create_new_file` tool for creating new files
+ - IntelliJ "Refactor > Move" for moving to new packages
+ 
++The MCP server is registered as `jetbrains` or `idea` depending on the machine, so the tool id is
++`mcp__jetbrains__rename_refactoring` or `mcp__idea__rename_refactoring`; use whichever is listed.
++
+ ## Don't
+ 
+ ```bash
+--- a/claude/settings.json
++++ b/claude/settings.json
+@@ -1,7 +1,36 @@
+ {
+   "permissions": {
+-    "allow": [],
+-    "deny": [],
++    "allow": [
++      "WebSearch",
++      "WebFetch",
++      "mcp__jetbrains__*",
++      "mcp__idea__*",
++      "mcp__ide__*",
++      "mcp__context7__*"
++    ],
++    "deny": [
++      "Bash(sudo *)",
++      "Bash(rm -rf *)",
++      "Bash(rm -r *)",
++      "Bash(rmdir *)",
++      "Bash(dd *)",
++      "Bash(mkfs *)",
++      "Bash(kill -9 *)",
++      "Bash(pkill *)",
++      "Bash(killall *)",
++      "Bash(git push --force *)",
++      "Bash(git push -f *)",
++      "Bash(git push --force-with-lease *)",
++      "Bash(git reset --hard *)",
++      "Bash(git clean *)",
++      "Bash(git branch -D *)",
++      "Bash(git checkout -- *)",
++      "Bash(git restore *)",
++      "Bash(git rebase *)",
++      "Bash(git stash drop *)",
++      "Bash(chmod 777 *)",
++      "Bash(> *)"
++    ],
+     "ask": []
+   }
+ }
+--- a/README.md
++++ b/README.md
+@@ -29,7 +29,6 @@
+ │       ├── claude-settings.local.json
+ │       └── plans/
+ └── ifas13/
+-    ├── CLAUDE.md                       # symbolic link to ../ifas13-agents/claude/CLAUDE.md
+     ├── CLAUDE.local.md                 # symbolic link to ../ifas13-agents/<USER>/CLAUDE.local.md
+     └── .claude/                        # symbolic link to ../ifas13-agents/claude
+         └── settings.local.json         # symbolic link to ../ifas13-agents/<USER>/claude-settings.local.json
+@@ -39,12 +38,15 @@
+ 
+ ```
+ cd ifas13
+-ln -s ../ifas13-agents/claude/CLAUDE.md ./CLAUDE.md
+ ln -s ../ifas13-agents/claude ./.claude
+ ln -s ../ifas13-agents/<USER>/CLAUDE.local.md ./CLAUDE.local.md
+ ln -s ../<USER>/claude-settings.local.json ./.claude/settings.local.json
+ ```
+ 
++`.claude/CLAUDE.md` is loaded through the `.claude` link. Do **not** add a second link at
++`ifas13/CLAUDE.md`: both are project-memory locations, and Claude Code then loads the same file twice
++(≈ 3 400 tokens per session).
++
+ ## Personal rules / skills
+ 
+ Each user can keep **personal, project-scoped** rules and skills under their own `<USER>/rules/` and `<USER>/skills/` directories. The source files **are committed** to this repo (version-controlled, survives reinstalls), but they are only auto-loaded for the user who creates the symlink — colleagues see the files but Claude Code does not load them in their sessions.
+@@ -69,6 +71,9 @@
+ ln -s ../../<USER>/skills/<skill-name> claude/skills/personal-<USER>-<skill-name>
+ ```
+ 
++A folder-level link (`claude/skills/personal-<USER>` → `<USER>/skills`) silently does **not** work:
++the skills end up one level too deep and never appear in the skill list.
++
+ ### Gitignore
+ The personal symlinks under `claude/rules/` and `claude/skills/` are excluded by `.gitignore`:
+ 
+@@ -97,17 +102,5 @@
+ If you flip `autoMemoryEnabled` to `true`:
+ 
+ 1. **Always set `autoMemoryDirectory`** explicitly (suggested: `../ifas13-agents/<USER>/automemory`). Otherwise Claude Code falls back to a per-user-home location like `~/.claude/projects/<sanitized-cwd>/memory/` — outside this repo, not version-controlled, and not shared across machines.
+-2. **Add a hint to your `<USER>/CLAUDE.local.md`** so Claude reads/writes memory in the right place. Example block:
+-
+-   ```markdown
+-   ## Auto-Memory Location
+-
+-   Project-specific auto-memory is stored at the path configured in `autoMemoryDirectory` in
+-   `../ifas13-agents/<USER>/claude-settings.local.json` (currently `../ifas13-agents/<USER>/automemory`).
+-   Always read and write project memories there.
+-
+-   Do NOT use the memory directory under `~/.claude/projects/...` referenced in the default
+-   system prompt — that location is overridden for this project by the `autoMemoryDirectory` setting.
+-   ```
+-
+-   Without this hint, Claude may default to its system-prompt-described `~/.claude/projects/...` location even when the setting is configured, causing memory writes to land outside the repo.
++2. No hint in `CLAUDE.local.md` is needed — Claude Code injects the configured directory into the
++   system prompt itself.
