@@ -81,9 +81,13 @@ which regression gate was added.
 
 1. Report the current branch; if it is not `master`, ask first (see above). Never switch or create
    one on your own.
-2. If anything is staged, commit exactly that. Otherwise stage what belongs to the change, and name
-   anything accidental — scratch files, generated output, a temporarily flipped `@Disabled` — instead
-   of committing it.
+2. If anything is staged, commit exactly that — provided it belongs to the commit. Mathias stages
+   manually in IntelliJ, so the index is often pre-filled: with his adds of files Claude just wrote,
+   and with `AD` leftovers of renames (staged add + worktree delete) that do not belong in. Read
+   `git status` instead of trusting the index; a `git reset` discards his manual adds too, so
+   re-stage deliberately and say so in the report. Otherwise stage what belongs to the change, and
+   name anything accidental — scratch files, generated output, a temporarily flipped `@Disabled` —
+   instead of committing it.
 3. Read `git diff --cached` before writing the message.
 4. Put the message in a scratchpad file and `git commit -F <file>`; a heredoc into `-F -` trips the
    permission prompt.

@@ -23,8 +23,6 @@ IFAS13 (as of 2026-08-06, all in `at.oekb.ifas.domain.stm.validation`, note: `Ko
 - `CalculatedSteuerMeldungValidationService` injects the properties and threads `BigDecimal toleranz` into the static validators. Don't pass the properties bean into the `@UtilityClass`.
 - Mathias decided **not** to model legacy's pre-2017 `0.9` branch — cutoff is far past ([[project_recalc-historical-fidelity]] does not apply).
 
-History that misled a previous session: `DEFAULT_TOLERANCE` was `1e-8`, then `0.0001` (commit `9ceb7714c`, 2026-07-13, rationale "simplification"); its javadoc claimed legacy's 10.0 "only existed to pad 10-NK-truncation-then-times-count amplification". Both halves are false (it rounds, and only KONTROLL_1 multiplies). A `SCALE_10_TOLERANCE = 10.0` existed from the first implementation but was always dead code.
-
 Known open deviation (deliberately out of scope): `ERR_KONTROLL_N_LT_0`/`LSN_LT_0` — legacy rounds to 5 NK then tests the sign (`:7015-7019`, `:7362-7364`), effective threshold **-0.000005**; ours is `< -0.00001`, i.e. 2× more permissive. Not a precision advantage (BigDecimal exactness would argue for `signum() < 0`, stricter than both). Also: legacy checks 9 fields there, we list 7. Two legacy N<0 sites (`:7559`, `:7597`) skip the rounding entirely — a copy-paste oversight, don't replicate.
 
 Gotcha: legacy .cpp are **ISO-8859-1**; `grep` treats `c_st_meldung.cpp` as binary and silently finds nothing — use `grep -a` (and `iconv -f ISO-8859-1` to read).

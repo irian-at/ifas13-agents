@@ -1,6 +1,6 @@
 ---
 name: validation-discrepancy
-description: Analyze a divergence between legacy CPP (`~/dev/projects/oekb/ifas/`) and new Java (`~/dev/projects/oekb/ifas13/`) validation output — typically a `[+] NUR IM NEUSYSTEM` or `[-] NUR IM ALTSYSTEM` entry from a grossfile recalculation diff. Use this skill whenever the user pastes lines from `error#diff.txt` / `error#diff-deviations.txt`, mentions a validation message that fires in one system but not the other, asks "why does the neusystem (not) fire this error", or wants to compare an ERR_* / INFO_* code between the two systems. The skill explains where each system's validation lives, how the CSV input is structured (and how that interacts with status), how to map a German message back to its raiser in both codebases, and the recurring discrepancy patterns observed so far.
+description: Analyze why an ERR_*/INFO_* validation message fires in legacy CPP but not in IFAS13, or vice versa. Use when the user pastes error#diff / error#diff-deviations.txt lines ([+] NUR IM NEUSYSTEM, [-] NUR IM ALTSYSTEM) or asks why the Neusystem does or does not fire a code.
 ---
 
 # Validation Discrepancy Analyzer

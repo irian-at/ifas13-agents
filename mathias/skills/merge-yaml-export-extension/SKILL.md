@@ -1,6 +1,6 @@
 ---
 name: merge-yaml-export-extension
-description: Merge a follow-up YAML database export ("extension") back into a primary `FondsYamlExportTool` export when the primary export missed some ISINs. Handles the trickiest part: filtering out STEUER_MELDUNG entries that were created AFTER the snapshot the primary export represents (e.g. created by a later grossfile run), plus their dependent STEUER_FIELDS_DATA / STEUER_BEH_DATA / STEUER_MELDUNG_FILE rows. Use this whenever the user says they "missed ISINs in a YAML export", "exported the DB again for missing ISINs", or asks to merge a `*-extension.yaml.txt` into a `*-export-AFTER.yaml.txt` / similar primary YAML used as test setup data. The companion skill [[find-missing-isins-for-yaml-extension]] produces the ISIN list that drives the re-export feeding into this merge.
+description: Merge, prune, extract or time-filter FondsYamlExportTool YAML fixtures (grossfile export-AFTER files and extensions) with their dependent rows; undo a single UPDATE; trim with FondsYamlStripTool. Use when a YAML test fixture misses ISINs or meldungen, carries post-snapshot rows, or must be rebuilt or shrunk.
 ---
 
 # Merge YAML Export Extension
@@ -165,16 +165,19 @@ Workflow:
 
 5. Merge it into the primary YAML with the regular `--merge` flow, then rebuild the test zip.
 
-This was the path used to recover gf3's `649492/649539/649548/649550` from `gf4-d20260807.zip` in June 2026 — see `project_gf3-missing-stmids-recovered-from-gf4.md`.
+This was the path used to recover gf3's `649492/649539/649548/649550` from `gf4-d20260807.zip` in June 2026.
 
 ### Gotcha: a post-T snapshot has the current grossfile's *mutations* baked in
 
 When the source is `gfN+1`'s `gfN-...-export-AFTER.yaml.txt` and you're rebuilding **gfN's setup** (pre-gfN state), that snapshot is *post-gfN* — it includes everything gfN did. Two classes must be undone, not just the obvious one:
 
 1. **Meldungen gfN created** (`OPEN;649NNN` rows in `gfN_return.csv`) — drop via `--merge --exclude-stm-ids`. They carry `eintragezeit` at gfN's wall-clock run time (matches `error.log`'s header timestamp, NOT the logical `d<yyyymmdd>`); grep that to confirm the set.
-2. **Predecessors gfN *mutated*** — subtler. An **OPE** meldung that gfN successfully UPDATEd or CONFIRMED gets `gueltBis` set (legacy `BeendeAlteMeldung`) and/or `confirmFileId`+`status: FIN`. In the snapshot it looks ended/confirmed; pre-gfN it was active OPE. The `gueltBis`-aware validator then reports it "nicht vorhanden" (see `project_gf6-update-on-ended-meldung-guelt-bis.md`). **Re-source these from a pre-T fixture** (e.g. `gf1-...-export-AFTER`) via `--extract --include-stm-ids`, after excluding them from the post-T merge.
+2. **Predecessors gfN *mutated*** — subtler. An **OPE** meldung that gfN successfully UPDATEd or CONFIRMED gets `gueltBis` set (legacy `BeendeAlteMeldung`) and/or `confirmFileId`+`status: FIN`. In the snapshot it looks ended/confirmed; pre-gfN it was active OPE. The `gueltBis`-aware validator then reports it "nicht vorhanden" (see [[project_gueltbis-active-meldung-discriminator]]). **Re-source these from a pre-T fixture** (e.g. `gf1-...-export-AFTER`) via `--extract --include-stm-ids`, after excluding them from the post-T merge.
 
-   A **FIN** predecessor that gfN updated is fine as-is — updating a FIN meldung does NOT set its `gueltBis` (it stays a confirmed historical row). Only OPE predecessors successfully updated/confirmed need pre-T re-sourcing. Detect them: `gueltBis` (or `guelt`/`confirmFileId`) stamped at gfN's run time. See `project_gf7-missing-data-recovered-from-gf8.md`.
+   A **FIN** predecessor that gfN updated is fine as-is — updating a FIN meldung does NOT set its `gueltBis` (it stays a confirmed historical row). Only OPE predecessors successfully updated/confirmed need pre-T re-sourcing. Detect them: `gueltBis` (or `guelt`/`confirmFileId`) stamped at gfN's run time.
+
+   If the fund was untouched between the source snapshot and the target point (verify across the
+   intervening CSVs), no time-filtering is needed at all.
 
 ## Pruning meldungen the legacy system doesn't expect
 
@@ -198,8 +201,55 @@ Steps:
 
 If you skip the cascade (`--no-cascade`), the import will fail with a `fk_vorherige_steuer_meldung2steuer_meldung` violation pointing at one of the pruned ids — exactly the symptom that motivated adding the cascade in the first place.
 
+## Undoing a single UPDATE in a quick-recalc yaml
+
+A `quick-recalc` fonds-export yaml is often an **export-AFTER** snapshot: taken once a suspect UPDATE
+has already run and mutated the DB. Replaying the same input CSV against it does not test the
+original question — the targeted stmId is superseded (`gueltBis` set), so you get
+`ERR_MELDID_NICHT_MEHR_GUELTIG` instead of the Fristen/status outcome you wanted. Single-STM version
+of the post-T recipe above:
+
+1. Remove the `STEUER_MELDUNG` block(s) the update created — the direct successor
+   (`vorherigeStmId` = the target) and anything chained off it (e.g. a later DELETE of that successor).
+2. Remove their child rows — `STEUER_FIELDS_DATA` / `STEUER_BEH_DATA` / `GESCHAEFTSJAHR` blocks matched
+   by `stmId:`. They vastly outnumber the parent rows (hundreds each) and are scattered through the file.
+3. On the predecessor: **drop `gueltBis` entirely** (null = active again) and **revert `guelt`** to the
+   predecessor's own `eintragezeit`/`gueltAb` — `SteuerMeldungRepository.closeIfOpen` only ever sets
+   `guelt` + `gueltBis` to the same `now`, so the pre-close `guelt` equals the row's creation timestamp.
+
+A block-splitter on `^- !<TYPE>` boundaries (`merge_yaml.py --prune`, or awk/Python) handles this on a
+500k-line yaml. Verify counts: removed child rows must be an exact multiple of removed parents
+(573 fields per STM × 2 = 1146, plus 2 parent blocks = 1148).
+
+The `_confirm.csv`/`_delete.csv`/`_return.csv` next to the main input CSV can stay: `RecalculationDomainService.doRecalc`
+picks ONE input per bundle, preferring the plain Melde-CSV; the return file is only read for the delta
+comparison. They are not replayed as a chain.
+
+## Trimming a bundle yaml with FondsYamlStripTool
+
+A UAT recalc-job export (`exportFondsByIsin`, minStmVersion 0) carries the complete STM history of every
+fund — gf1: 4.25M entities, 3.98M of them `STEUER_FIELDS_DATA`, 405 MB, 12 min row-by-row import. The
+recalc reads field data only for Vorherige Meldungen it actually processes; gf1 (165 NEW, 2 declined
+UPDATE) reads none and runs byte-identical on a headers-only yaml (18,884 entities, 8.5 MB, 8 s).
+Verified 2026-09-29; gf2–gf8 pending.
+
+1. Strip: `mvn -pl ifas-dev-tools exec:java -Dexec.mainClass=at.oekb.ifas.devtools.FondsYamlStripTool
+   -Dexec.args="<in> <out> <newestPerFund> [ids]"`. Bundles whose tests need previous Meldungen keep the
+   newest N per fund or explicit stm ids.
+2. Prove it: run the bundle with the full yaml, save `target/grossfile-rerun-recalc/<ds>/`, run again
+   with the stripped one and diff all output files with run timestamps, `Verarbeitungsbeginn`,
+   END-record times, import-count and duration lines masked. Anything else differing = a needed Meldung
+   was stripped.
+3. To see which STMs a run reads: `-Dlogging.level.org.hibernate.SQL=DEBUG
+   -Dlogging.level.org.hibernate.orm.jdbc.bind=TRACE` on `mvn test` (surefire forwards them); the bind
+   lines after selects on `steuer_fields_data` / `steuer_beh_data` carry the stm ids.
+
 ## Common gotchas
 
+- **Entity tags can contain digits** — `KEST98` (§98-KESt Stammdaten, keyed by `numWfsKu`). A splitter
+  regex of `^- !<([A-Z_]+)>` folds those lines into the neighbouring block and they vanish silently;
+  the symptom is a late, unexplained `… KESt auf Zinsen gem. Para. 98 EStG 1988 <NEIN> weicht … ab`.
+  Use `^- !<([A-Z0-9_]+)>` and verify every untargeted type keeps its count.
 - **The zip fixture loads every `*.yaml.txt` — don't leave the extension in it.** This was the biggest landmine: even with a perfectly filtered merged YAML, the test still sees the dropped meldungen if the extension YAML is also packed in the zip. The symptom is a validator returning an stmId you *thought* you dropped. See "Rebuilding the test zip" above.
 - **`STEUER_MELDUNG_FILE` uses `fileId:` not `id:`** as its primary key. A naive regex on `id:` will skip it.
 - **`STEUER_MELDUNG_FILE` is often missing from older exports** entirely — the original file may have zero of them while the extension has dozens. That's fine; appending is non-destructive.

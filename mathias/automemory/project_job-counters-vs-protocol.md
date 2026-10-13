@@ -1,8 +1,8 @@
 ---
-name: job-counters-vs-protocol
+name: project_job-counters-vs-protocol
 description: Job subtype tables carry only the few counters a list or filter needs; per-item detail goes into the job's protocol file (jobs.protocol_file_ref), decided 2026-10-08 for PreisVersionSyncJob and PreisVersionJob
 metadata:
-  type: feedback
+  type: project
 ---
 
 A job subtype table (`*_jobs`, JOINED child of `jobs`) gets **only the counters something lists, filters
@@ -22,4 +22,4 @@ house already pairs few counters with a protocol (`ausschuettungs_meldung_batch_
 **How to apply:** when a new job type gets result columns, ask of each: will a list show it, a filter
 use it, or must it commit with the job's writes? Otherwise it is a protocol line. Protocol lines at INFO
 or above (DEBUG is not captured); the protocol lives outside the job's transaction, counters inside.
-Related: [[fondspreise-naming-rules]], [[sybase-schema-freeze]].
+Related: `mathias/rules/fondspreise-naming.md`, [[project_sybase-schema-freeze]].

@@ -22,7 +22,7 @@ the row). A **FINAL** predecessor keeps `guelt_bis` null and stays active.
 ## Debugging heuristic for `ERR_MELDID_FEHLT` deviations
 
 Before treating an Altsystem `ERR_MELDID_FEHLT` deviation as a fixture-data problem (recover/prune
-per [[project_recalc-fixture-data-recovery]] / [[merge-yaml-export-extension]]), **check whether the
+per [[merge-yaml-export-extension]]), **check whether the
 referenced meldung is present-but-ended (`gueltBis` set)**. If it is, legacy legitimately has the row
 and the deviation is a *validation-behaviour* bug, not missing/extra data. Recovery/prune applies
 only when legacy genuinely never had the row.
@@ -32,4 +32,4 @@ counts as the active `previousSteuerMeldung` only when `getGueltBis() == null` (
 on `DbSteuerMeldung` only — input/CSV STMs never have it). Do **not** filter the `existingMeldungen`
 map map-wide — chain walks (`findVorherigeFinalSteuerMeldung`, successor lookups) still need ended rows.
 
-Related: [[project_recalc-fixture-data-recovery]], [[project_recalc-historical-fidelity]].
+Related: [[project_recalc-historical-fidelity]], [[project_korrekturfrist-requires-final-predecessor]].

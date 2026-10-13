@@ -1,6 +1,6 @@
 ---
 name: find-missing-isins-for-yaml-extension
-description: Identify which ISINs a grossfile run (`gfN-d<yyyymmdd>`) needs that aren't yet represented in the merged YAML fixture sitting next to it. Produces the ISIN list the user feeds into `FondsYamlExportTool` to create the next `*-yaml-extension.yaml.txt` for the [[merge-yaml-export-extension]] step. Use this when the user says "prepare a yaml extension for gfN", "what ISINs are missing from the gfN yaml", or before merging a new extension.
+description: Find the ISINs a grossfile run (gfN-d<yyyymmdd>) references that are missing from the merged YAML fixture next to it. Use when asked to prepare a yaml extension for gfN or which ISINs the gfN yaml lacks; first step before merge-yaml-export-extension.
 ---
 
 # Find ISINs Missing From YAML Extension

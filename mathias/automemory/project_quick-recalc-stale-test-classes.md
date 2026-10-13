@@ -27,4 +27,4 @@ real cause is a duplicate resource.
 **How to apply:** when this error appears, `ls target/test-classes/.../quick-recalc/` **before**
 inspecting the zip. Any extra zip there is the bug; delete it (or `mvn clean test-compile -pl
 ifas-testing/ifas-integration-tests -Pno-proxy`). Same trap applies to the multi-file mode of the
-test. See [[project_recalc-fixture-data-recovery]] for the fixture side of quick-recalc work.
+test. Fixture surgery (undoing an UPDATE, recovering rows) is the [[merge-yaml-export-extension]] skill.

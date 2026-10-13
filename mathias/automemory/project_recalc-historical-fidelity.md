@@ -15,4 +15,4 @@ When IFAS13 recalculates a SteuerMeldung of schema version V (≤ current legacy
 - When introducing a similar gate, cite the legacy `OeKBSD-…` ticket in the commit message so the rationale doesn't get lost.
 - Grossfile baselines and `[+]/[-]` deviations may legitimately include legacy-only entries that current legacy wouldn't emit — those are stale-by-design (fixture logs predate legacy changes).
 
-Related: [[feedback_only-change-what-was-asked]].
+Related: [[project_stb-auslieferformat-only]] (the same "don't tidy a deliberate gate" pattern).

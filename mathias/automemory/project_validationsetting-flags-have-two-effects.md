@@ -24,8 +24,7 @@ effects, not one:
 **Why:** the two halves live in different packages (`validation.delta` vs `ermittlung`) and neither
 javadoc used to mention the other, so adding a flag and wiring only the report half looks complete but
 leaves the return-file `STATUS_*` diffs (`STATUS_STATUS`, `STATUS_MELDUNGS_ID`,
-`STATUS_MELDUNGS_ID_REF`) in place — they are consequences of the decline, not of the log entry. This
-cost a wrong "out of scope" call when `updOldmDiffsAsWarning` was added on 2026-08-05.
+`STATUS_MELDUNGS_ID_REF`) in place — they are consequences of the decline, not of the log entry.
 
 **How to apply:** adding a fifth flag means touching both halves plus
 `ValidationSetting.ofRecalcArtifactDiffsAsWarning` (the single-UI-checkbox expander) and the
@@ -47,5 +46,5 @@ never spans deliveries. The legacy return status is the only available discrimin
 `CONFIRM_DECLINED` on its own once the suppression is skipped.
 
 Related: [[project_gf1-fielddiff-null-vs-zero]] (the residual field diff this fix exposed once the
-meldung was no longer declined), [[project_recalc-fixture-data-recovery]] (why replay fixtures contain
-the delivery's own product in the first place), [[project_lieferung-codes-are-clones]].
+meldung was no longer declined), [[project_gueltbis-active-meldung-discriminator]] (why replay fixtures contain the delivery's own
+product in the first place), [[project_lieferung-codes-are-clones]].

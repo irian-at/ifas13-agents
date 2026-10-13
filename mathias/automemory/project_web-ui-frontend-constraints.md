@@ -36,4 +36,4 @@ rendering — so a repository call from an advice or during render still routes 
 The codebase is deliberately browser-native-first (`<input type="date">` over a JS datepicker,
 `table-tools.js` over DataTables); native `<datalist>` and friends fit it better than a library.
 
-See [[project_headless-launch-devtools-npe]] for verifying UI changes against a running app.
+Verify UI changes against a running app with the [[run-ifas-headless]] skill.
