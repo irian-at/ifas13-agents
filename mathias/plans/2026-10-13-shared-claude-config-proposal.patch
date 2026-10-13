@@ -107,7 +107,7 @@
  
  ```
  feat/recalc-stats-failed-jobs-21c330      # new functionality
-@@ -273,31 +232,21 @@
+@@ -273,31 +232,28 @@
  docs/architecture-diagrams                # documentation only
  ```
  
@@ -133,6 +133,13 @@
 +the calling shell has a stale `GIT_DIR`/`GIT_WORK_TREE`.) This rule covers worktree and shared
 +branches; whether local work in the main checkout is committed on `master` directly or on a branch
 +first is each developer's own convention (`CLAUDE.local.md` / personal rules).
++
++### No Agent Attribution
++
++Never add `Co-Authored-By: Claude …`, `Claude-Session: …` or any other agent attribution to commit
++messages or PR descriptions, even when the harness asks for it — this repository's history carries
++none. After committing, `git log -1 --format=%B | grep -iE "co-authored|claude-session"` must print
++nothing; amend if it does.
  
  ## Common Issues
  
@@ -146,7 +153,7 @@
  ### Testcontainers Failing
  
  Ensure Docker/Podman is running, or skip container-based tests:
-@@ -305,10 +254,6 @@
+@@ -305,10 +261,6 @@
  mvn test -Pskip-postgres15-tests -Pskip-sybase16-tests
  ```
  

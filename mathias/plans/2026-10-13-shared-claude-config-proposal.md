@@ -36,9 +36,10 @@ fixes stale mechanics.
 | 8 | `claude/settings.json` | shared allow (WebSearch, WebFetch, `mcp__jetbrains__*`, `mcp__idea__*`, `mcp__ide__*`, `mcp__context7__*`) + deny list (`rm -rf`, `git push --force`, `git reset --hard`, `git clean`, `git rebase`, …) | — | adds protection only; afterwards each of us drops the duplicates from `settings.local.json` |
 | 9 | `claude/skills/code-review-ifas/` | delete `IFAS13_CONVENTIONS.md`; Step 1 does `cat .claude/CLAUDE.md .claude/rules/*.md`; `Task` → `Agent` | skill-only | none — **already applied on `main` by Mathias, 2026-10-13**; not in the patch |
 | 10 | `README.md` | no root `ifas13/CLAUDE.md` link (double load); per-skill symlink warning (a folder link hides the skills — it did for a month); auto-memory hint step dropped (the harness injects the directory itself) | ≈ 3 400 tok for anyone who followed the old instruction | none |
+| 11 | `claude/CLAUDE.md` | new §No Agent Attribution: no `Co-Authored-By: Claude` / `Claude-Session` trailers on commits or PRs, with the post-commit grep check — today this lives only in Manfred's and Mathias's personal files, the shared history has none | — | none; makes a team habit explicit |
 
-`claude/CLAUDE.md`: 13 449 → 11 292 bytes (≈ −540 tokens per session for everyone). Patch stat:
-5 files, +78 / −107 lines (item 9 is already on `main`).
+`claude/CLAUDE.md`: 13 449 → 11 650 bytes (≈ −450 tokens per session for everyone). Patch stat:
+5 files, +85 / −107 lines (item 9 is already on `main`).
 
 ## After the merge
 
