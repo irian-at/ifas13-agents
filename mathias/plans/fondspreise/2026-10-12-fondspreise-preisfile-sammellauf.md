@@ -262,6 +262,20 @@ manueller Lauf 2) wären über `(key_date, daily_run_number)` verschieden; die b
   danach Vorgängerpreis im Fallback des letzten Laufs; Lauf 2 aus → Lauf 1 mit Fallback; Fremdwährung übersprungen;
   Bundle-Einträge und Reihenfolge; genau ein Archiv- und ein MFT-Item mit elf Einträgen und Ready; Duplikat am selben
   Tag abgelehnt; Stempel sind bedingt (Wiederholung schreibt kein zweites `I2`).
+- **Nachtrag 2026-10-13 (umgesetzt):** `MftService.sendZipEntriesToMft(zip, entries, readyFile, target, options)` — ein
+  Item, Einträge in Listenreihenfolge, Ready-File zuletzt, Abbruch beim ersten Fehler, Retry von vorn
+  (`MftUploadEntry`, `MftReadyFile`; alte Payloads lesbar). `MftTarget.FONDSPREISE` auf dem Endpoint
+  `STEUERDATEN_AUSWERTUNG`. Auswahl/Stammdaten/ASF/Records im package-privaten `PreisfileRecordsAssembler`; der
+  Execution-Service hält Stempel, Zähler, Archiv- und MFT-Item in einer Transaktion. Abweichungen: Fall 2 des Plans war
+  in sich widersprüchlich (heute publizierte Tripel haben heute eine Zeile und bekommen keinen Fallback) — der Test
+  seedet „gestern publiziert“; Versionen außerhalb jeder Zielgruppe (`X`, TEST, AIF ohne Schalter) werden gestempelt,
+  sonst kämen sie jeden Lauf wieder; ohne Stammdaten → WARN, ungestempelt; Fremdwährung → übersprungen, gezählt,
+  ungestempelt; bei mehreren Löschungen je Schlüssel geht die jüngste als `I3`, alle werden gestempelt; Ready-File-Zeit
+  = `erstellt_at` des Laufs (nicht Upload-Zeit); `publishedAt` = `erstellt_at`. **Umgebung:** der Postgres-Testcontainer
+  startet seit heute Mittag nicht mehr (podman `log_driver = journald`, Testcontainers wartet auf die Logzeile);
+  der Agent lief über einen temporären Socket mit `k8s-file`, mein Rerun nur H2 (`-Pskip-postgres15-tests`, 68 grün).
+- **Stand 2026-10-13 — umgesetzt, Commit `6f40d81f5`** (gepusht). main-service 92, Integrationstests 68 (H2) grün;
+  Postgres-Hälfte beim Agenten grün, lokal bis zum Log-Driver-Fix nicht nachprüfbar.
 
 ### Chunk 4 — UI und Dokumentation
 - Detailseite, Recht, Autorisierungstests, Render-Tests; `ifas13-jobs.md`, `jobs-catalog.md`, `mft-interface.md`;
