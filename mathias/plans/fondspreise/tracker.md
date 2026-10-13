@@ -402,8 +402,11 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
         und das Upload-Formular
       - Prozentangaben als Prozentzahl (10 % = `10`) — nicht prüfbar, nur Doku
       LMT bleibt bis Klärung G reine Eingangsvalidierung (Inbox mit `lmt_prozentkennzeichen`/`lmt_stichtag`, keine
-      Version, kein `kurs`, kein Preisfile). Eigener Plan, Chunks: Regeln im Eingang (+ Rückmeldungs-Codes) →
-      Periodizität → Löschungs-Wertvergleich → Dateiname mit der MFT-Ankunft.
+      Version, kein `kurs`, kein Preisfile). **Plan 2026-10-13:**
+      [2026-10-13-fondspreise-lieferformat-3-0.md](2026-10-13-fondspreise-lieferformat-3-0.md) — alle sieben Regeln
+      hinter dem Stichtag `ifas.fondspreise.preismeldung.format3-ab` (Datum von der Fachabteilung), vier Chunks:
+      Inbox-Spalte `periodizitaet` → Regeln im Eingang mit Port ins Ledger für die Löschung → Service/Property/Doku →
+      csv-schema-Pfad löschen. Offen beim Review: R5 (Fondsbezeichnung > 45: verwerfen oder kürzen).
 - [ ] **Team-Diskussion: Voll-Refresh der Neusystem-Sybase vs. Schreibtabellen von IFAS-NEU** (User 2026-10-13):
       jeder Refresh überschreibt alles, was IFAS-NEU in seine Sybase schreibt (`kurs1`, STM-Tabellen) — vorerst
       akzeptierter Verlust. Zu entscheiden im Team: harter Schnitt (kein Refresh mehr; dann braucht IFAS-NEU einen
