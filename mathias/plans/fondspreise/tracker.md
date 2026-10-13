@@ -364,7 +364,7 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
       Inbound-Pull (Legacy `preis_ins.e` alle 10 Minuten aus `<base>/<liefer_id>/send`, `mft-interface.md`
       „the pull direction“), Dedup nach Dateiname + Empfang, Verschieben ins `done`-Verzeichnis; Priorität NORMAL,
       `SourceType.MFT`. Mit dem Betrieb den Pull-Kanal klären (REST-Gateway wie beim Upload?)
-- [ ] **Postgres-Testcontainer startet nicht** (seit 2026-10-13 mittags): podman 5.8.8 rootless mit `log_driver = journald`,
+- [x] ~~**Postgres-Testcontainer startet nicht**~~ — behoben 2026-10-13 (User: `log_driver = "k8s-file"`), `PreisfileJobTest` 8 × 2 DBs grün. War (seit 2026-10-13 mittags): podman 5.8.8 rootless mit `log_driver = journald`,
       `podman logs` liefert nichts, Testcontainers wartet vergeblich auf die Startzeile von `postgres:18`. Fix:
       `log_driver = "k8s-file"` in `~/.config/containers/containers.conf` (home-manager). Bis dahin `-Pskip-postgres15-tests`
 - [ ] **Pagination verliert `archived`** (Befund Agent 2026-10-12): die nummerierten Seitenlinks des geteilten
