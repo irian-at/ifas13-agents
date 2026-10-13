@@ -235,6 +235,22 @@ manueller Lauf 2) wären über `(key_date, daily_run_number)` verschieden; die b
 - Paket `preisfile` (5.), alle elf Writer, Zahlen-/Datumsformat, Zielgruppen, Sortierung, Bundle-Reihenfolge, Ready-File.
 - Tests mit den Golden-Zeilen des 02.09. (Beispiel als Testressource auszugsweise), Umlaute, Rundung, leere Ausschüttung,
   Datei ohne `I2` (`I9` mit `0`), Solva ohne Kopf/Fuß.
+- **Nachtrag 2026-10-13 (umgesetzt):** Paket `preisfile` mit Records (`PreisfileRecord`, `SolvaRecord`, `Zielgruppen.of`
+  strippt `cod_art_f`), `PreisfileNumbers` als Port von `outFloat` (bis 4 NK so viele wie nötig, min. 1; braucht es
+  mehr, genau 4 **mit** Nullen — `1.00001` → `1.0000`, und der Float-Rest `101.09999847…` → `101.1000` wie Legacy; der
+  ASF-Betrag ist deshalb **ungerundet** durchzureichen), elf Writer, Ready-File, `PreisfileBundle` in Legacy-**Upload**-
+  Reihenfolge (das Legacy-Archiv-ZIP ordnet anders: `preis.csv, preis.xml, preis_v.csv, …` — belanglos). Probe gegen alle
+  fünf Legacy-Tage (01.–07.09.): 45 von 55 Files byteidentisch, die übrigen 10 (`preis.csv`/`preis.xml`) nur im
+  Float-Rest der Ausschüttungsbeträge verschieden. Bewusste Abweichungen: `I9`/TXT bei leerem File ohne Legacys fünftes
+  Feld; `<ZAHLTAG/>` statt `XXXX.XX.XX`; Halb-Rundung dezimal statt binär; `I3` vor `I2` desselben Schlüssels (Legacy nach
+  `eintragezeit`); Zeichen außerhalb ISO-8859-1 als `?`. Solva-XML: ein `SOLVARECORD` je Wert (Legacy `OutSolvaXml`), nicht
+  je (ISIN, Datum); `ANZAHL`-Zähler im XML zählen Records, nicht Zeilen. Kein Legacy-Tag enthält ein `I3`/`D` — diese
+  Formate stammen allein aus dem Code. **Für Chunk 3:** Name und Ausschüttung einer Gruppe kommen aus ihrem ersten
+  Record; `I3`-Duplikate je Schlüssel vorher entfernen (der XML-Writer lehnt einen Code zweimal je Gruppe ab); Writer
+  nehmen `Collection` und sortieren selbst. **TXT/XML sind Blätter:** ein Writer + ein Bundle-Eintrag, später ohne
+  Nebenwirkung entfernbar (User-Frage 2026-10-13).
+- **Stand 2026-10-13 — umgesetzt, Commit `f9fbc64fe`** (gepusht, Merge `4e1dd44b5`). Domänenmodul 289 Tests grün,
+  davon 85 neu (12 Golden-Zeilen-Tests), forbiddenapis sauber.
 
 ### Chunk 3 — Services, Scheduling, MFT-Sequenz
 - `MftService` Sequenz-Upload + `MftTarget.FONDSPREISE` + Properties (6.3; `MftServiceIntegrationTest` +
