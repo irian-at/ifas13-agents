@@ -59,5 +59,10 @@
   "plansDirectory": "/home/sma/dev/projects/ifas13-agents/mathias/plans",
   "autoMemoryEnabled": true,
   "autoMemoryDirectory": "/home/sma/dev/projects/ifas13-agents/mathias/automemory",
-  "effortLevel": "xhigh"
+  "effortLevel": "xhigh",
+  "deniedMcpServers": [
+    { "serverName": "claude.ai Gmail" },
+    { "serverName": "claude.ai Google Drive" },
+    { "serverName": "claude.ai Google Calendar" }
+  ]
 }
