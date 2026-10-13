@@ -56,8 +56,8 @@ Launch a **haiku** agent to verify review is needed. **Skip review** if ANY of t
 ### Step 1: Gather Context
 
 ```bash
-# Get CLAUDE.md files
-cat CLAUDE.md .claude/CLAUDE.md 2>/dev/null
+# Get CLAUDE.md and the path-scoped rules (the review agents have no file context, so load them all)
+cat .claude/CLAUDE.md .claude/rules/*.md
 
 # Get changed files
 git status --porcelain
@@ -75,13 +75,13 @@ Launch a **haiku** agent to return a brief summary of what's being changed (2-3 
 
 ### Step 3: Launch 4 Parallel Agents
 
-Use `Task` tool with `run_in_background: true` for parallel execution.
+Use the `Agent` tool with `run_in_background: true` for parallel execution.
 
 **Agent 1 & 2: CLAUDE.md Compliance** (use **sonnet** model)
 
 Redundant agents for guideline checks. Prompt for both:
 ```
-Audit the git diff for CLAUDE.md compliance.
+Audit the git diff for compliance with CLAUDE.md and the rule files from `.claude/rules/`.
 
 CRITICAL: Only flag HIGH SIGNAL issues:
 ✅ Clear, unambiguous CLAUDE.md violations with exact rule quotes
@@ -99,7 +99,7 @@ For each potential issue:
 For each issue found, provide:
 - File path and line number
 - Description of violation
-- Exact quote from CLAUDE.md
+- Exact quote from CLAUDE.md or the rule file
 - Confidence score (0-100)
 ```
 
@@ -285,10 +285,4 @@ Fix path/to/file.java:88: [brief description of issue and suggested fix]
 
 ## IFAS13-Specific Checks
 
-Agents should verify these CLAUDE.md rules (see [IFAS13_CONVENTIONS.md](./IFAS13_CONVENTIONS.md)):
-- `@NullMarked` on all classes
-- Temporal utilities (`Instants.now()`, not `Instant.now()`)
-- No `System.out`/`System.err`
-- AssertJ assertions (not JUnit)
-- Given-when-then test naming
-- `@Inject` not `@Autowired`
+The rule files loaded in Step 1 are the checklist; there is no separate copy to keep in sync.
