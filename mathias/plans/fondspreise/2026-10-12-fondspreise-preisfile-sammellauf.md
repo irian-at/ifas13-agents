@@ -280,6 +280,17 @@ manueller Lauf 2) wären über `(key_date, daily_run_number)` verschieden; die b
 ### Chunk 4 — UI und Dokumentation
 - Detailseite, Recht, Autorisierungstests, Render-Tests; `ifas13-jobs.md`, `jobs-catalog.md`, `mft-interface.md`;
   Tracker-Todo Migrations-Stempel um die Publikationsstempel erweitern.
+- **Nachtrag 2026-10-13 (umgesetzt):** Detailseite `/ui/preisfile-jobs/{id}` in `web.stm` nach dem Muster der
+  Sync-Seite (Karten *Lauf* mit Fallback/Fenster/Erstellt um und *Zähler* mit sechs Zeilen; Ergebnis-Bundle über die
+  generische Karte und `/ui/jobs/{id}/result-file` — erste dedizierte Seite, die den generischen Download nutzt, Javadoc
+  dort nachgezogen), Pfade im Recht `PREIS_MELDUNGEN` (+8 Autorisierungsfälle). Doku: `ifas13-jobs.md` Abschnitt
+  `PreisfileJob`, `jobs-catalog.md` 5.8 (Folgeabschnitte nummeriert, Timer-Knoten in „Who triggers whom“, Statuszeile),
+  `mft-interface.md` „Current state“ gegen den Code berichtigt (Property `endpoint-type`, ein `FILE`-Part + Supplier-Header,
+  sieben Targets, Sequenz-Upload). Tracker-Todo Migrations-Stempel um die Publikationsstempel erweitert (nur offene
+  Versionen vor T stempeln; beendete nicht anfassen, sonst würden alte Löschungen zu `I3`-Kandidaten).
+- **Stand 2026-10-13 — umgesetzt, Commit `50d943850`** (gepusht). web-core 153, web-ui 168 grün. **Damit ist der Plan
+  vollständig umgesetzt** (Chunks `efd1c5fd2`, `f9fbc64fe`, `6f40d81f5`, `50d943850`). Offen laut Abschnitt 8: Plausi
+  `-P`, T2S, endgültige Dateinamen, `N`-Fonds in `alle`, Migrations-Stempel (Sync + Publikation) vor dem Einschalten.
 
 ## 10. Verifikation
 

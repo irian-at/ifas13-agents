@@ -1,52 +1,32 @@
 ---
 name: project_fondspreise-stufe-split
-description: Fondspreise Stufe 1 liegt auf master; Stufe 2 (feat/fondspreise-sync) wird seit 2026-09-24 NICHT gemergt, sondern ist Steinbruch für den neuen preis_historie-Plan — ihre Migrationen V067-V069 entfallen.
-metadata: 
-  node_type: memory
+description: Fondspreise Stufe 1 liegt auf master; feat/fondspreise-sync wird NICHT gemergt (Steinbruch, V067-V069 entfallen); Stand, Blocker und Pläne stehen in plans/fondspreise/tracker.md.
+metadata:
   type: project
-  originSessionId: 5e72a69b-1a23-469b-a15c-9532e0182340
-  modified: 2026-09-30T15:24:37.033Z
 ---
 
-Am 2026-09-16 wurde die Fondspreise-Arbeit geteilt:
+Seit 2026-09-16 geteilt: **master** trägt Stufe 1 (Eingangsprüfung, Inbox `preis_meldung_zeilen`,
+Rückmeldung im Legacy-Format, Parallelbetrieb-Diff, Web-Seiten), seit 2026-09-30 auch `Kurs`/`TmpIfLast`
+samt Repositories (`V073__kurs_tmp_if_last.sql`, nur Test-DB-Provisionierung) und seit Oktober das
+`preis_versions`-Ledger mit `PreisVersionJob`, `PreisVersionSyncJob` und `PreisMeldungJob`.
+**`feat/fondspreise-sync` wird nicht gemergt** (sein Guard-Design ist durch `preis_versions` ersetzt);
+seine Migrationen V067-V069 entfallen, der Branch ist Steinbruch (`PreismeldungSyncDecisions`,
+`FondspreiseProperties`). `feat/fondspreis` ist der Stand vor der Teilung.
 
-- **master** trägt Stufe 1: Eingangsprüfung, Inbox `preismeldung_zeilen` (beim
-  Job-System), Rückmeldung im Legacy-Format, Parallelbetrieb-Diff, drei Web-Seiten.
-- **feat/fondspreise-sync** trägt Stufe 2 als *ein* Revert-Commit: `preis_herkunft`,
-  `letzte_preise`, `kurs`, `tmp_if_last`, `PreismeldungSyncService`,
-  `LetztePreiseService`, `PreismeldungDbDiff`. Migrationen V067-V069, nie deployt.
-- `feat/fondspreis` ist der historische Stand vor der Teilung.
+`database-context.fondspreise` heißt `business-new-introduced`; das Ledger ist dort die erste Tabelle
+([[project_sybase-schema-freeze]]).
 
-**Seit 2026-09-24: der Branch wird nicht gemergt.** Das Guard-Design (Klammer-
-Transaktionen, zwei Guard-Tabellen) ist durch `preis_historie` ersetzt.
-**Verbindlicher Plan seit 2026-09-30:**
-`mathias/plans/fondspreise/2026-09-30-fondspreise-preis-historie-versionen.md` —
-Versionszeilen (`created_at`/`invalidated_at`/`deleted`, Position `empfangen_at`+`zeilen_nr`),
-Claim je Lauf statt Guard, `preis_historie_source` (eine Zeile je wirksamer Inbox-Zeile,
-`operation` + beide Versions-IDs, beim Job-System mit Cascade), kein Wertvergleich, Wiederholung
-fügt nur hinzu; Sybase-Ableitung als Folgejob, nicht im Plan. Alle Befunde zum Altsystem, die Datenlage, Fachabteilungs-Aussagen und die Klärungen A–P stehen
-seit 2026-09-30 in `mathias/plans/fondspreise/2026-09-30-fondspreise-legacy-analyse-und-befunde.md`
-(Digest; Basis bleibt `docs/Fondspreise/fondspreise-legacy-analyse.md`). Konzept (31.08.),
-Schnitt-1/2-Pläne, Formen, ER, Zeitreihe + Review, Tagesablauf-Decks und das Fragen-File liegen
-**archiviert** unter `mathias/plans/archive/2026-08/` und `2026-09/` — nicht mehr daraus zitieren;
-`plans/fondspreise/` hält nur Plan, Analyse, `tracker.md`, das SQL-File und seit 2026-10-08 den Sync-Plan `2026-10-08-fondspreise-preis-version-sync-kurs.md` (Schnitt 2b). Der Branch dient als Steinbruch (übernommen werden u. a.
-`PreismeldungSyncDecisions`, `FondspreiseProperties`; Tabelle im Plan, Abschnitt 5). **`Kurs`/`TmpIfLast` samt Repositories
-sind seit 2026-09-30 auf master** (`5d22c157c`, DDL als `V073__kurs_tmp_if_last.sql` in beiden
-Bäumen, nur Test-DB-Provisionierung); die Ableitung nach `kurs`/`tmp_if_last` fehlt weiterhin.
-Die frühere Nachnummerierung V067-V069 → V071+ ist damit hinfällig; neue DDL kommt als
-**eine** neue Migration (Plan, Chunk 3), Nummer nach
-`mathias/rules/flyway-versions-after-merge.md` bestimmen — siehe
-[[feedback_flyway-one-file-per-feature]].
+**Why:** alles vor dem 2026-09-30 (Konzept 31.08., Schnitt-1/2-Pläne, Formen, ER, Zeitreihe, Decks)
+liegt archiviert unter `mathias/plans/archive/2026-08/` und `2026-09/` — nicht mehr daraus zitieren.
 
-`database-context.fondspreise` heißt `business-new-introduced`; `preis_historie` wird
-dort die erste Tabelle sein — siehe [[project_sybase-schema-freeze]].
+**How to apply:** aktueller Stand, Blocker, Klärungen und Go-live-Backlog (z. B.
+`ifas.fondspreise.preis-version-sync.enabled` bleibt aus) stehen in
+`mathias/plans/fondspreise/tracker.md`; daneben die verbindlichen Pläne
+(`2026-09-30-…-preis-historie-versionen.md`, `2026-10-08-…-preis-version-sync-kurs.md`,
+`2026-10-12-…-preis-meldung-job.md`, `2026-10-12-…-preisfile-sammellauf.md`) und die Legacy-Analyse
+(`2026-09-30-…-legacy-analyse-und-befunde.md`). Siehe [[project_test-stage-sybase-layout]].
 
-**Stand 2026-10-12:** der Sync-Plan (`2026-10-08-…-preis-version-sync-kurs.md`) ist in sieben Chunks
-vollständig umgesetzt (`22adddcf6` … `1e23c2c5f`); `ifas.fondspreise.preis-version-sync.enabled` bleibt
-aus, bis die Go-live-Backlog-Entscheidung (Plan Abschnitt 7) steht — bis dahin hat der Sync nur Tests und den
-manuellen Auslöser auf „Geplante Aufgaben“ als Aufrufer.
-
-**Stand 2026-10-12 (abends):** auch der produktive `PreisMeldungJob` ist umgesetzt (Plan
-`2026-10-12-fondspreise-preis-meldung-job.md`, Commits `a15b22307`/`791ab3736`/`63dfb558b`): Upload-Formular unter
-STM → Eingang → Rückmeldung an Archiv/MFT → Lauf (`sync_requested=true`) → Sync. Die Ankunft via MFT ist nur ein
-auskommentierter `submitFromMft` mit TODO; der Parallelbetrieb-Dispatcher routet Preisfiles weiter zum Diff-Job.
+**Stand 2026-10-13:** auch der Preisfile-Sammellauf (`PreisfileJob`, Plan `2026-10-12-fondspreise-preisfile-sammellauf.md`,
+Commits `efd1c5fd2`/`f9fbc64fe`/`6f40d81f5`/`50d943850`) ist umgesetzt; beide Läufe per Property aus. Vor dem
+Einschalten von Sync und Sammellauf auf TEST: Migrations-Stempel (Sync- **und** Publikationsstempel, nur offene
+Versionen vor dem Snapshot). Noch kein Plan: Plausi `-P`, T2S, Fehlmeldung, Kennzahlen.
