@@ -382,6 +382,28 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
         (Rest von P: Vorschlag „Vorgängerpreis“, mit der Fachabteilung bestätigen).
       - Plausi (`preis_dld.e -P`) bewusst nicht im Plan — eigener Plan später (User 2026-10-12); alle elf Dateien
         plus Ready-File im Umfang (User 2026-10-12); Name `PreisfileJob` bestätigt (User 2026-10-12)
+- [ ] **Lieferformat 3.0 vollständig umsetzen** (entschieden 2026-10-13, User: „we need to follow 3.0 spec“; Quelle
+      `docs/Fondspreise/202604-LMT-Preismeldung_ISINs_2026.pdf`, Version 3.0, „anwendbar ab [tbd]“ — Datum bei der
+      Fachabteilung erfragen). Befund 2026-10-13: der produktive Eingang (`eingang/PreisMeldungEingangProcessor` +
+      `PreisMeldungLineValidations`) kennt das 3.0-Layout (zehn Spalten, L1–L3, Aktion `I`, Prozentkennzeichen,
+      Stichtag) und prüft, was Legacy prüft. **Fehlt produktiv** (Legacy prüft es auch nicht, jede neue Ablehnung wird
+      im Parallelbetriebs-Diff als „Neusystem strenger“ sichtbar — gewollt):
+      - L1/L3 ohne `0`-Werte; Inaktivierung `I` nur mit Wert `0`; L2 mit `0` Tagen (außer `I`) verlangt den Stichtag
+        (Spec 4.2 und Anhang) — die drei Regeln existieren schon in `csv/CsvPreisMeldungValidations` (csv-schema-Pfad),
+        den produktiv niemand aufruft (nur `PreisMeldungCsvSchemaTest`, `PreisMeldungCsvTests`): Regeln in den
+        Eingang übernehmen, csv-schema-Pfad danach löschen oder als einzigen Parser verdrahten — entscheiden
+      - Periodizität (Spalte 8): zulässige Werte `D` (Default), `W`, `M2`, `M`, `Q`, `S`, `A`, Pflicht wenn nicht `D`
+        — heute komplett ignoriert (Legacy leert das Feld seit 2017); ob und wohin der Wert gespeichert wird, offen
+      - Längen: Fondsbezeichnung STRING(45), Währung STRING(3) — heute nur Tabellenprüfung der Währung
+      - Löschung muss die ursprünglich gelieferten Werte wiederholen — `VersionChange.delete` beendet die offene
+        Version allein über den Schlüssel; Wertvergleich plus Ablehnung bei Abweichung (Meldungstext festlegen)
+      - Dateiname `Preis_<absender>_<YYYYMMDD>_<HHMMSS>.csv`, nur `-` und `_` als Sonderzeichen — nirgends geprüft; der
+        Absender steht damit an zweiter Stelle (alt: alles vor dem Datum), relevant für die MFT-Ankunft (Todo unten)
+        und das Upload-Formular
+      - Prozentangaben als Prozentzahl (10 % = `10`) — nicht prüfbar, nur Doku
+      LMT bleibt bis Klärung G reine Eingangsvalidierung (Inbox mit `lmt_prozentkennzeichen`/`lmt_stichtag`, keine
+      Version, kein `kurs`, kein Preisfile). Eigener Plan, Chunks: Regeln im Eingang (+ Rückmeldungs-Codes) →
+      Periodizität → Löschungs-Wertvergleich → Dateiname mit der MFT-Ankunft.
 - [ ] **Team-Diskussion: Voll-Refresh der Neusystem-Sybase vs. Schreibtabellen von IFAS-NEU** (User 2026-10-13):
       jeder Refresh überschreibt alles, was IFAS-NEU in seine Sybase schreibt (`kurs1`, STM-Tabellen) — vorerst
       akzeptierter Verlust. Zu entscheiden im Team: harter Schnitt (kein Refresh mehr; dann braucht IFAS-NEU einen

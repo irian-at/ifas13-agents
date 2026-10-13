@@ -382,6 +382,16 @@ Nichts bis Chunk 3 ändert das Verhalten des laufenden Systems.
   erste Stichpunkt korrigiert („`kurs` wird geschrieben und nur für die Snapshot-Prüfung gelesen“);
   `jobs-catalog.md` Statuszeile und ein Satz in 5.7. **Damit ist der Plan vollständig umgesetzt**; offen aus
   Abschnitt 10 unverändert (Publikationsstempel einmalig manuell, Team-Diskussion Refresh).
+- **Smoke-Test der Selbstheilung 2026-10-13 (`LocalH2WithMailhogIfasApplication`, Sync eingeschaltet, Mailhog per podman):**
+  Stammdaten-YAML nötig (die automatisch geladenen Basisdaten kennen die db_union-Fonds nicht — ohne sie claimt der
+  Lauf 0 Zeilen). Lieferung 31.08. → Sync: „no own kurs row to check and kurs holds no guelt in the window“, 6
+  Schlüssel geschrieben, keine Karte, keine Mail. Refresh simuliert per SQL-Konsole (`update kurs set guelt =
+  dateadd('MINUTE', -90, guelt)`), Lieferung 01.09. → Sync: WARN „kurs was replaced since the last own write (canary
+  AT0000A0S392 2026-08-31 EUR Z written at 16:54:01: guelt now 15:24:01); T = 15:24:01, margin PT30M: 6 stamp(s)
+  since T − margin cleared, 0 … stamped“, danach 12 Schlüssel geschrieben (6 neu, 6 nachgeholt); Karte
+  „Sybase-Snapshot“ mit T 15:24:01, 0, 6; genau eine Mail in Mailhog an `tester@localhost` (System-Support der
+  DEV-Properties), Betreff „IFAS13-…: Job with Warnings: PreisVersionSync“, Protokoll als Anhang. Manueller vierter
+  Sync: Kanarie stimmt, „no unprocessed versions“, keine Karte, keine weitere Mail.
 
 ## Quellen
 
