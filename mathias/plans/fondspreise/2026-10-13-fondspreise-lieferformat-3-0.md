@@ -36,7 +36,7 @@ prüft genau das, was Legacy prüft (Legacy-Analyse 2.6/2.8). Nicht geprüft, in
 
 R1–R3 stehen bereits im csv-schema-Pfad (`CsvPreisMeldungValidations`), den produktiv niemand aufruft.
 
-Entscheidungen (User 2026-10-13, Vorgaben Fable zur Bestätigung beim Review):
+Entscheidungen (User 2026-10-13):
 
 - **Alle sieben Regeln hinter dem Stichtag 3.0.** Ohne Datum verhält sich der Eingang wie heute — die
   Golden-File-Tests und der Parallelbetriebs-Diff bleiben sauber; die Fixtures heißen `URA_20260831_104207.csv`
@@ -45,9 +45,8 @@ Entscheidungen (User 2026-10-13, Vorgaben Fable zur Bestätigung beim Review):
   Ablehnungen im Diff „Neusystem strenger“ — gewollt.
 - **Schweregrade wie Legacy, wo Legacy eine Regel kannte:** R4 leert nur das Feld (`ERR_INTERVALL01`, Wortlaut aus
   `c_param.cpp:434-439`); R1–R3, R6 verwerfen die Zeile; R7 bricht die Datei ab (wie `ERR_FORMAT04`).
-- **R5 Vorgabe: Zeile verwerfen** (`ERR_FONDSBEZ01`), weil die Spec Abweichungen als Verarbeitungshindernis erklärt.
-  Alternative, falls die Fachabteilung den Preis nicht an einem langen Namen scheitern lassen will: auf 45 kürzen
-  und `INFO` ins `oekbinfo.log`. Beim Review entscheiden.
+- **R5: Zeile verwerfen** (`ERR_FONDSBEZ01`; entschieden User 2026-10-13), weil die Spec Abweichungen als
+  Verarbeitungshindernis erklärt. Kürzen auf 45 mit `INFO` war die Alternative und ist verworfen.
 - **R6 im Eingang, nicht im Lauf:** nur der Eingang erzeugt die Rückmeldung an den Lieferanten; der Vergleich
   braucht die offene Version (Port ins Ledger) und die früheren Zeilen derselben Datei. Numerischer Vergleich
   (`100` = `100.0`), keine offene Version und keine frühere `N`-Zeile → keine Prüfung (Verhalten wie heute: der
@@ -180,7 +179,6 @@ Verhalten des laufenden Systems ändert sich erst mit gesetztem Stichtag (Chunk 
 | Thema | Stand |
 |---|---|
 | **Stichtag 3.0 je Stage setzen** | wenn die Fachabteilung das Datum nennt; bis dahin Property leer |
-| **R5 kürzen statt verwerfen** | Fachabteilung, siehe Abschnitt 1 |
 | **LMT persistieren/weitergeben** | Klärung G; der Eingang speichert weiter nur Inbox-Felder |
 | **MFT-Ankunft für Preismeldungen** | Tracker; nutzt den Absender an zweiter Stelle des Namens |
 | **Format 1 / `.txt`** (`AllowOldPreisFormat`, `AllowTxtExt4PreisFile`) | Tracker, mit 3.0 obsolet, wenn die Fachabteilung zustimmt |
