@@ -17,11 +17,12 @@
 
 Always activate `-Pno-proxy` and `-Pdev-build`: there is no `~/.m2/settings.xml`, so Maven resolves
 only from Central, and without `dev-build` the build fails on `jespa:jespa-jakarta:2.0.5`.
-`-Pplatform-amd64` is the POM default on this machine (Manfred needs `-Pplatform-arm64` for Apple
-Silicon).
+Also name `-Pplatform-amd64` explicitly (Manfred needs `-Pplatform-arm64` for Apple Silicon): it is
+`activeByDefault` in `ifas-libreoffice-recalc-server-container`, but that POM also declares
+`no-proxy`, so `-Pno-proxy` switches it off and the LibreOffice recalc image is never built.
 
 ```bash
-mvn clean install -Pno-proxy,dev-build
+mvn clean install -Pno-proxy,dev-build,platform-amd64
 ```
 
 ## Precedence and settings
