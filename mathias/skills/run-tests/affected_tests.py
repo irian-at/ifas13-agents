@@ -79,6 +79,7 @@ DB_POM_TOKENS = re.compile(
 LIBREOFFICE_PATHS = re.compile(r"recalc|workbook|libreoffice|xls-support", re.IGNORECASE)
 
 TEST_FILE = re.compile(r"^(Test\w*|\w+Test|\w+Tests|\w+TestCase)\.java$")
+TEST_ANNOTATION = re.compile(r"@(Test|ParameterizedTest|RepeatedTest|TestFactory|TestTemplate)\b")
 PACKAGE = re.compile(r"^\s*package\s+([\w.]+)\s*;", re.MULTILINE)
 IMPORT = re.compile(r"^\s*import\s+(static\s+)?([\w.]+?)(\.\*)?\s*;", re.MULTILINE)
 CAPITALISED = re.compile(r"\b[A-Z][A-Za-z0-9_]*\b")
@@ -101,7 +102,6 @@ class JavaClass:
     module: str
     path: str
     is_test: bool
-    has_nested: bool
     explicit_imports: set = field(default_factory=set)
     wildcard_imports: set = field(default_factory=set)
     idents: set = field(default_factory=set)
@@ -285,12 +285,15 @@ def index_classes(root, leaves):
                     else:
                         explicit.add(name)
                 simple = file.stem
+                # a test-named helper without test methods (and no base class to inherit them) runs nothing
                 is_test = (kind == "test" and TEST_FILE.match(file.name) is not None
-                           and not re.search(r"\babstract\s+class\s+" + simple + r"\b", text))
+                           and not re.search(r"\babstract\s+class\s+" + simple + r"\b", text)
+                           and (TEST_ANNOTATION.search(text) is not None
+                                or re.search(r"\bclass\s+" + simple + r"\b[^{]*\bextends\b", text) is not None))
                 classes.append(JavaClass(
                     fqn=f"{package}.{simple}" if package else simple, simple=simple, package=package,
                     module=module, path=str(file.relative_to(root)), is_test=is_test,
-                    has_nested="@Nested" in text, explicit_imports=explicit, wildcard_imports=wildcard,
+                    explicit_imports=explicit, wildcard_imports=wildcard,
                     idents=set(CAPITALISED.findall(text)), text=text))
     return classes
 
@@ -427,10 +430,8 @@ def maven_command(plan, args):
     if not plan.full_reactor:
         patterns = []
         for module in sorted(plan.tests):
-            for c, method in plan.tests[module]:
-                patterns.append(c.fqn + method)
-                if c.has_nested and not method:
-                    patterns.append(c.fqn + "$*")
+            # surefire runs the @Nested classes of a listed class without an extra pattern
+            patterns += [c.fqn + method for c, method in plan.tests[module]]
         cmd += ["-pl", ",".join(sorted(plan.tests)), "-am"]
         cmd += ["-Dtest=" + ",".join(patterns), "-Dsurefire.failIfNoSpecifiedTests=false"]
     cmd.append("test")
