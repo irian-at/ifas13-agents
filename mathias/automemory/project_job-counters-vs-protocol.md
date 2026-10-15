@@ -22,4 +22,4 @@ house already pairs few counters with a protocol (`ausschuettungs_meldung_batch_
 **How to apply:** when a new job type gets result columns, ask of each: will a list show it, a filter
 use it, or must it commit with the job's writes? Otherwise it is a protocol line. Protocol lines at INFO
 or above (DEBUG is not captured); the protocol lives outside the job's transaction, counters inside.
-Related: `mathias/rules/fondspreise-naming.md`, [[project_sybase-schema-freeze]].
+Related: `mathias/rules/naming.md`, [[project_sybase-schema-freeze]].
