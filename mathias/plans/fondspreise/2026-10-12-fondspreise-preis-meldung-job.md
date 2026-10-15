@@ -3,12 +3,15 @@
 Datum 2026-10-12. Nachfolger der Sync-Plan-Lücke „der Sync hat außer Tests und dem manuellen Auslöser
 keinen Aufrufer“ (Sync-Plan Abschnitt 7, Tracker „Produktiver Preismeldungs-Job (`persistResult=true`)“).
 
+**Namen** (Nachtrag 2026-10-15): Spaltennamen folgen dem Stand nach V084 (`2a007ec34`), Java-Namen der
+Namensbereinigung vom selben Tag. V080 legte sie als `empfangen_at`, `eingang_abgeschlossen_at` und `rueckmeldung_urteil` an.
+
 ## 0. Glossar
 
 | Begriff | Bedeutung |
 |---|---|
 | **Eingang** | Stufe 1 der Lieferkette (`preis_ins.e`): Prüfung des Lieferfiles, Inbox-Zeilen, Rückmeldung — in IFAS13 `PreisMeldungEingangService` |
-| **Rückmeldung** | das ZIP, das der Lieferant zurückbekommt (`statistics/error/info/data.log` + Originalfile; `RueckmeldungArtefakte`) |
+| **Rückmeldung** | das ZIP, das der Lieferant zurückbekommt (`statistics/error/info/data.log` + Originalfile; `RueckmeldungFiles`) |
 | **oekbinfo.log** | internes Protokoll des Eingangs, nicht Teil der Rückmeldung |
 | **Diff-Job** | `PreisMeldungDiffJob`, Parallelbetrieb: entscheidet nur, keine Außenwirkung, difft gegen Altsystem-Logs |
 | **Lauf** | `PreisVersionJob`, faltet die Inbox ins Ledger `preis_versions` |
@@ -53,9 +56,9 @@ FK auf `jobs` (V067 — „der produktive Preismeldungs-Job besitzt ebenfalls In
 | `zeilen_count` | integer | gelieferte Zeilen (`PreisMeldungEingangResult.lineCount()`) |
 | `zeilen_accepted_count` | integer | angenommene Zeilen = Inbox-Zeilen |
 | `bug_zeilen_count` | integer | verworfene Zeilen |
-| `rueckmeldung_urteil` | varchar(5) | `RueckmeldungUrteil` |
-| `empfangen_at` | timestamptz not null | DB-Uhr des Job-Systems bei Einreichung; Positionsteil 1 der Inbox-Zeilen |
-| `eingang_abgeschlossen_at` | timestamptz | Write-once-Marker wie beim Diff-Job |
+| `rueckmeldung_status` | varchar(5) | `RueckmeldungStatus` |
+| `received_at` | timestamptz not null | DB-Uhr des Job-Systems bei Einreichung; Positionsteil 1 der Inbox-Zeilen |
+| `eingang_completed_at` | timestamptz | Write-once-Marker wie beim Diff-Job |
 | `notes` | text | |
 
 Zähler nur, was listbar ist (Memory „Job counters vs protocol“); je Zeile steht alles in Rückmeldung und
@@ -67,7 +70,7 @@ oekbinfo.log. Grants wie V063.
 
 - `submitFromWebUi(NamedContentTypeResource csv, String lieferant, String createdBy, @Nullable String notes)`:
   `requireActiveTransaction()`, CSV in den Filestore, Job `PENDING`/`WEB`, `keyDate = LocalDates.nowInVienna()`,
-  `createdAt = OffsetDateTimes.now()`, `empfangenAt = withJobSystemDbContext(currentDbTime)` (wie der Diff-Job),
+  `createdAt = OffsetDateTimes.now()`, `receivedAt = withJobSystemDbContext(currentDbTime)` (wie der Diff-Job),
   `jobService.submitToWorkQueue(WQ_TASK_TYPE, job, URGENT)` (Muster `AusschuettungsMeldungJobSubmissionService`).
 - **Auskommentiert mit TODO:** `submitFromMft(...)` — `SourceType.MFT`, Priorität `NORMAL`, Aufrufer ist der
   noch nicht gebaute Inbound-Pull (Legacy `preis_ins.e` alle 10 Minuten aus `<base>/<liefer_id>/send`). Kommentar
@@ -89,9 +92,9 @@ Detailseite zeigt die Job-Logzeilen). `maxAttempts` Default (1), wie Diff- und A
    zusammen committet:
    - `zeileRepository.deleteByJobId` (Reste eines abgebrochenen Versuchs), `saveAll(toEntities(...))` — das
      Mapping wird aus `PreisMeldungDiffJobExecutionService.toEntities` in einen gemeinsamen package-private
-     Helfer gezogen (`PreisMeldungZeilen.toEntities(jobId, empfangenAt, lines)`), der Diff-Job ruft ihn ebenfalls;
-   - `jobRepository.updateResult(id, resultBundleFile, oekbinfoLogFile, zeilen, accepted, bugs, urteil)`;
-   - `markEingangAbgeschlossen` bedingt (`eingang_abgeschlossen_at is null`), 0 Zeilen → Ausnahme → Rollback
+     Helfer gezogen (`PreisMeldungZeilen.toEntities(jobId, receivedAt, lines)`), der Diff-Job ruft ihn ebenfalls;
+   - `jobRepository.updateResult(id, resultBundleFile, oekbinfoLogFile, zeilen, accepted, bugs, rueckmeldungStatus)`;
+   - `markEingangCompleted` bedingt (`eingang_completed_at is null`), 0 Zeilen → Ausnahme → Rollback
      (Schutz gegen die nebenläufige zweite Ausführung, wie beim Diff-Job);
    - **Außenwirkung in derselben Transaktion**, damit Marker und Aufträge nie auseinanderfallen:
      `archiveService.sendToArchiveAndJournal(resultBundleFile, zipName, ArchiveType.FONDSPREISE, keyDate, lieferant,
@@ -183,14 +186,14 @@ Uploads per `Resources.peek`) und `AusschuettungMeldungFormPageController` (Rüc
 ### Chunk 1 — Persistenz und MFT-Target
 - V080 `preis_meldung_jobs`; Entity `PreisMeldungJob` (+ `SourceType`, `JobWithResultBundle`),
   `PreisMeldungJobStatus` (PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED), `PreisMeldungJobRepository`
-  (`updateResult`, `markEingangAbgeschlossen` bedingt, `updateNotes`, `updateArchived(Batch)`, Listen-Query mit
+  (`updateResult`, `markEingangCompleted` bedingt, `updateNotes`, `updateArchived(Batch)`, Listen-Query mit
   Filtern nach dem Muster `PreisMeldungDiffJobRepository`); `MftTarget.PREIS_MELDUNG`; die Properties-Zeilen (3.3).
 - Tests: `PreisMeldungJobRepositoryTest` (Integrationstests, Muster `PreisVersionJobRepositoryTest`): speichern/
   lesen, Marker bedingt (zweiter Aufruf 0), Listen-Filter; `mvn install` des Flyway-Moduls vor den Tests
   (Memory „Flyway-Modul installieren“).
 - **Nachtrag 2026-10-12 (umgesetzt):** V080 im Postgres-Baum plus Kommentar-Platzhalter im Sybase-Baum (Regel
   „ein File je Feature und Baum“, wie V063–V079). Die Inbox heißt seit V075 `preis_meldung_zeilen`, ihr FK zeigt
-  auf `jobs` — nichts zu tun. Listenfilter liegen als `findListPage(text, status, urteil, archived, pageable)` am
+  auf `jobs` — nichts zu tun. Listenfilter liegen als `findListPage(text, status, rueckmeldungStatus, archived, pageable)` am
   Repository (Spezifikation + `JobPagingRepository`-Fragment wie beim Diff-Job; Urteil als String, da
   `ifas-persistence-infra` die Domäne nicht kennt). `MftTarget.PREIS_MELDUNG` als letzte Konstante (Ordinale bleiben).
   Schema-Referenz `postgres-db-schema.sql` regeneriert, `package-info` nachgezogen. **Befund:** der Claim des Laufs
@@ -204,7 +207,7 @@ Uploads per `Resources.peek`) und `AusschuettungMeldungFormPageController` (Rüc
   die drei Downloads), Helfer `PreisMeldungZeilen.toEntities` (Diff-Job umgestellt).
 - **Claim des Laufs weiten** (Befund Chunk 1): `PreisMeldungZeileRepository.claimUnclaimed` claimt heute nur
   Zeilen, deren Job ein `PreisMeldungDiffJob` mit gesetztem Marker ist. Zweite Unterabfrage auf
-  `PreisMeldungJob` mit `eingangAbgeschlossenAt IS NOT NULL` (OR), Javadoc dort und an `deleteByJobId` nachziehen;
+  `PreisMeldungJob` mit `eingangCompletedAt IS NOT NULL` (OR), Javadoc dort und an `deleteByJobId` nachziehen;
   `PreisMeldungZeileRepositoryTest`/`PreisVersionJobTest` um den Fall „Zeilen eines produktiven Jobs werden
   geclaimt, die eines Jobs ohne Marker nicht“ ergänzen.
 - Tests `PreisMeldungJobTest` (Integration, H2 + Postgres, Profil mit Work-Queue wie `PreisVersionSyncJobTest`;
@@ -236,13 +239,13 @@ Uploads per `Resources.peek`) und `AusschuettungMeldungFormPageController` (Rüc
   und drei Downloads, Formular lehnt ein Nicht-Preisfile ohne Job ab, `JobDetailPages` löst den Typ auf),
   Dokumentation (5).
 - **Nachtrag 2026-10-12 (umgesetzt):** Seiten in `at.oekb.ifas.web.stm` nach dem Muster der Diff-Seiten: Liste mit
-  Spalten Quelle/Geliefert/Angenommen/Bugs/Urteil (+ Notizen), Standardsortierung `empfangenAt` absteigend, Bulk-Archivieren
+  Spalten Quelle/Geliefert/Angenommen/Bugs/Urteil (+ Notizen), Standardsortierung `receivedAt` absteigend, Bulk-Archivieren
   ohne Löschen; Detail mit drei Downloads, Inbox-Zeilen über `preis-zeile`-Fragment, Notizen inline, Protokollkarte;
   Formular prüft die Datei per `Resources.peek` + `IfasCsvMeldeFileTypes` (Ausschüttungs-CSV und unerkennbare Datei
   werden mit Klartext abgewiesen, ohne Job), rendert Fehler wie das Ausschüttungs-Formular, kein Lieferant-Default,
   kein DB-Selektor. Recht `PREIS_MELDUNGEN` in `canAccessStm()`, +8 Autorisierungsfälle (inkl. `POST /ui/preis-meldung/upload`).
   `Lieferung(jobId, jobType, lieferant, inputFilename)` an `ZeileRow`; Links über `/ui/jobs/{id}` (Forward via
-  `JobDetailPages`). Das geteilte `pagination`-Fragment trägt jetzt auch `urteil` (auf anderen Seiten leer, wie dort
+  `JobDetailPages`). Das geteilte `pagination`-Fragment trägt jetzt auch `rueckmeldungStatus` (auf anderen Seiten leer, wie dort
   schon `keyDate`/`taskType`); Befund des Agenten: die nummerierten Seitenlinks aller Listen verlieren `archived`
   (vorbestehend, nicht behoben). `ThymeleafPageTestBase` bekam Pageable-Binding und einen Multipart-Helfer.
   Doku: `jobs-catalog` 5.7 neu (Folgeabschnitte nummeriert), Statuszeilen PreisMeldung/PreisVersion/PreisVersionSync,

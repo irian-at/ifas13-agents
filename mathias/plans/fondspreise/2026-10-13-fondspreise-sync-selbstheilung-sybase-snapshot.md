@@ -16,7 +16,7 @@ den Sync weg; für das Preisfile bleibt der einmalige Publikationsstempel (Absch
 | **Ledger** | `preis_versions` (Kontext `business-new-introduced`, Postgres; lokal/Tests H2) |
 | **Stempel** | `processed_at` + `preis_version_sync_job_id` einer Version: „`kurs1` spiegelt diese Version“ |
 | **`guelt`** | Schreibzeitpunkt einer `kurs`-Zeile: Legacy setzt `getdate()`, der Sync `nowInVienna()`; Sybase `datetime`, lokal `timestamp(6)` |
-| **Kanarienzeile** (engl. *canary*) | Die `kurs`-Zeile der jüngsten offenen Version, die der Sync selbst geschrieben hat, samt dem `guelt`, das er dabei gesetzt hat. Steht sie noch so da, hat seit unserem letzten Schreiben niemand die Tabelle ersetzt |
+| **Kanarienzeile** (engl. *snapshot marker*) | Die `kurs`-Zeile der jüngsten offenen Version, die der Sync selbst geschrieben hat, samt dem `guelt`, das er dabei gesetzt hat. Steht sie noch so da, hat seit unserem letzten Schreiben niemand die Tabelle ersetzt |
 | **T** | Jüngstes `guelt` in `kurs1` nach dem Laden = letzter Legacy-Schreibvorgang vor dem Dump, Näherung für die Dump-Zeit |
 | **T_eff** | `T − Marge` (Standard 30 Minuten), die Grenze, mit der das Ledger verglichen wird |
 
@@ -120,7 +120,7 @@ dem Einschalten des Sammellaufs auf TEST bleibt ein einmaliger manueller Schritt
 |---|---|---|
 | `kurs_guelt` | `timestamp(6) null` (ohne Zeitzone, spiegelt `kurs.guelt`) | Das `guelt`, das **dieser Sync** in die `kurs`-Zeile der Version geschrieben hat. Null = die Zeile ist nicht von uns: per Regel übersprungen, von Legacy geschrieben (Regel 1), oder nach einem Refresh (Regel 3) |
 
-Index `ix_preis_versions_kurs_guelt (kurs_guelt)` für die Kanariensuche (`offen = true and kurs_guelt is not null
+Index `ix_preis_versions_kurs_guelt (kurs_guelt)` für die Kanariensuche (`open = true and kurs_guelt is not null
 order by kurs_guelt desc`, erste Zeile). Kein partieller Index — H2 kennt keinen (V035, V075). Keine neue Constraint.
 
 ### 3.2 `preis_version_sync_jobs`
@@ -157,12 +157,12 @@ write(...)
   nächsten Versuch korrekt (dann ohne Kanarienzeile: Regel 1 findet nichts mehr, Delta schreibt die freigegebenen).
   Ohne etwas zu schreiben keine Transaktion — die Commit-Fehler-Tests (`…LedgerCommitFails…`) bleiben unberührt.
 - Die Ids für `markKursWritten`: je `KursChange.Write(key, …)` die offene Version `openByKey.get(key).id()`;
-  chunked 1000 wie die Stempel. Unbedingt (eine seit dem Lesen beendete Version ist `offen = null` und nie Kanarie).
+  chunked 1000 wie die Stempel. Unbedingt (eine seit dem Lesen beendete Version ist `open = null` und nie Kanarie).
 - **Protokoll** (englische Logzeilen wie bisher):
   - *ohne Kanarienzeile, T = null:* `INFO … no own kurs row to check and kurs holds no guelt in the window`
   - *ohne Kanarienzeile, T gesetzt, Regel 1 = 0:* `INFO … no own kurs row to check; nothing before T to stamp`
   - *ohne Kanarienzeile, Regel 1 > 0:* `WARN … kurs treated as a snapshot of T = …: n version(s) before T − margin stamped as written by legacy`
-  - *ersetzt:* `WARN … kurs was replaced since the last own write (canary <key> written at <guelt>: <missing | guelt now …>); T = …, margin …: n stamp(s) since T − margin cleared, m version(s) before stamped as written by legacy`
+  - *ersetzt:* `WARN … kurs was replaced since the last own write (snapshot marker <key> written at <guelt>: <missing | guelt now …>); T = …, margin …: n stamp(s) since T − margin cleared, m version(s) before stamped as written by legacy`
 - **Benachrichtigung:** `executeWithProtocol` → `executeWithProtocolAndNotifyOnErrorsOrWarnings(job, "Preisversionen → kurs abgleichen", Level.INFO, null, …)`.
   Damit mailen auch die bestehenden `WARN`-Zeilen *skipped, no fund resolves* (Stammdaten-Skip) — offene Frage aus
   Sync-Plan 7, hiermit mit „ja, an den Support“ beantwortet. Signatur: `Job` statt Typ/Stichtag, Rückgabe `URI`.
@@ -229,7 +229,7 @@ Nichts bis Chunk 3 ändert das Verhalten des laufenden Systems.
   3.1 und 3.2 in einem File, Kopfkommentar nach dem Muster von V079.
 - `PreisVersion.kursGuelt` (`LocalDateTime`), `PreisVersionSyncJob.snapshotT`, `versionsSnapshotStamped`,
   `versionsSnapshotCleared`.
-- `PreisVersionRepository`: `findFirstByOffenTrueAndKursGueltNotNullOrderByKursGueltDesc()`,
+- `PreisVersionRepository`: `findFirstByOpenTrueAndKursGueltNotNullOrderByKursGueltDesc()`,
   `markKursWritten(ids, guelt)`, `clearStampsProcessedSince(@Nullable since)` (null = alle), `clearKursGuelt()`,
   `markProcessedOpenCreatedBefore(before, processedAt, jobId)`, `markProcessedEndedInvalidatedBefore(before,
   processedAt, jobId)` — alle `@Modifying`, Rückgabe Zeilenzahl.
@@ -349,7 +349,7 @@ Nichts bis Chunk 3 ändert das Verhalten des laufenden Systems.
   Umstellung auf `executeWithProtocolAndNotifyOnErrorsOrWarnings` braucht deshalb keine Klammer. Javadoc von
   `executeWithProtocol` („notifies the business department“) mit anpassen.
 - **Nachtrag 2026-10-13 (Chunk 3 umgesetzt, Commit `da7ca67ec`, gepusht):** `healAfterSnapshot` vor dem Lesen mit drei Zweigen
-  (Kanarie stimmt → nur DEBUG; ohne Kanarie → `stampBeforeSnapshotWithoutCanary`; ersetzt → `resetToSnapshot`,
+  (Kanarie stimmt → nur DEBUG; ohne Kanarie → `stampBeforeSnapshotWithoutMarker`; ersetzt → `resetToSnapshot`,
   Regeln 2, 3, 1, `updateSnapshot`, WARN). `guelt` auf Sekunden; `markKursWritten` chunked im Schreib-Tx **nach**
   `stamp()`, nicht direkt nach `apply` — sonst stünde das Ledger vor infra und die geprüfte Commit-Reihenfolge
   [business, infra, ledger] bräche. Umstellung auf `executeWithProtocolAndNotifyOnErrorsOrWarnings(job,
@@ -368,7 +368,7 @@ Nichts bis Chunk 3 ändert das Verhalten des laufenden Systems.
   Heil-Transaktion vor dem Schreiben — scheitert der Delta-Lauf, bleiben sie stehen, der Retry überschreibt sie
   nicht, und die WARN-Zeile des gescheiterten Versuchs steht nur im WQ-Ausführungslog, nicht im Job-Protokoll.
   Logzeilen: „no own kurs row to check and kurs holds no guelt in the window“, „… nothing before T to stamp (T = …,
-  margin …)“, „kurs treated as a snapshot of T = …“, „kurs was replaced since the last own write (canary … )“.
+  margin …)“, „kurs treated as a snapshot of T = …“, „kurs was replaced since the last own write (snapshot marker … )“.
   Stammdaten-WARN-Zeilen mailen jetzt an den Support. Nicht geprüft: Kanarien-Lookup und T-Abfrage auf Sybase (char-Padding
   von `cod_fliesscode` beim `findById` — Sybase vergleicht `char` blank-gepolstert); die Haupttransaktion trägt Sybase
   jetzt lesend ein (zweite Sybase-Verbindung je Sync). Zombie-Schutz: die Heil-Transaktion ruft kein
@@ -386,7 +386,7 @@ Nichts bis Chunk 3 ändert das Verhalten des laufenden Systems.
   Stammdaten-YAML nötig (die automatisch geladenen Basisdaten kennen die db_union-Fonds nicht — ohne sie claimt der
   Lauf 0 Zeilen). Lieferung 31.08. → Sync: „no own kurs row to check and kurs holds no guelt in the window“, 6
   Schlüssel geschrieben, keine Karte, keine Mail. Refresh simuliert per SQL-Konsole (`update kurs set guelt =
-  dateadd('MINUTE', -90, guelt)`), Lieferung 01.09. → Sync: WARN „kurs was replaced since the last own write (canary
+  dateadd('MINUTE', -90, guelt)`), Lieferung 01.09. → Sync: WARN „kurs was replaced since the last own write (snapshot marker
   AT0000A0S392 2026-08-31 EUR Z written at 16:54:01: guelt now 15:24:01); T = 15:24:01, margin PT30M: 6 stamp(s)
   since T − margin cleared, 0 … stamped“, danach 12 Schlüssel geschrieben (6 neu, 6 nachgeholt); Karte
   „Sybase-Snapshot“ mit T 15:24:01, 0, 6; genau eine Mail in Mailhog an `tester@localhost` (System-Support der

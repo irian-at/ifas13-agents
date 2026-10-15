@@ -129,10 +129,14 @@ Quelle: Konzept, Abschnitt *Datenbeschaffung*. Q-Nummern siehe Warnung unten.
 Definition: Konzept, *Implementierung in Schnitten*. Der Detail-Plan je Schnitt entsteht beim Start
 als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
 
+Namen (2026-10-15): Spalten- und Indexnamen folgen dem Stand nach V084 (`2a007ec34`). Angelegt wurden sie in V063 und
+V075–V081 als `offen`, `preis_datum`, `empfangen_at`, `eingang_abgeschlossen_at`, `rueckmeldung_urteil`, `funds`,
+`funds_skipped_fondswaehrung`, `ux_preis_versions_offen`, `ix_preis_versions_schluessel`.
+
 | # | Schnitt | blockiert durch | Detail-Plan | Status |
 |---|---|---|---|---|
 | 1 | Lieferkette Stufe 1 — Eingang, Inbox, Rückmeldung | ~~`tax_code`~~ (erhoben, V1) | [2026-09-02-fondspreise-schnitt1-eingang-inbox-rueckmeldung.md](../archive/2026-09/2026-09-02-fondspreise-schnitt1-eingang-inbox-rueckmeldung.md) | **umgesetzt + gepusht** (ifas13 `1f3d9f393`/`0dbd47271`); **Byte-Verifikation am 2026-09-14 durchgeführt** — `statistics.log` und `data.log` mussten auf das echte Format umgebaut werden, zwei Golden-File-Tests stehen (siehe *Erledigt*). Rest siehe die drei neuen offenen Punkte unten |
-| 2 | Stufe 2 — **`preis_versions`** (Versionen je Preisschlüssel, `PreisVersionJob` mit Claim, `preis_version_sources`); Sybase-Ableitung `kurs`/`tmp_if_last` als Folgejob danach | — | [2026-09-30-fondspreise-preis-historie-versionen.md](2026-09-30-fondspreise-preis-historie-versionen.md) | **Design entschieden 2026-09-30**; **Chunk 3 (Persistenzhälfte) umgesetzt 2026-10-01**, committet und gepusht als `b137e7724`: V075 (`preis_versions`, `preis_version_sources`, Inbox neu mit `id`/`empfangen_at`/`processing_job_id` (V076 → `preis_version_job_id`), kein Bestand, kein Backfill), Entities/Repositories, `currentDbTime()`, Multi-DB-Tests. Entscheidungen 2026-10-01: Position auf der Zeile, Markerprüfung im Claim, Benennung Entity = Tabelle (`PreisVersion` ↔ `preis_versions`). **Chunks 1 und 2 (Domäne: Faltung, Filter) umgesetzt 2026-10-01**, Commits `aa8eaedb6` und `457446d83`. Benennung nachgezogen in `85dff4c2c` (`StorageGates`, `SkipReason`, `PreisKey`). Weitere Benennungsrunde 2026-10-01, Commit `04eb37736`: Schreibweise `PreisMeldung` (Tabelle `preis_meldung_zeilen`, in V075 geändert statt V076 — vor dem ersten Deployment), Packages `service.fondspreise` / `persistence.infra.fondspreise`, Suffix `Data`. Eingang write-once, Chunks 4–6 offen. Das Guard-Design vom 08.09. (`preis_herkunft`, `letzte_preise`, Klammer-Transaktionen; Branch `feat/fondspreise-sync`, V067–V069 nie deployt) ist verworfen — der Branch dient nur als Steinbruch. `Kurs`/`TmpIfLast` liegen seit `5d22c157c` (V073) auf master |
+| 2 | Stufe 2 — **`preis_versions`** (Versionen je Preisschlüssel, `PreisVersionJob` mit Claim, `preis_version_sources`); Sybase-Ableitung `kurs`/`tmp_if_last` als Folgejob danach | — | [2026-09-30-fondspreise-preis-historie-versionen.md](2026-09-30-fondspreise-preis-historie-versionen.md) | **Design entschieden 2026-09-30**; **Chunk 3 (Persistenzhälfte) umgesetzt 2026-10-01**, committet und gepusht als `b137e7724`: V075 (`preis_versions`, `preis_version_sources`, Inbox neu mit `id`/`received_at`/`processing_job_id` (V076 → `preis_version_job_id`), kein Bestand, kein Backfill), Entities/Repositories, `currentDbTime()`, Multi-DB-Tests. Entscheidungen 2026-10-01: Position auf der Zeile, Markerprüfung im Claim, Benennung Entity = Tabelle (`PreisVersion` ↔ `preis_versions`). **Chunks 1 und 2 (Domäne: Faltung, Filter) umgesetzt 2026-10-01**, Commits `aa8eaedb6` und `457446d83`. Benennung nachgezogen in `85dff4c2c` (`StorageGates`, `SkipReason`, `PreisKey`). Weitere Benennungsrunde 2026-10-01, Commit `04eb37736`: Schreibweise `PreisMeldung` (Tabelle `preis_meldung_zeilen`, in V075 geändert statt V076 — vor dem ersten Deployment), Packages `service.fondspreise` / `persistence.infra.fondspreise`, Suffix `Data`. Eingang write-once, Chunks 4–6 offen. Das Guard-Design vom 08.09. (`preis_herkunft`, `letzte_preise`, Klammer-Transaktionen; Branch `feat/fondspreise-sync`, V067–V069 nie deployt) ist verworfen — der Branch dient nur als Steinbruch. `Kurs`/`TmpIfLast` liegen seit `5d22c157c` (V073) auf master |
 | 2b | Sybase-Ableitung **`kurs`** aus `preis_versions` — `PreisVersionSyncJob` als Folgejob des Laufs, Stempel `processed_at`/`preis_version_sync_job_id` auf der Version, ein aktiver Sync, selbstheilend; `tmp_if_last` später | produktiver Preismeldungs-Job (erster Einreicher mit `sync_requested`) | [2026-10-08-fondspreise-preis-version-sync-kurs.md](2026-10-08-fondspreise-preis-version-sync-kurs.md) | **Design entschieden 2026-10-08** (/discuss), Plan geschrieben; **Chunk 1 umgesetzt** `22adddcf6`; **Chunk 2 umgesetzt** `068df2816` (`KursChanges.derive`); **Chunk 3 umgesetzt** `47094764d` (Sync-Job); **Chunk 4 umgesetzt** `34b20d641` (Lauf reicht Sync ein); **Chunk 5 umgesetzt** `f5091bb5f` (Verschränkungstests); **Chunk 6 umgesetzt** `03804889c` (Commit-Reihenfolge auf drei DBs); **Chunk 7 umgesetzt** `1e23c2c5f` (Detailseite, `kurs`-Spalte, geplante Aufgabe) — **Plan vollständig umgesetzt 2026-10-12**; Property bleibt aus bis zum Migrations-Stempel (Todo unten, Verfahren entschieden 2026-10-12, Plan Abschnitt 7) |
 | 3 | `WirksamePreismeldungen` als Komponente, isoliert getestet | — | [2026-10-12-fondspreise-preisfile-sammellauf.md](2026-10-12-fondspreise-preisfile-sammellauf.md) | **Plan 2026-10-12**, Chunk 1 `efd1c5fd2`, Chunk 2 `f9fbc64fe`, Chunk 3 `6f40d81f5`, Chunk 4 `50d943850` — **umgesetzt 2026-10-13** |
 | 4 | Sammelreport Lauf 1 — Plausi, Files, Publikationsprotokoll, Verteilung | — | [2026-10-12-fondspreise-preisfile-sammellauf.md](2026-10-12-fondspreise-preisfile-sammellauf.md) | **Plan 2026-10-12**, Chunk 1 `efd1c5fd2`, Chunk 2 `f9fbc64fe`, Chunk 3 `6f40d81f5`, Chunk 4 `50d943850` — **umgesetzt 2026-10-13** |
@@ -392,8 +396,8 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
         (Spec 4.2 und Anhang) — die drei Regeln existieren schon in `csv/CsvPreisMeldungValidations` (csv-schema-Pfad),
         den produktiv niemand aufruft (nur `PreisMeldungCsvSchemaTest`, `PreisMeldungCsvTests`): Regeln in den
         Eingang übernehmen, csv-schema-Pfad danach löschen oder als einzigen Parser verdrahten — entscheiden
-      - Periodizität (Spalte 8): zulässige Werte `D` (Default), `W`, `M2`, `M`, `Q`, `S`, `A`, Pflicht wenn nicht `D`
-        — heute komplett ignoriert (Legacy leert das Feld seit 2017); ob und wohin der Wert gespeichert wird, offen
+      - Periodizität (Spalte 8): **nur speichern, nicht prüfen** (User 2026-10-14) — Inbox-Spalte `periodizitaet`,
+        verbatim, damit sie später verarbeitet werden kann; Legacy leert das Feld seit 2017, kein Abnehmer
       - Längen: Fondsbezeichnung STRING(45), Währung STRING(3) — heute nur Tabellenprüfung der Währung
       - Löschung muss die ursprünglich gelieferten Werte wiederholen — `VersionChange.delete` beendet die offene
         Version allein über den Schlüssel; Wertvergleich plus Ablehnung bei Abweichung (Meldungstext festlegen)
@@ -403,10 +407,20 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
       - Prozentangaben als Prozentzahl (10 % = `10`) — nicht prüfbar, nur Doku
       LMT bleibt bis Klärung G reine Eingangsvalidierung (Inbox mit `lmt_prozentkennzeichen`/`lmt_stichtag`, keine
       Version, kein `kurs`, kein Preisfile). **Plan 2026-10-13:**
-      [2026-10-13-fondspreise-lieferformat-3-0.md](2026-10-13-fondspreise-lieferformat-3-0.md) — alle sieben Regeln
-      hinter dem Stichtag `ifas.fondspreise.preismeldung.format3-ab` (Datum von der Fachabteilung), vier Chunks:
-      Inbox-Spalte `periodizitaet` → Regeln im Eingang mit Port ins Ledger für die Löschung → Service/Property/Doku →
-      csv-schema-Pfad löschen. R5 (Fondsbezeichnung > 45) verwirft die Zeile (User 2026-10-13).
+      [2026-10-13-fondspreise-lieferformat-3-0.md](2026-10-13-fondspreise-lieferformat-3-0.md) — alle sechs Regeln
+      **ab sofort, ohne Stichtag** (User 2026-10-14; der Gate-Ansatz ist verworfen — Zählung: R7 träfe heute 203 von 203
+      Dateien, R5 1–3 % der Zeilen von fünf Lieferanten, R1–R3/R6 nichts), vier Chunks: Inbox-Spalte `periodizitaet`
+      (`77210f79c`) → Regeln im Eingang mit Port ins Ledger für die Löschung, Spalte 8 ungeprüft gespeichert →
+      Service/Fixtures/Doku → csv-schema-Pfad löschen. Folge auf TEST: der Diff-Job lehnt jede Archivdatei am
+      Namen ab, bis die Lieferanten umstellen — Fachabteilung muss die Lieferanten informieren (Datum offen). R5 (Fondsbezeichnung > 45) verwirft die Zeile (User 2026-10-13).
+- [x] ~~**`RueckmeldungUrteil` → `RueckmeldungVerdict`**~~ (User 2026-10-14, „later“): das Lieferanten-Urteil ERROR/INFO einer
+  Lieferung (abgeleitet wie Legacys `wc -l error.log > 5` in `make_einzel.awk`) trägt ein technisches deutsches
+  Wort — kein Fachbegriff, Legacy hat keinen Namen dafür — und verstößt gegen `naming.md` (technische
+  Wörter englisch). Eigener `refactor`-Chunk: Enum, Felder, Request-Parameter `urteil`, Templates (auch das
+  Pagination-Fragment), Spalte `preis_meldung_jobs.rueckmeldung_urteil` → `rueckmeldung_verdict` per Migration
+  (infra, Postgres/H2), 43 Dateien. Rename per IDE (`ide-refactoring.md`); das JetBrains-MCP war 2026-10-14 nicht
+  erreichbar. Eingeführt mit `1f3d9f393` (2026-09-02), vor der Regel-Datei.
+  **Umgesetzt 2026-10-15** als `RueckmeldungStatus` / Spalte `rueckmeldung_status` (V084, Namensbereinigung). Statt „Verdict“ gewählt, weil Legacy es `liefer_status` nennt und „Status“ geläufiger ist.
 - [ ] **Team-Diskussion: Voll-Refresh der Neusystem-Sybase vs. Schreibtabellen von IFAS-NEU** (User 2026-10-13):
       jeder Refresh überschreibt alles, was IFAS-NEU in seine Sybase schreibt (`kurs1`, STM-Tabellen) — vorerst
       akzeptierter Verlust. Zu entscheiden im Team: harter Schnitt (kein Refresh mehr; dann braucht IFAS-NEU einen
@@ -497,6 +511,13 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
 
 ## Erledigt
 
+- 2026-10-15 — **Namensbereinigung Fondspreise nach `mathias/rules/naming.md`** (`2a007ec34`, `73c856978`,
+  `5b4478706`, gepusht). DB-Namen per V084 (`open`, `preisdatum`, `received_at`, `eingang_completed_at`,
+  `rueckmeldung_status`, `fonds*` samt Constraint- und Indexnamen), Java-Namen dazu in `73c856978`, die übrigen
+  Gruppen (deutsche technische Wörter, übersetzte Fachbegriffe, ungebräuchliches Englisch, Testnamen) und
+  `RueckmeldungLevel` → `RueckmeldungStatus` in `5b4478706`. V084 dafür am selben Tag in place geändert
+  (`rueckmeldung_level` → `rueckmeldung_status`) — TEST deployt `master` nachts und hatte V084 noch nicht.
+  Separat: Badge des Rückmeldungs-Status auf den Diff-Seiten verglich mit `'OK'` statt `'INFO'` (`fc5b2d13d`).
 - 2026-10-13 — **Selbstheilung des Syncs nach einem Sybase-Snapshot** (`5187df831`, `e7893c8a8`, `da7ca67ec`, `529eb53f8`, gepusht). Kanarienzeile + `kurs_guelt`, T aus `max(kurs.guelt)` im Preisdatum-Fenster, Marge 30 min,
   drei Ledger-Updates, Zähler am Sync-Job; Job-Protokoll-Mails je Job-Typ an Fachbereich oder System-Support
   (`notification.jobs.<JobType>.recipients`, zwei Bestandsfehler der Warnungs-Einstellungen behoben). Plan:
@@ -555,7 +576,7 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
   committeter Faltung ließ den Lauf `COMPLETED` ohne Zähler — `updateResult` committet jetzt mit der
   Faltung. 7 Szenarien × H2/Postgres grün. Plan Abschnitt 8, Chunk 7
 - 2026-10-06 — **Chunk 3 abgeschlossen: Eingang write-once** (`01ec25fb6`, gepusht). Zeilen, Ergebnis und
-  Marker `eingang_abgeschlossen_at` committen in einer Transaktion, der Marker bedingt (Rollback bei
+  Marker `eingang_completed_at` committen in einer Transaktion, der Marker bedingt (Rollback bei
   paralleler Ausführung), ein Lauf mit gesetztem Marker wertet nichts neu aus. **Chunk 4 abgeschlossen** (`5e5b7056c` `PreisVersionJob`, `1f98514a2` Claim-Spalte
   `preis_version_job_id`, gepusht): Claim → Filter → Faltung → `preis_versions` + `preis_version_sources`
   in einer Transaktion, 58 Integrationstests H2 + Postgres. **Chunk 5 abgeschlossen** (`19dfc41d6`, gepusht): der Eingang reicht den `PreisVersionJob` als
@@ -568,7 +589,7 @@ als eigenes datiertes File in diesem Ordner und wird hier verlinkt.
   `preis_versions` + `preis_version_sources` + Inbox-Id/Claim; Umbenennungen `85dff4c2c`, `04eb37736`)
 - 2026-09-30 — **Ledger-Design entschieden, Plandokumente konsolidiert.** Diskussion vom 30.09.:
   `preis_versions` als Versionszeilen (`created_at`/`invalidated_at`/`deleted`, Position
-  `empfangen_at` + `zeilen_nr`), Claim je Verarbeitungs-Lauf statt Guard, `preis_version_sources`
+  `received_at` + `zeilen_nr`), Claim je Verarbeitungs-Lauf statt Guard, `preis_version_sources`
   (eine Zeile je wirksamer Inbox-Zeile, `operation` + beide Versions-IDs, beim Job-System mit
   Cascade), kein Wertvergleich, Wiederholung fügt nur hinzu, Sybase-Ableitung als Folgejob. Plan:
   `2026-09-30-fondspreise-preis-historie-versionen.md`. Alle Befunde zum Altsystem, die Datenlage,

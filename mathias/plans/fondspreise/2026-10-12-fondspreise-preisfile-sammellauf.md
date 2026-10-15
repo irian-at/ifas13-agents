@@ -5,6 +5,10 @@ Ledger, zwei Läufe je Tag, Publikationsprotokoll, Archiv und MFT. Entscheidunge
 (Tracker „Sammellauf — Entscheidungen“): jeder Lauf ein Delta, Fallback im letzten Lauf des Tages, kein
 `tmp_if_last`, Dateinamen vorerst mit Laufnummer, alle elf Dateien plus Ready-File, Plausi (`-P`) ein eigener Plan.
 
+**Namen** (Nachtrag 2026-10-15): Spalten- und Indexnamen folgen dem Stand nach V084 (`2a007ec34`), Java-Namen der
+Namensbereinigung vom selben Tag. V081 legte `funds`, `funds_skipped_fondswaehrung` und den Fallback-Index über
+`preis_datum`, `offen` an.
+
 ## 0. Glossar
 
 | Begriff | Bedeutung |
@@ -69,7 +73,7 @@ Beispiel vom 02.09.2026 in `docs/Fondspreise/beispiele/testdaten_september/Berei
 | `deletion_preisfile_job_id` | uuid null | der Lauf, der es schrieb |
 
 Checks `ck_preis_versions_published` und `ck_preis_versions_deletion_published` (beide Spalten eines Paars null oder
-beide gesetzt). Index `ix_preis_versions_fallback (isin, waehrung, meldekategorie, preis_datum, offen)` für die
+beide gesetzt). Index `ix_preis_versions_fallback (isin, waehrung, meldekategorie, preisdatum, open)` für die
 Fallback-Abfrage; Index `ix_preis_versions_published_at (published_at)` für das Delta (`published_at is null` auf
 Postgres über den Index). Kein Backfill: alle Versionen gelten als unpubliziert — **vor dem ersten produktiven Lauf
 ist ein Migrations-Stempel nötig** (wie beim Sync; Tracker-Todo erweitern: Versionen vor dem Snapshot gelten als von
@@ -90,20 +94,20 @@ JOINED-Kind von `jobs` (Muster V080). `daily_run_number` auf `jobs` (1/2, Unique
 | `versions_i3` | integer null | `I3`-Zeilen |
 | `versions_fallback` | integer null | Fallback-Zeilen |
 | `solva_rows` | integer null | Solva-Zeilen (`S<n>` + `D<n>`) |
-| `funds` | integer null | ISINs in `preis_<lauf>.csv` |
-| `funds_skipped_fondswaehrung` | integer null | Versionen, die die Währungsregel ausließ |
+| `fonds` | integer null | ISINs in `preis_<lauf>.csv` |
+| `fonds_skipped_fondswaehrung` | integer null | Versionen, die die Währungsregel ausließ |
 
 Zähler null bis zum Commit; Details (welcher Schlüssel in welchen Stream, Skips) im Protokoll (Memory „Job counters vs protocol“).
 
 ## 3. Auswahl aus dem Ledger (`PreisVersionRepository`, Kontext `business-new-introduced`)
 
-1. **Delta `I2`:** `offen = true and published_at is null and preis_datum >= :windowStart` (Fenster auch hier, damit
+1. **Delta `I2`:** `open = true and published_at is null and preisdatum >= :windowStart` (Fenster auch hier, damit
    uralte Nachlieferungen nicht als Delta hinausgehen — Legacy-Fenster `tmp_if_kurs` kennt kein Alter; Abweichung
    bewusst, im Protokoll gezählt).
 2. **Delta `I3`:** beendete Versionen mit `deleted = true`, `deletion_published_at is null`, `published_at is not null`
    (oder eine frühere Version desselben Schlüssels publiziert — vereinfacht: die gelöschte Version selbst war
    publiziert), und ohne offene Nachfolgerin desselben Schlüssels (ISIN, Preisdatum, Währung, Code).
-3. **Fallback** (nur `with_fallback`): offene Versionen mit `preis_datum >= :windowStart`, je (ISIN, Währung, Code)
+3. **Fallback** (nur `with_fallback`): offene Versionen mit `preisdatum >= :windowStart`, je (ISIN, Währung, Code)
    die mit dem höchsten Preisdatum (`NOT EXISTS` jüngere offene desselben Tripels), ausgenommen Tripel mit einer
    Version, deren `published_at` oder `deletion_published_at` heute liegt, und ausgenommen die Versionen aus 1.
 4. **Stempel** nach dem Schreiben, in 1000er-Chunks: `markPublished(ids, at, jobId)` bedingt `published_at is null`,
@@ -113,7 +117,7 @@ Alles über die Währungsregel gefiltert (Stammdaten-Lookup je ISIN, `fondswaehr
 
 ## 4. Stammdaten und Ausschüttungen (Kontext `business`, lesend)
 
-- `InvRepository.findPreisfileFundDataByIsinIn(Collection<String> isins)`: ISIN, `wfs_wkn`, Name (`txt_bez_xl`,
+- `InvRepository.findPreisfileFondsDataByIsinIn(Collection<String> isins)`: ISIN, `wfs_wkn`, Name (`txt_bez_xl`,
   ersatzweise `txt_bez_m`), `veroeffentlichung`, `fonds_zgru`, `cod_art_f`; aktuelle `wkn_hist`-Zuordnung
   (`dat_gueltig_bis` null bzw. jüngste), in 1000er-Chunks (Muster `findAusschuettungFundDataByIsinIn`).
   ISIN ohne Stammdaten: Zeile in `alle` mit leerem Namen? Legacy nimmt den gelieferten `txt_bez`; das Ledger hat
@@ -124,7 +128,7 @@ Alles über die Währungsregel gefiltert (Stammdaten-Lookup je ISIN, `fondswaehr
 
 ## 5. Domäne `at.oekb.ifas.domain.fondspreise.preisfile` (reine Funktionen, keine DB)
 
-- `PreisfileRecord(Satzart I2|I3, LocalDate preisDatum, String waehrung, String isin, Meldekategorie code, BigDecimal wert,
+- `PreisfileRecord(Satzart I2|I3, LocalDate preisdatum, String waehrung, String isin, Meldekategorie code, BigDecimal wert,
   @Nullable Ausschuettung ausschuettung, String fondsname, Zielgruppen gruppen, boolean fallback)`;
   `Ausschuettung(BigDecimal betrag, @Nullable LocalDate zahltag)`; `SolvaRecord(Satzart S|D, int nummer, LocalDate datum, String isin, BigDecimal wert, Zielgruppen gruppen)`;
   `Zielgruppen` aus `veroeffentlichung`, `fonds_zgru`, `cod_art_f`, `include-aif` → Flags `alle`, `v`, `p`.
@@ -218,8 +222,8 @@ manueller Lauf 2) wären über `(key_date, daily_run_number)` verschieden; die b
   Zeile“, bedingte Stempel), Stammdaten-/ASF-Abfragen gegen `FondspreiseStammdatenCreator`-Seeds.
 - **Nachtrag 2026-10-12 (umgesetzt):** V081 wie geplant (Sybase-Platzhalter); `PreisfileJob` mit `JobPagingRepository`-
   Fragment (abgeleitetes `countBy…` bricht unter Hibernate 6 bei JOINED, wie beim Ausschüttungs-Batch), keine Setter
-  auf den Ergebnisfeldern. `PreisfileFundData` trägt zusätzlich die Fondswährung (`inv.waehrung`) für die Währungsregel;
-  `findCurrentPreisfileFundDataByIsinIn` wählt je ISIN wie Legacy (`dat_gueltig_bis` null zuerst, dann jüngste, dann
+  auf den Ergebnisfeldern. `PreisfileFondsData` trägt zusätzlich die Fondswährung (`inv.waehrung`) für die Währungsregel;
+  `findCurrentPreisfileFondsDataByIsinIn` wählt je ISIN wie Legacy (`dat_gueltig_bis` null zuerst, dann jüngste, dann
   `dat_gueltig_ab` jüngste). `txt_bez_xl` ist not null — der `COALESCE` auf `txt_bez_m` bleibt, ist aber untestbar.
   **Für Chunk 3 (vom Agenten notiert):** (1) ein Tripel aus dem Delta kann zugleich einen Fallback-Kandidaten liefern
   (verspätete Lieferung mit älterem Preisdatum als die jüngste publizierte offene Version, oder sein `I3` im selben
@@ -227,7 +231,7 @@ manueller Lauf 2) wären über `(key_date, daily_run_number)` verschieden; die b
   Schlüssel liefern (A publiziert und gelöscht, B eröffnet, publiziert und gelöscht, bevor A's `I3` hinausging) — je
   Schlüssel nur eines schreiben, beide stempeln; (3) `cod_art_f` kommt auf Sybase gepolstert (`"AIF "`), strippen wie
   `PreisMeldungStammdatenService`; (4) `findForPreisfile` erwartet `from`/`to` als Tagesbeginn; (5)
-  `funds_skipped_fondswaehrung` zählt Versionen.
+  `fonds_skipped_fondswaehrung` zählt Versionen.
 - **Stand 2026-10-12 — umgesetzt, Commit `efd1c5fd2`** (gepusht). `PreisfileJobRepositoryTest` 7 × 2 DBs,
   `PreisVersionRepositoryTest` +11, `InvRepositoryTest` +3, `AsfRepositoryTest` neu; Nachbartests grün (134 im Rerun ohne Sybase).
 

@@ -30,6 +30,9 @@ Everything else is English: verbs, technical concepts, glue words.
   reason, filter, job, version, count, source are technical → English.
 - A compound Fachbegriff keeps its German parts (`PreisMeldungZeile`, `GjZeitreihe`); never
   half-translate it.
+- A part of an entity name used as its short form is a Fachbegriff too: `Zeile` for a
+  `PreisMeldungZeile` (`zeilenNr`, `zeilen_claimed`). The same word in a generic technical sense is
+  English: `lineNumber` of a raw CSV line in the parser.
 - The plural follows the noun's language: `zeilen`, `meldungen`, but `versions`, `keys`.
 - Umlauts are transliterated: `ae`, `oe`, `ue`, `ss` (`Ausschuettung`, `Waehrung`).
 - Legacy codes and constants keep the legacy spelling (`ERR_FRIST_NOSN`, `C_PLAN`, `AIF`).

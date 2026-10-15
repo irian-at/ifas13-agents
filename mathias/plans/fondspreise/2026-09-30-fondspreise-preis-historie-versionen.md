@@ -12,18 +12,22 @@ Ledger-Commit (Abschnitt 7). Die Entities `Kurs`/`TmpIfLast` liegen seit `5d22c1
 **Umsetzung in Chunks** (Abschnitt 8): jeder Chunk ist ein eigener Commit auf `master`, baut, hat
 seine Tests und verbessert den Stand, ohne auf den nächsten zu warten.
 
+**Namen** (Nachtrag 2026-10-15): Spalten- und Indexnamen folgen dem Stand nach V084 (`2a007ec34`), Java-Namen der
+Namensbereinigung vom selben Tag. V075 legte sie als `offen`, `preis_datum`, `empfangen_at`, `eingang_abgeschlossen_at`,
+`ux_preis_versions_offen` und `ix_preis_versions_schluessel` an.
+
 ---
 
 ## 0. Glossar
 
 | Begriff | Bedeutung |
 |---|---|
-| **Schlüssel** | (`isin`, `preis_datum`, `waehrung`, `meldekategorie`) — ein Preis eines Fonds zu einem Stichtag in einer Währung und Kategorie. `meldekategorie` nur `R`, `E`, `Z`, `S`, `S2`, `S3`; LMT erreicht das Ledger nie |
+| **Schlüssel** | (`isin`, `preisdatum`, `waehrung`, `meldekategorie`) — ein Preis eines Fonds zu einem Stichtag in einer Währung und Kategorie. `meldekategorie` nur `R`, `E`, `Z`, `S`, `S2`, `S3`; LMT erreicht das Ledger nie |
 | **Version** | eine Zeile in `preis_versions`: ein Zustand, den IFAS für einen Schlüssel gehalten hat, mit Beginn und (falls beendet) Ende |
 | **offene Version** | die Version eines Schlüssels mit `invalidated_at is null`; höchstens eine je Schlüssel |
 | **N / D** | die Aktion einer Inbox-Zeile: liefern bzw. aktualisieren (`N`) oder zurückziehen (`D`) |
 | **Lauf** | eine Ausführung des `PreisVersionJob`, der Inbox-Zeilen zu Versionen faltet |
-| **Position** | (`empfangen_at`, `zeilen_nr`) einer Zeile: Ankunft der Lieferung nach der DB-Uhr, dann physische Zeilennummer im File. Die Ordnung der Faltung |
+| **Position** | (`received_at`, `zeilen_nr`) einer Zeile: Ankunft der Lieferung nach der DB-Uhr, dann physische Zeilennummer im File. Die Ordnung der Faltung |
 | **Cursor** | die Position, die die offene Version eines Schlüssels trägt — die Position der Zeile, die sie erzeugt hat |
 | **Claim** | die bedingte Zuweisung noch nicht verarbeiteter Inbox-Zeilen an einen Lauf (`preis_version_job_id`) |
 | **wirksame Zeile** | eine Inbox-Zeile, die in einem Lauf eine Version erzeugt oder beendet hat |
@@ -39,21 +43,21 @@ seine Tests und verbessert den Stand, ohne auf den nächsten zu warten.
 | **Form der Version** | Versionszeile mit Beginn (`created_at`) und Ende (`invalidated_at`); das Ende trägt die Art als Flag (`deleted`). **Keine D-Zeile**, keine Ereignis-Tabelle, keine Ist-Tabelle. Eine Löschung beendet die offene Version mit `deleted = true`; danach hat der Schlüssel keine offene Version, bis ein neues `N` eine öffnet |
 | **Kein Wertvergleich** | Jede wirksame `N`-Zeile erzeugt eine neue Version, auch bei gleichem Wert. Eine identische Nachlieferung ist damit im Ledger sichtbar. Zwischenwerte, die **innerhalb eines Laufs** von einer späteren Zeile desselben Schlüssels überholt werden, erzeugen keine Version — sie stehen nur in der Inbox |
 | **Faltung je Lauf und Schlüssel** | Die nach Position **letzte** Zeile des Schlüssels im Lauf entscheidet; sie gilt nur, wenn ihre Position **nach dem Cursor** liegt. `N` beendet die offene Version (`deleted = false`) und öffnet eine neue; `D` beendet sie mit `deleted = true`; `D` ohne offene Version ist ein No-op. Ein Lauf schreibt je Schlüssel höchstens eine neue Version |
-| **Ankunftsordnung** | Gilt **über Läufe hinweg**: die Position steht auf jeder Version (`empfangen_at`, `zeilen_nr`). Eine spät verarbeitete ältere Zeile verdrängt keine jüngere. Innerhalb eines Jobs gewinnt die höhere Zeilennummer (Legacy: „letzte Zeile gewinnt“ in `tmp_if_kurs`) |
-| **Wiederholungen** | Eine Wiederholung erbt `empfangen_at` des Originals. Ihre Zeilen tragen dieselben Positionen wie die des Originals: was das Original schon geschrieben hat, wird nicht doppelt geschrieben (Position nicht nach dem Cursor); was das Original abgelehnt und die Wiederholung angenommen hat, gilt nach Ankunftsordnung. **Eine Wiederholung fügt nur hinzu, nimmt nie zurück**: eine Version, deren Zeile die Wiederholung jetzt ablehnt, bleibt offen. Sichtbar in der Inbox der Wiederholung (Zeile fehlt) und an der Version (Position zeigt auf das Original). Keine Verdrängungslogik im Lauf |
+| **Ankunftsordnung** | Gilt **über Läufe hinweg**: die Position steht auf jeder Version (`received_at`, `zeilen_nr`). Eine spät verarbeitete ältere Zeile verdrängt keine jüngere. Innerhalb eines Jobs gewinnt die höhere Zeilennummer (Legacy: „letzte Zeile gewinnt“ in `tmp_if_kurs`) |
+| **Wiederholungen** | Eine Wiederholung erbt `received_at` des Originals. Ihre Zeilen tragen dieselben Positionen wie die des Originals: was das Original schon geschrieben hat, wird nicht doppelt geschrieben (Position nicht nach dem Cursor); was das Original abgelehnt und die Wiederholung angenommen hat, gilt nach Ankunftsordnung. **Eine Wiederholung fügt nur hinzu, nimmt nie zurück**: eine Version, deren Zeile die Wiederholung jetzt ablehnt, bleibt offen. Sichtbar in der Inbox der Wiederholung (Zeile fehlt) und an der Version (Position zeigt auf das Original). Keine Verdrängungslogik im Lauf |
 | **Nebenläufigkeit** | **Claim**: ein Lauf weist sich in **eigener Transaktion** alle Inbox-Zeilen mit `preis_version_job_id is null` zu, deren Eingang abgeschlossen ist (ein bedingtes Update mit Subquery auf den Marker), committet, und liest dann zurück, was er tatsächlich bekommen hat. Ein paralleler Lauf findet nichts. Keine Sperren, kein Guard |
 | **Transaktion des Laufs** | Versionen (`business-new-introduced`) und Quellzeilen (`job-system`) in **einer** synchronisierten Transaktion. Im Deployment und in beiden lokalen Postgres-Profilen lösen beide Kontexte auf denselben db-key auf → ein Commit. Nur der H2-only-Launcher trennt sie (Abschnitt 3.7) |
-| **Zeitstempel** | `created_at` = DB-Uhr des Kontexts `business-new-introduced` als erste Anweisung der Schreibtransaktion, **ein Wert für alle Versionen des Laufs**; `invalidated_at` der beendeten Version = derselbe Wert. `empfangen_at` am Job = DB-Uhr des Job-Kontexts bei der Einreichung |
+| **Zeitstempel** | `created_at` = DB-Uhr des Kontexts `business-new-introduced` als erste Anweisung der Schreibtransaktion, **ein Wert für alle Versionen des Laufs**; `invalidated_at` der beendeten Version = derselbe Wert. `received_at` am Job = DB-Uhr des Job-Kontexts bei der Einreichung |
 | **Herkunft** | `preis_version_sources`: **eine Zeile je wirksamer Inbox-Zeile** mit `operation` (`NEW`, `UPDATE`, `DELETE`) und beiden Versions-IDs (`created_preis_version_id`, `ended_preis_version_id`, je nullable). Liegt **neben der Inbox** im `job-system`, FK auf die Inbox-Zeile **mit Cascade**; die Versions-IDs sind logische Referenzen. `preis_versions` selbst referenziert weder Job noch Inbox — Housekeeping der Jobs berührt das Ledger nie |
-| **Identitäten** | Inbox-Zeile und Version bekommen je eine `id uuid`. Auf der Version zusätzlich die Position (`empfangen_at`, `zeilen_nr`), die nach dem Aufräumen der Inbox noch Job (über `empfangen_at`) und physische Zeile im archivierten File benennt |
+| **Identitäten** | Inbox-Zeile und Version bekommen je eine `id uuid`. Auf der Version zusätzlich die Position (`received_at`, `zeilen_nr`), die nach dem Aufräumen der Inbox noch Job (über `received_at`) und physische Zeile im archivierten File benennt |
 | **Benennung** (User 2026-10-01) | Neue Tabellen heißen wie ihre Entity: Entity singular, Tabelle Plural in snake_case — `PreisVersion` ↔ `preis_versions`, `PreisVersionSource` ↔ `preis_version_sources` (Muster `PreisMeldungZeile` ↔ `preis_meldung_zeilen`). Id-Referenzen nennen den Zieltyp (`created_preis_version_id`, `preis_meldung_zeile_id`). Das Domänen-Record heißt `PreisVersionData` (Abschnitt 5) |
-| **Stammdaten** | Stand **zum Stichtag** (`findFonds(isin, preis_datum)`), `num_wfs_ku` auf jeder Version. Filter je Zeile wie bisher: LMT und Aktion `I` (kein Schlüssel), unbekannte ISIN, TEST-ISIN, C-Plan/AIF/Liquidation bei Gate „aus“ — übersprungen, auch ein `D`. Übersprungene Zeilen werden mit Grund geloggt, nicht gespeichert |
+| **Stammdaten** | Stand **zum Stichtag** (`findFonds(isin, preisdatum)`), `num_wfs_ku` auf jeder Version. Filter je Zeile wie bisher: LMT und Aktion `I` (kein Schlüssel), unbekannte ISIN, TEST-ISIN, C-Plan/AIF/Liquidation bei Gate „aus“ — übersprungen, auch ein `D`. Übersprungene Zeilen werden mit Grund geloggt, nicht gespeichert |
 | **Währung** | Prüfung am **Eingang** (`ERR_CURRENCY04` über `tax_code.isinwaehrung = J` für `R/E/Z/S/S2/S3`, nur im Neusystem). Der Lauf kennt keine Währungsregel; bis das Flag an ist, erreichen Fremdwährungspreise das Ledger auf ihrem eigenen Schlüssel (Tracker, Todo „Währungsprüfung“) |
 | **Veto** | entfällt (Klärung E3) |
 | **Manuelle Eingriffe** | keine. Korrektur nur über neue Lieferung oder Wiederholung |
 | **Aufbewahrung** | Produktive Preismeldungs-Jobs werden nie gelöscht. Inbox-Zeilen werden nach einem Fenster gelöscht (Tracker, Todo „Aufräumregel“); ihre Quellzeilen gehen per Cascade mit, die Versionen bleiben |
 | **Sybase-Ableitung** | **Folgejob** nach dem Ledger-Commit, eigener Job, eigener Retry; nicht in diesem Plan (Abschnitt 7) |
-| **Partitionierung** | später, nach `preis_datum`; jetzt nur vorbereitet (Abschnitt 7) |
+| **Partitionierung** | später, nach `preisdatum`; jetzt nur vorbereitet (Abschnitt 7) |
 
 ---
 
@@ -69,14 +73,14 @@ Bestand: V061/V067 (`job_id`, `zeilen_nr`, `isin`, `preisdatum`, `waehrung`, `me
 |---|---|
 | `id uuid not null`, **neuer PK**; (`job_id`, `zeilen_nr`) wird Unique-Constraint | einspaltige Identität für `preis_version_sources`. Kein Bestand: es existiert noch kein Diff-Job (geprüft 2026-10-01), die Inbox ist leer — V075 legt sie neu an; **kein Backfill**, keine Aufräum-Statements |
 | `preis_version_job_id uuid null` + Index | der Claim (Abschnitt 3.2). Logische Referenz auf den `PreisVersionJob`; kein FK, damit ein gelöschter Testlauf keine Zeilen sperrt |
-| `empfangen_at timestamp(6) with time zone not null` | Position, Teil 1, **auf der Zeile** (User 2026-10-01): der Eingang kopiert `empfangen_at` des Jobs auf jede Zeile. Die Position ist damit auf der Zeile vollständig, der Lauf braucht keinen Join auf eine Job-Tabelle; Zeilen einer Wiederholung tragen den Wert des Originals |
+| `received_at timestamp(6) with time zone not null` | Position, Teil 1, **auf der Zeile** (User 2026-10-01): der Eingang kopiert `received_at` des Jobs auf jede Zeile. Die Position ist damit auf der Zeile vollständig, der Lauf braucht keinen Join auf eine Job-Tabelle; Zeilen einer Wiederholung tragen den Wert des Originals |
 | Index (`isin`, `preisdatum`) | „Zeilen eines Schlüssels“ für Support-Abfragen; der Lauf selbst liest über `preis_version_job_id` |
 
 Verhalten, das der Lauf voraussetzt:
 
 - **Nur angenommene Zeilen.** Abgelehnte stehen in der Rückmeldung.
 - **Write-once je Job** (Review B7, unverändert nötig): die Eingangsstufe schreibt Zeilen, Marker
-  `eingang_abgeschlossen_at`, Result-Referenz und Zähler in **einer** `job-system`-Transaktion;
+  `eingang_completed_at`, Result-Referenz und Zähler in **einer** `job-system`-Transaktion;
   ein Retry mit gesetztem Marker wertet nicht neu aus und fasst die Zeilen nicht an. Wichtiger als
   zuvor: ein Retry, der schon **geclaimte** Zeilen ersetzte, hinterließe ungeclaimte Kopien, und
   ohne Wertvergleich würden daraus doppelte Versionen. Neu auswerten heißt Wiederholung (neuer Job).
@@ -88,8 +92,8 @@ Jeder Jobtyp führt seine Spalten selbst (Muster Ausschüttung), `timestamp(6) w
 
 | Spalte | Null | Bedeutung |
 |---|---|---|
-| `empfangen_at` | nein | Ankunft der Lieferung bei IFAS nach der DB-Uhr des Job-Kontexts, gesetzt bei der Einreichung über `DatabaseContextHelper.currentDbTime()` (neu, neben `getCurrentDbUser()`, `DatabaseContextHelper:76`). **Erste Komponente der Position**; der Eingang kopiert den Wert auf jede Inbox-Zeile (2.1). Eine Wiederholung erbt den Wert des Originals. Kein Bestand (noch kein Diff-Job vorhanden, geprüft 2026-10-01); `not null` ohne Default lässt V075 auf einer nicht leeren Tabelle scheitern statt zu löschen |
-| `eingang_abgeschlossen_at` | ja | der Eingang ist bis zum Ende gelaufen, die angenommenen Zeilen stehen endgültig in der Inbox (write-once-Marker). Kein Bestand (s. o.) |
+| `received_at` | nein | Ankunft der Lieferung bei IFAS nach der DB-Uhr des Job-Kontexts, gesetzt bei der Einreichung über `DatabaseContextHelper.currentDbTime()` (neu, neben `getCurrentDbUser()`, `DatabaseContextHelper:76`). **Erste Komponente der Position**; der Eingang kopiert den Wert auf jede Inbox-Zeile (2.1). Eine Wiederholung erbt den Wert des Originals. Kein Bestand (noch kein Diff-Job vorhanden, geprüft 2026-10-01); `not null` ohne Default lässt V075 auf einer nicht leeren Tabelle scheitern statt zu löschen |
+| `eingang_completed_at` | ja | der Eingang ist bis zum Ende gelaufen, die angenommenen Zeilen stehen endgültig in der Inbox (write-once-Marker). Kein Bestand (s. o.) |
 
 `verarbeitet_am` aus dem 09-24-Plan **entfällt**: der Claim je Zeile sagt, welcher Lauf sie
 verarbeitet hat.
@@ -102,7 +106,7 @@ Kontext `business-new-introduced`, Modul `ifas-persistence-fondspreise`.
 |---|---|---|---|
 | `id` | `uuid` | nein | PK |
 | `isin` | `varchar(12)` | nein | Schlüsselteil, wie geliefert |
-| `preis_datum` | `date` | nein | Schlüsselteil; der Stichtag als Punkt. Kein Intervall: `kurs`/`tmp_if_last` sind punktbasiert, Fill-forward ist eine Leseregel je Leser |
+| `preisdatum` | `date` | nein | Schlüsselteil; der Stichtag als Punkt. Kein Intervall: `kurs`/`tmp_if_last` sind punktbasiert, Fill-forward ist eine Leseregel je Leser |
 | `waehrung` | `varchar(3)` | nein | Schlüsselteil; Lieferwährung |
 | `meldekategorie` | `varchar(2)` | nein | Schlüsselteil; `R`, `E`, `Z`, `S`, `S2`, `S3` |
 | `wert` | `numeric` | nein | der Preis; **ohne Präzision und Skala** (`max_nk` ist für diese Codes null, jede feste Skala rundete still); einmal an der Grenze Inbox → Domäne geparst |
@@ -110,24 +114,24 @@ Kontext `business-new-introduced`, Modul `ifas-persistence-fondspreise`.
 | `created_at` | `timestamp(6) with time zone` | nein | seit wann IFAS diese Version hält; DB-Uhr, ein Wert je Lauf |
 | `invalidated_at` | `timestamp(6) with time zone` | ja | `null` = offen; sonst der `created_at` des Laufs, der sie beendet hat |
 | `deleted` | `boolean` | nein | `true` nur mit `invalidated_at`: beendet durch `D`. `false` = offen oder durch ein neueres `N` ersetzt |
-| `offen` | `boolean` | ja | `true` genau dann, wenn `invalidated_at is null`, sonst `null`. Träger des Unique-Index (siehe unten) |
-| `empfangen_at` | `timestamp(6) with time zone` | nein | Position, Teil 1: `empfangen_at` der erzeugenden Zeile (vom Job kopiert) |
+| `open` | `boolean` | ja | `true` genau dann, wenn `invalidated_at is null`, sonst `null`. Träger des Unique-Index (siehe unten) |
+| `received_at` | `timestamp(6) with time zone` | nein | Position, Teil 1: `received_at` der erzeugenden Zeile (vom Job kopiert) |
 | `zeilen_nr` | `integer` | nein | Position, Teil 2: physische Zeilennummer der erzeugenden Zeile |
 
 Indizes und Constraints:
 
-- `ux_preis_versions_offen` (`isin`, `preis_datum`, `waehrung`, `meldekategorie`, `offen`) —
+- `ux_preis_versions_open` (`isin`, `preisdatum`, `waehrung`, `meldekategorie`, `open`) —
   höchstens eine offene Version je Schlüssel. H2 kennt keine partiellen Indizes
   (`V035__jobs_daily_run_number.sql:16-25`); NULL-Werte sind in Unique-Indizes auf Postgres und H2
   verschieden, daher die Markierungsspalte statt `where invalidated_at is null`.
-- `ix_preis_versions_schluessel` (`isin`, `preis_datum`, `waehrung`, `meldekategorie`, `created_at`)
+- `ix_preis_versions_key` (`isin`, `preisdatum`, `waehrung`, `meldekategorie`, `created_at`)
   — Kette eines Schlüssels, Zustand zu T, Preisreihe eines Fonds.
-- Check: `offen = true` ⇔ `invalidated_at is null`; `deleted = true` ⇒ `invalidated_at is not null`.
+- Check: `open = true` ⇔ `invalidated_at is null`; `deleted = true` ⇒ `invalidated_at is not null`.
 - Kein FK, keine Referenz auf Jobs oder Inbox.
 
 **Invarianten je Schlüssel** (Konstruktor der Domänen-Zeitreihe, Chunk 1):
 
-- geordnet nach `created_at`, dann `empfangen_at`, `zeilen_nr`;
+- geordnet nach `created_at`, dann `received_at`, `zeilen_nr`;
 - lückenlos: `invalidated_at` einer Version = `created_at` der nächsten, **außer** nach einer
   Löschung — dort ist die Kette unterbrochen, bis ein `N` neu öffnet;
 - höchstens eine offene Version, und sie ist die letzte;
@@ -144,11 +148,11 @@ Abfragen:
 
 | Frage | Prädikat |
 |---|---|
-| aktueller Preis eines Schlüssels | `offen = true` |
+| aktueller Preis eines Schlüssels | `open = true` |
 | zurückgezogen vs. nie geliefert | letzte Version des Schlüssels hat `deleted = true` vs. keine Version |
 | Stand zu T | `created_at <= T` und (`invalidated_at is null` oder `invalidated_at > T`) |
-| Preisreihe eines Fonds, Stand jetzt | `isin`, `offen = true`, order by `preis_datum` |
-| Historie eines Fonds für die Fachabteilung | alle Versionen der ISIN, order by `preis_datum`, `created_at` |
+| Preisreihe eines Fonds, Stand jetzt | `isin`, `open = true`, order by `preisdatum` |
+| Historie eines Fonds für die Fachabteilung | alle Versionen der ISIN, order by `preisdatum`, `created_at` |
 | welche Zeile hat diese Version erzeugt / beendet | `preis_version_sources` über `created_preis_version_id` / `ended_preis_version_id` |
 
 ### 2.4 `preis_version_sources` — neu
@@ -195,10 +199,10 @@ Mo 08:10    J5   3      N 21.9. 101.90                  L5 08:20 V3 öffnen (NEW
 Mo 09:00    J6   3      N 21.9. 101.90 (identisch)      L6 09:10 V3 beenden, V5 öffnen (UPDATE) — kein Wertvergleich
 Mo 09:02    J7   3      N 18.9. 101.20 (langsamer       L6       ignoriert: Position (Mo 09:02, 3)? nein —
                         Eingang eines Fr-Files,                  J7 erbt nichts, ist ein eigener Job; Beispiel s. u.
-                        empfangen_at Fr 08:06)
+                        received_at Fr 08:06)
 ```
 
-Der letzte Fall präzisiert: J7 ist eine Lieferung mit `empfangen_at` **Fr 08:06** (Einreichung
+Der letzte Fall präzisiert: J7 ist eine Lieferung mit `received_at` **Fr 08:06** (Einreichung
 Freitag), deren Eingang erst Montag abgeschlossen wurde. Sie wird von L6 geclaimt. Position
 (Fr 08:06, 3) liegt **vor** dem Cursor von V4 (Mo 08:10, 4) → ignoriert, keine Version, keine
 Quellzeile. Legacy hätte sie eingespielt.
@@ -206,7 +210,7 @@ Quellzeile. Legacy hätte sie eingespielt.
 `preis_versions` danach (`—` = null):
 
 ```
-id  preis_datum  wert    created_at  invalidated_at  deleted  offen  empfangen_at  zeilen_nr
+id  preisdatum   wert    created_at  invalidated_at  deleted  open   received_at   zeilen_nr
 V0  2026-09-17   100.90  Do 08:10    —               false    true   Do 08:00      3
 V1  2026-09-18   101.30  Fr 08:15    Fr 10:15        false    —      Fr 08:07      3
 V2  2026-09-18   101.35  Fr 10:15    Fr 15:15        true     —      Fr 10:05      3
@@ -256,12 +260,12 @@ Die Sicherung aus B11 (Löschen verweigern) entfällt, weil das Ledger keine Job
 
 1. **Eigene Transaktion** (`job-system`): `update preis_meldung_zeilen set preis_version_job_id = :lauf
    where preis_version_job_id is null and job_id in (select id from preis_meldung_diff_jobs where
-   eingang_abgeschlossen_at is not null)` — **ein** bedingtes Update, kein Select-then-Update. Commit.
+   eingang_completed_at is not null)` — **ein** bedingtes Update, kein Select-then-Update. Commit.
    Zeilen eines Jobs ohne Marker bleiben ungeclaimt, bis der Marker gesetzt ist (User 2026-10-01;
    zuvor stand die Markerprüfung im Zurücklesen, wo eine markerlose Zeile geclaimt und nie gelesen
    worden wäre). Die Subquery nennt die Diff-Job-Tabelle; der produktive Job muss sie erweitern oder
    der Marker wandert nach `jobs`.
-2. **Zurücklesen**: alle Zeilen mit `preis_version_job_id = :lauf`, geordnet nach (`empfangen_at`,
+2. **Zurücklesen**: alle Zeilen mit `preis_version_job_id = :lauf`, geordnet nach (`received_at`,
    `zeilen_nr`) der Zeile — kein Join. Was ein paralleler Lauf vorher geclaimt hat, ist nicht dabei.
    Die Anzahl muss der Claim-Anzahl entsprechen; eine Abweichung ist ein Bug und lässt den Lauf
    scheitern.
@@ -280,7 +284,7 @@ Aus dem 09-24-Plan unverändert, Reihenfolge:
 | Regel | Ergebnis |
 |---|---|
 | Kategorie LMT oder Aktion `I` | kein Schlüssel — fällt vor dem Filter weg |
-| `findFonds(isin, preis_datum)` leer | überspringen, `WARN`; der Eingang lehnt unbekannte ISINs ab, Stammdaten können sich aber geändert haben |
+| `findFonds(isin, preisdatum)` leer | überspringen, `WARN`; der Eingang lehnt unbekannte ISINs ab, Stammdaten können sich aber geändert haben |
 | TEST-ISIN | überspringen, auch `D` |
 | C-Plan, AIF, Fonds in Liquidation bei Gate „aus“ | überspringen, auch `D`; Gates per Default „speichern“ (Legacy `InsPreise*` = 1) |
 | sonst | Zeile für die Faltung: Schlüssel, Aktion, `wert` (für `N` aus `new BigDecimal`, für `D` null), `num_wfs_ku`, Position, `preis_meldung_zeile_id` |
@@ -316,9 +320,9 @@ des Laufs zu diesem Schlüssel.
 Die neue Version trägt `wert`, `num_wfs_ku` und die Position der Kandidatin, `created_at` des
 Laufs. Kein Vergleich mit dem Wert von V.
 
-**Tiebreak:** die Position ist (`empfangen_at`, `zeilen_nr`), **ohne Job-ID**. Eine Wiederholung
+**Tiebreak:** die Position ist (`received_at`, `zeilen_nr`), **ohne Job-ID**. Eine Wiederholung
 hat dieselben Positionen wie ihr Original — genau deshalb schreibt sie nichts doppelt. Zwei
-**fremde** Jobs mit identischem `empfangen_at` (Mikrosekunden der DB-Uhr) kollidierten auf
+**fremde** Jobs mit identischem `received_at` (Mikrosekunden der DB-Uhr) kollidierten auf
 `zeilen_nr`; das ist theoretisch, wird dokumentiert und nicht behandelt. Eine Job-ID in der Position
 wäre falsch: sie machte die Zeile der Wiederholung zu einer „späteren“ und verdoppelte die Version.
 
@@ -330,8 +334,8 @@ REQUIRES_NEW, weil der Work-Queue-Handler schon in einer Transaktion läuft — 
 
 1. `created_at` = `currentDbTime()` im Kontext `business-new-introduced`, **einmal**.
 2. Je Schlüssel in **fester Reihenfolge** (Schlüsselordnung): offene Version beenden
-   (`invalidated_at`, `deleted`, `offen = null`) — als bedingtes Update „noch offen“, Anzahl 1
-   prüfen — und neue Version einfügen (`offen = true`). Ein zweiter Insert auf einen Schlüssel
+   (`invalidated_at`, `deleted`, `open = null`) — als bedingtes Update „noch offen“, Anzahl 1
+   prüfen — und neue Version einfügen (`open = true`). Ein zweiter Insert auf einen Schlüssel
    scheitert am Unique-Index; das ist nach dem Claim nur noch ein Bug-Detektor.
 3. Quellzeilen einfügen (`job-system`).
 4. Commit: der Manager flusht alle enrollten Datenbanken, dann committet er sie nacheinander
@@ -342,7 +346,7 @@ Guard aus 3.2.
 
 ### 3.6 Wiederholungen
 
-Kein eigener Code. `empfangen_at` wird beim Einreichen der Wiederholung aus dem Original kopiert
+Kein eigener Code. `received_at` wird beim Einreichen der Wiederholung aus dem Original kopiert
 (`repeatedFromJob`, `Job.java:85`; `JobRepository:54`); alles Weitere ergibt sich aus der Position
 (Abschnitt 1, „Wiederholungen“).
 
@@ -386,8 +390,8 @@ noch in Prosa — Gruppierung nach Stufe wie `eingang`; kein
 „Inbox“ in Klassennamen, die Inbox ist der Name der Tabelle; die gefilterte Zeile heißt
 `FilteredPreisMeldungZeile`, der Filter `PreisMeldungZeilenFilter`.)
 
-- `PreisKey` — Record (`isin`, `preisDatum`, `waehrung`, `meldekategorie`), lehnt LMT ab.
-- `Position` — Record (`empfangenAt`, `zeilenNr`), `Comparable`.
+- `PreisKey` — Record (`isin`, `preisdatum`, `waehrung`, `meldekategorie`), lehnt LMT ab.
+- `Position` — Record (`receivedAt`, `zeilenNr`), `Comparable`.
 - `PreisVersionData` — Record der Version (ohne DB-Details). `PreisVersion` ist die Entity; Muster
   `PreisMeldungZeile` (Entity) / `PreisMeldungZeileData` (Record).
 - `FilteredPreisMeldungZeile` — gefilterte Zeile für die Faltung (Schlüssel, Aktion, `wert`, `numWfsKu`,
@@ -436,9 +440,9 @@ ifas-database/ifas-database-flyway`, sonst testet man das alte Jar.
 | Thema | Stand |
 |---|---|
 | **Ableitung nach `kurs`** | Folgejob nach dem Ledger-Commit (Abschnitt 4). Reconcile je Schlüssel: offene Version mit Wert ⇒ `kurs`-Zeile mit diesem Wert (delete-then-insert je Code wie Legacy); letzte Version `deleted` ohne offene Nachfolgerin ⇒ keine `kurs`-Zeile. Idempotent, eigener Retry, Sybase = eigener db-key. **Entschieden 2026-10-08 (User): optional und konfigurierbar** — zwei Schalter: eine Property, ob das Deployment überhaupt synct (lokal/H2, TEST ohne Neusystem-Sybase: aus), und der auslösende Job, ob er den Sync will — der `PreisMeldungDiffJob` nie (wie Mail und MFT-Upload), der produktive Job ja; Muster `persistResult`/`triggerPreisVersionJob`. Der `PreisVersionJob` reicht den Sync als Folgejob nach dem Commit der Faltung ein, nur wenn beide Schalter ja sagen. Der Sync hat damit bis zum produktiven Job keinen Aufrufer: standalone bauen und testen, Verdrahtung kommt mit ihm. Folge: im Parallelbetrieb bekommt die Neusystem-Sybase keine `kurs`/`tmp_if_last`-Zeilen; wie D13 diese Tabellen vergleicht (Ledger projiziert gegen Alt-`kurs` oder erst mit dem produktiven Job auf TEST) ist **vertagt**. **Plan geschrieben 2026-10-08:** [2026-10-08-fondspreise-preis-version-sync-kurs.md](2026-10-08-fondspreise-preis-version-sync-kurs.md) |
-| **Ableitung nach `tmp_if_last`** | ein Platz je (`isin`, `waehrung`, `meldekategorie`): offene Version mit höchstem `preis_datum`. Spaltenquellen (User 30.09.): `eintragezeit` aus `created_at` oder `empfangen_at` (Legacy: Ankunft → `empfangen_at` diffts sauberer), `txt_bez` aus den Stammdaten (bekannte Abweichung zu „wie geliefert“, bis Klärung O), `liefer_id` = Lieferant — nur der Job kennt ihn (Klärung J: Stammdaten sagen es nicht) |
+| **Ableitung nach `tmp_if_last`** | ein Platz je (`isin`, `waehrung`, `meldekategorie`): offene Version mit höchstem `preisdatum`. Spaltenquellen (User 30.09.): `eintragezeit` aus `created_at` oder `received_at` (Legacy: Ankunft → `received_at` diffts sauberer), `txt_bez` aus den Stammdaten (bekannte Abweichung zu „wie geliefert“, bis Klärung O), `liefer_id` = Lieferant — nur der Job kennt ihn (Klärung J: Stammdaten sagen es nicht) |
 | **Lieferant auf der Version** | offen: Kopie auf `preis_versions` (Eigenschaft der Version, überlebt das Job-Housekeeping) oder Hop über `preis_version_sources` → Inbox → Job. Nachrüstbar, solange die Inbox-Zeilen leben |
-| **Partitionierung nach `preis_datum`** | Postgres verlangt den Partitionsschlüssel in jedem Unique-Constraint → PK würde (`preis_datum`, `id`); der Unique-Index enthält `preis_datum` schon. H2 kennt keine Partitionierung → `${pg-only}`-DDL. Ob das Ledger je beschnitten wird, ist fachlich: Legacy beschneidet `kurs` nie (42,6 Mio Zeilen seit 1994) |
+| **Partitionierung nach `preisdatum`** | Postgres verlangt den Partitionsschlüssel in jedem Unique-Constraint → PK würde (`preisdatum`, `id`); der Unique-Index enthält `preisdatum` schon. H2 kennt keine Partitionierung → `${pg-only}`-DDL. Ob das Ledger je beschnitten wird, ist fachlich: Legacy beschneidet `kurs` nie (42,6 Mio Zeilen seit 1994) |
 | Sammelreport (Schnitt 4/5) | liest offene Versionen und das Publikationsprotokoll |
 | Fehlmeldung (Schnitt 7) | Anti-Join auf offene Versionen; „letzte Version `deleted`“ = zurückgezogen |
 | Kennzahlen-Invalidierung | ausgelöst durch das Beenden einer `R`-Version |
@@ -475,7 +479,7 @@ Reihenfolge = Abhängigkeit. Chunks 1 und 2 sind reine Domäne ohne DDL.
   Preisdatum; `wert` für `N` geparst, für `D` null; dieselbe ISIN mit zwei Preisdaten und
   verschiedenem `num_wfs_ku` aus `wkn_hist`.
 - **Stand 2026-10-01:** umgesetzt (`StorageGates`, `SkipReason`, `PreisMeldungZeilenFilter` mit sealed
-  `Result` Passed/Skipped/NoKey auf `PreisMeldungZeileData` + (`zeileId`, `empfangenAt`);
+  `Result` Passed/Skipped/NoKey auf `PreisMeldungZeileData` + (`zeileId`, `receivedAt`);
   `FondspreiseProperties` mit drei `store*`-Gates; Stammdaten-Cache je (ISIN, Stichtag) mit
   Integrationstest H2 + Postgres), Commit `457446d83`. NoKey gilt für jeden Code außer R/E/Z/S/S2/S3;
   der CSV-Typ `PREIS_MELDEKATEGORIE` lässt ohnehin nur die neun Enum-Werte durch.
@@ -483,10 +487,10 @@ Reihenfolge = Abhängigkeit. Chunks 1 und 2 sind reine Domäne ohne DDL.
 ### Chunk 3 — Persistenz: eine Migration, Entities, Eingang write-once
 
 - **Migration V075** (Abschnitt 6): Inbox neu anlegen (leer; kein Diff-Job vorhanden) mit `id` als PK, Unique (`job_id`, `zeilen_nr`), `processing_job_id` (in V076 umbenannt zu `preis_version_job_id`)
-  und Indizes; `empfangen_at`/`eingang_abgeschlossen_at` am Diff-Job ohne Backfill; `preis_versions` mit Indizes und Checks; `preis_version_sources` mit
+  und Indizes; `received_at`/`eingang_completed_at` am Diff-Job ohne Backfill; `preis_versions` mit Indizes und Checks; `preis_version_sources` mit
   Cascade-FK und Indizes; Grants.
 - **Entities/Repositories:** `PreisMeldungZeile` auf `@Id uuid` umstellen (`PreisMeldungZeileId`
-  entfällt), `empfangen_at` auf der Zeile, Claim-Update mit Markerbedingung und „Zeilen eines Laufs“
+  entfällt), `received_at` auf der Zeile, Claim-Update mit Markerbedingung und „Zeilen eines Laufs“
   ohne Job-Join; `PreisVersion` + Repository (offene
   Version je Schlüssel, Kette je Schlüssel, bedingtes Beenden mit Anzahl, Versionen einer ISIN);
   `PreisVersionSource` + Repository (existiert für Zeile, nach Versions-ID).
@@ -494,8 +498,8 @@ Reihenfolge = Abhängigkeit. Chunks 1 und 2 sind reine Domäne ohne DDL.
   Routing-`JdbcTemplate`; Postgres/H2).
 - **Eingang write-once** (Review B7): `PreisMeldungDiffJobExecutionService.executeDiff` — heute
   Inbox-Transaktion (`:111-113`), dann Filestore, dann `updateResult` (`:136`); neu: auswerten →
-  Bundle bauen und speichern → **eine** Transaktion (Zeilen, `eingang_abgeschlossen_at`,
-  Result-Referenz, Zähler). Marker gesetzt → alles überspringen. `submit` setzt `empfangen_at`;
+  Bundle bauen und speichern → **eine** Transaktion (Zeilen, `eingang_completed_at`,
+  Result-Referenz, Zähler). Marker gesetzt → alles überspringen. `submit` setzt `received_at`;
   der Wiederholungspfad kopiert es aus dem Original.
 - **Tests** (Multi-DB, H2 + Postgres; Sybase entfällt): Unique der offenen Version greift;
   bedingtes Beenden liefert 0 bei schon beendeter Version; Cascade Inbox → Quellzeile; `wert` mit
@@ -507,10 +511,10 @@ Reihenfolge = Abhängigkeit. Chunks 1 und 2 sind reine Domäne ohne DDL.
 **Stand 2026-10-01 — Persistenzhälfte umgesetzt, Commit `b137e7724`** (V075, Entities, Repositories, `currentDbTime()`,
 Multi-DB-Tests H2 + Postgres grün). **Stand 2026-10-06 — Eingang write-once umgesetzt, Commit `01ec25fb6`:**
 Markerprüfung vor dem Filestore-Zugriff, eine REQUIRES_NEW-Transaktion `deleteByJobId → saveAll → updateResult →
-markEingangAbgeschlossen(currentDbTime())`; der Marker wird **bedingt** gesetzt (`… AND eingangAbgeschlossenAt IS NULL`,
+markEingangCompleted(currentDbTime())`; der Marker wird **bedingt** gesetzt (`… AND eingangCompletedAt IS NULL`,
 Rückgabe 0 → Ausnahme → Rollback), damit zwei gleichzeitige Ausführungen desselben Jobs nicht beide committen.
 `PreisMeldungDiffJobTest` läuft jetzt auf H2 + Postgres (Marker + Claim, Retry mit/ohne Marker, bedingter Marker).
-Für den Diff-Job gibt es keinen Wiederholungspfad; „die Wiederholung erbt `empfangen_at`" gilt erst für den produktiven
+Für den Diff-Job gibt es keinen Wiederholungspfad; „die Wiederholung erbt `received_at`" gilt erst für den produktiven
 Job. Befunde für die Folge-Chunks:
 
 - **Bestand:** keiner — `preis_meldung_diff_jobs` ist auf allen Stages leer (User 2026-10-01); V075
@@ -519,7 +523,7 @@ Job. Befunde für die Folge-Chunks:
   deployt werden.
 - **Die Markerbedingung im Claim nennt `preis_meldung_diff_jobs`.** Kommt der produktive Job (2.2
   „später ebenso“), muss die Subquery ihn mit abdecken oder der Marker wandert nach `jobs`. Das
-  Zurücklesen braucht seit 2026-10-01 keinen Job-Join mehr: `empfangen_at` steht auf der Zeile.
+  Zurücklesen braucht seit 2026-10-01 keinen Job-Join mehr: `received_at` steht auf der Zeile.
 - **`PreisVersionSource` hat eine zugewiesene Id:** Spring Data `save()` macht daher ein
   `merge` (SELECT vor jedem INSERT). Für das Schreiben in Chunk 4 `persist` bzw. `Persistable`
   verwenden.
@@ -580,7 +584,7 @@ Eingang bleibt bei 1, der selbstheilende Pfad greift erst nach manuellem Zurück
 
 ### Chunk 6 — UI: Preisversionen (bis 2026-10-08 „Preishistorie")
 
-- **Inhalt:** Seite je ISIN (alle Versionen, `preis_datum`, Wert, `created_at`/`invalidated_at`,
+- **Inhalt:** Seite je ISIN (alle Versionen, `preisdatum`, Wert, `created_at`/`invalidated_at`,
   `deleted`, Position; Quelle über `preis_version_sources` mit Link auf Job und Zeile, „Zeile nicht
   mehr in der Inbox“ wenn aufgeräumt); Einstieg von der Job-Detailseite (Schlüssel der Lieferung)
   und über eine ISIN-Suche unter *Testen*. Grenzen der Web-UI: kein npm/CDN, nur `~{::section}`.

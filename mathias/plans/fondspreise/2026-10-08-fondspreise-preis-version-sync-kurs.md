@@ -20,8 +20,8 @@ folgt die Selbstheilung: ein gescheiterter Sync hinterlässt nur ungestempelte Z
 | Ledger | `preis_versions` (Kontext `business-new-introduced`, Postgres; lokal H2) |
 | Lauf | ein `PreisVersionJob`: verarbeitet Inbox-Zeilen zu Versionen (Vorgänger-Plan) |
 | Sync | ein `PreisVersionSyncJob`: bringt `kurs` auf den Stand des Ledgers (dieser Plan) |
-| Schlüssel | (`isin`, `preis_datum`, `waehrung`, `meldekategorie`), wie im Ledger |
-| aktueller Stand | die offene Version eines Schlüssels (`offen = true`), oder keine |
+| Schlüssel | (`isin`, `preisdatum`, `waehrung`, `meldekategorie`), wie im Ledger |
+| aktueller Stand | die offene Version eines Schlüssels (`open = true`), oder keine |
 | Reconcile | `kurs` für einen Schlüssel an den aktuellen Stand angleichen, unabhängig davon, was der auslösende Lauf geschrieben hat |
 | Stempel | `processed_at` / `preis_version_sync_job_id` auf der Version: ein Sync hat die Zeile mitgenommen (geschrieben **oder** regelkonform übersprungen) |
 | Fondswährung | `FondsStammdaten.fondswaehrung`, aufgelöst über `PreisMeldungStammdatenService` zum Stichtag der Zeile |
@@ -49,7 +49,7 @@ folgt die Selbstheilung: ein gescheiterter Sync hinterlässt nur ungestempelte Z
 | **Lauf ohne Änderungen** | löst trotzdem einen Sync aus (Heilung früher, Transparenz) |
 | **Kein stündlicher Sweep** | vorerst manueller Auslöser („Geplante Aufgaben", Task deaktiviert). Der Sweep ist ein Umschalten von `scheduled-tasks.preis-version-sync.enabled`, falls ein Ausfall ihn je nötig macht |
 | **Währungsregel** | wie Legacy: Preiswährung ≠ Fondswährung → keine `kurs`-Zeile (auch kein Delete), geloggt als *skipped by rule*, gestempelt. Sollte nach Einschalten der Eingangsprüfung (`ERR_CURRENCY04`) nicht mehr vorkommen. Klärung P bleibt davon unberührt (betrifft den Fallback) |
-| **`guelt`** | Schreibzeit des Syncs (App-Uhr Wien), wie Legacy `getdate()` beim Einspielen. `created_at`/`empfangen_at` wären Abweichungen, die nur D13 oder ein Fremdleser bemerkt — beides vertagt |
+| **`guelt`** | Schreibzeit des Syncs (App-Uhr Wien), wie Legacy `getdate()` beim Einspielen. `created_at`/`received_at` wären Abweichungen, die nur D13 oder ein Fremdleser bemerkt — beides vertagt |
 | **`num_bericht_kurs`** | Delete-then-Insert schreibt die Zeile neu, ein `R` verliert seinen berichtigten Kurs wie im Legacy; Auffüllen ist Sache der Kennzahlen (Schnitt 6). Der Sync weiß nichts davon |
 | **Fehlende Stammdaten** | Fonds zum Stichtag nicht mehr auflösbar (Stammdaten seit dem Lauf geändert): Schlüssel übersprungen (`skipped_stammdaten`, `WARN`), gestempelt; Reparatur über Stempel löschen |
 | **Vertagt** | D13 für `kurs`/`tmp_if_last`; Lieferant auf der Version. Go-live-Backlog: Verfahren „Migrations-Stempel“ entschieden 2026-10-12 (Abschnitt 7) |
@@ -123,7 +123,7 @@ V073 legt die Tabelle in jedem Profil an). Legacy-Quelle: `WriteKurse`, `preisek
 | `kurs` | Quelle | Bemerkung |
 |---|---|---|
 | `num_wfs_ku` | Version | vom Lauf zum Stichtag aufgelöst |
-| `dat_kurs` | `preis_datum` | |
+| `dat_kurs` | `preisdatum` | |
 | `cod_fliesscode` | `meldekategorie` | `R`, `E`, `Z`, `S`, `S2`, `S3`; gleiche Codes wie Legacy |
 | `waehrung` | `waehrung` | = Fondswährung, sonst übersprungen |
 | `num_kurs` | `wert` | `numeric` → `float`; Legacy schreibt `%.20le` eines `double` |
@@ -195,7 +195,7 @@ Leer → Job `COMPLETED` mit Zählern 0, `versions_processed_at null`, eine Logz
 Mehrere ungestempelte Zeilen desselben Schlüssels (beendete und neue) ergeben **einen** Reconcile; jeder
 Reconcile ist eine Protokollzeile (2.2).
 Stammdaten: `PreisMeldungStammdatenService.createProvider()` im Kontext `business`, `findFonds(isin,
-preis_datum)` → `fondswaehrung`; Reihenfolge der Schlüssel deterministisch (`PreisKey`-Ordnung des Laufs),
+preisdatum)` → `fondswaehrung`; Reihenfolge der Schlüssel deterministisch (`PreisKey`-Ordnung des Laufs),
 damit Sybase-Sperren in fester Reihenfolge genommen werden.
 
 ### 3.5 Schreiben — eine synchronisierte Transaktion, Sybase zuerst
@@ -278,7 +278,7 @@ manuellen Auslöser.
 
 - **Beenden löscht den Stempel**: beim Beenden einer Version (durch `N` oder `D`) setzt `writeVersions`
   `processed_at`/`preis_version_sync_job_id` auf `null` — die Zeile wird ohnehin aktualisiert (`invalidated_at`,
-  `deleted`, `offen`). Bei `D` ist die beendete Zeile der einzige Träger von „`kurs`-Zeile entfernen";
+  `deleted`, `open`). Bei `D` ist die beendete Zeile der einzige Träger von „`kurs`-Zeile entfernen";
   bei `N` deckt die Nachfolgerin den Schlüssel, das Löschen ist dann redundant und billig.
 - **Neue Versionen** entstehen ohne Stempel (Spalten-Default).
 - **Einreichung des Syncs** nach 3.1, gesteuert über `sync_requested` und die Property.
@@ -323,7 +323,7 @@ Kein Backfill: alle bestehenden Versionen bleiben ungestempelt (Go-live-Backlog,
 
 | Thema | Stand |
 |---|---|
-| **`tmp_if_last`** | eigener Plan, wenn Klärung N (Zweck des Fallbacks) und O (Fremdleser) stehen. Aus dem Ledger: Schlüssel, Wert, `dat_kurs`. Nicht auf der Version: Lieferant (nur der Eingang kennt ihn; Vorgänger-Plan Abschnitt 7 „Lieferant auf der Version") und Ankunftszeit (Inbox-Zeile, über `preis_version_sources` erreichbar, solange das Inbox-Fenster sie hält — vor der Aufräumregel entscheiden). Fondsbezeichnung aus den **IFAS-Stammdaten** (User 2026-10-08; Legacy pflegt `txt_bez` bei ISIN-Umbenennung ohnehin nach, `ISIN_UPD.CPP:228`). Semantik „zuletzt verarbeitet gewinnt, `D` lässt stehen" vs. „offene Version mit höchstem `preis_datum`" dort entscheiden |
+| **`tmp_if_last`** | eigener Plan, wenn Klärung N (Zweck des Fallbacks) und O (Fremdleser) stehen. Aus dem Ledger: Schlüssel, Wert, `dat_kurs`. Nicht auf der Version: Lieferant (nur der Eingang kennt ihn; Vorgänger-Plan Abschnitt 7 „Lieferant auf der Version") und Ankunftszeit (Inbox-Zeile, über `preis_version_sources` erreichbar, solange das Inbox-Fenster sie hält — vor der Aufräumregel entscheiden). Fondsbezeichnung aus den **IFAS-Stammdaten** (User 2026-10-08; Legacy pflegt `txt_bez` bei ISIN-Umbenennung ohnehin nach, `ISIN_UPD.CPP:228`). Semantik „zuletzt verarbeitet gewinnt, `D` lässt stehen" vs. „offene Version mit höchstem `preisdatum`" dort entscheiden |
 | **Stündlicher Sweep** | `scheduled-tasks.preis-version-sync.enabled=true` — nur relevant, wenn nach einem Ausfall alle Syncs des Tages ihre Versuche aufgebraucht haben und kein weiteres File kommt |
 | **Go-live-Backlog** | Die Versionen aus dem Parallelbetrieb (Diff-Job) sind ungestempelt; der erste produktive Sync würde den gesamten Backlog gegen die Neusystem-Sybase abgleichen. **Verfahren entschieden 2026-10-12 (User):** die Neusystem-Sybase startet mit einem migrierten Stand von `kurs` (Voll-Sync aus der Alt-DB, Snapshot-Zeitpunkt T). Alles, was Legacy bis T geschrieben hat, steht damit schon in `kurs`; alles danach schreibt Legacy nur noch in die Alt-DB. Daher: **Migrations-Stempel** — alle Versionen mit `created_at < T` per SQL stempeln (`processed_at = T`, `preis_version_sync_job_id` = ein eigens angelegter `PreisVersionSyncJob` „migration“, COMPLETED, damit die Spalte *kurs* „seit T (Sync …)“ zeigt und der Link auflöst); alles ab T bleibt ungestempelt und ist Arbeit des ersten echten Syncs. Spätere Änderungen an alten Schlüsseln fließen trotzdem: ein Lauf, der eine gestempelte Version beendet, löscht ihren Stempel. Snapshot in einem ruhigen Fenster nach Legacys letztem Schreiben des Tages, damit „vor T erzeugt“ und „von Legacy geschrieben“ dieselben Lieferungen meinen; wird die Migration vor dem Go-live wiederholt, wandert T mit. Schlüssel, die Legacy schrieb, der Parallelbetrieb aber nie sah, bleiben migriert und unberührt. D13 ist damit keine Go-live-Voraussetzung. Ein Pro-Lauf-Design hätte den Schritt stillschweigend übersprungen |
 | **D13 für `kurs`/`tmp_if_last`** | vertagt (User 2026-10-08): Ledger projiziert gegen Alt-`kurs`, oder erst mit dem produktiven Job auf TEST |
