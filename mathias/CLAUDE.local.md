@@ -15,11 +15,13 @@
 
 ## Maven
 
-Always activate `-Pno-proxy`. `-Pplatform-amd64` is the POM default on this machine (Manfred needs
-`-Pplatform-arm64` for Apple Silicon).
+Always activate `-Pno-proxy` and `-Pdev-build`: there is no `~/.m2/settings.xml`, so Maven resolves
+only from Central, and without `dev-build` the build fails on `jespa:jespa-jakarta:2.0.5`.
+`-Pplatform-amd64` is the POM default on this machine (Manfred needs `-Pplatform-arm64` for Apple
+Silicon).
 
 ```bash
-mvn clean install -Pno-proxy
+mvn clean install -Pno-proxy,dev-build
 ```
 
 ## Precedence and settings
